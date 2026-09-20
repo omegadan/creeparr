@@ -49,7 +49,10 @@ class PatreonProvider(ProviderService):
             log.warning("%s; falling back to httpx", exc)
             transport = build_transport("httpx")
         return PatreonClient(
-            transport, RateLimiter(s.requests_per_second), cookies, user_agent=s.user_agent
+            transport,
+            RateLimiter(s.requests_per_second, (s.random_delay_min, s.random_delay_max)),
+            cookies,
+            user_agent=s.user_agent,
         )
 
     @property

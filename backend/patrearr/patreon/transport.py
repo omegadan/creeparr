@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
@@ -184,19 +185,31 @@ def build_transport(backend: str, impersonate: str = "chrome") -> Transport:
 
 
 class RateLimiter:
-    """Simple global minimum-interval limiter shared by all API calls."""
+    """Global minimum-interval limiter with an optional random extra delay.
 
-    def __init__(self, requests_per_second: float = 1.0) -> None:
+    The random delay (uniform between ``delay_min`` and ``delay_max`` seconds) is added
+    to every request on top of the fixed interval, to make traffic look less robotic.
+    """
+
+    def __init__(
+        self,
+        requests_per_second: float = 1.0,
+        random_delay: tuple[float, float] = (0.0, 0.0),
+    ) -> None:
         self.min_interval = 1.0 / requests_per_second if requests_per_second > 0 else 0.0
+        self.delay_min = max(0.0, random_delay[0])
+        self.delay_max = max(self.delay_min, random_delay[1])
         self._lock = asyncio.Lock()
         self._last = 0.0
 
     async def wait(self) -> None:
-        if self.min_interval <= 0:
+        if self.min_interval <= 0 and self.delay_max <= 0:
             return
         async with self._lock:
-            now = time.monotonic()
-            delay = self._last + self.min_interval - now
-            if delay > 0:
-                await asyncio.sleep(delay)
+            if self.min_interval > 0:
+                delay = self._last + self.min_interval - time.monotonic()
+                if delay > 0:
+                    await asyncio.sleep(delay)
+            if self.delay_max > 0:
+                await asyncio.sleep(random.uniform(self.delay_min, self.delay_max))
             self._last = time.monotonic()

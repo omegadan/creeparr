@@ -11,7 +11,10 @@ See the table in the README. They cover paths, port and log level only. `PATREAR
 | patreon.session_id | "" | Secret; set via `PUT /settings/patreon-auth` |
 | patreon.cookies_txt | "" | Secret; optional Netscape cookie export |
 | patreon.user_agent | Patreon mobile UA | |
-| patreon.requests_per_second | 1.0 | Global API rate limit (0.1–10) |
+| patreon.requests_per_second | 1.0 | Steady API rate limit (0.1–10) |
+| patreon.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) added before each request; 0/0 disables |
+| onlyfans.requests_per_second | 0.5 | Steady API rate limit (0.1–5) |
+| onlyfans.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) before each OnlyFans request |
 | patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |
 | scan.interval_minutes | 60 | 0 disables scheduled scans |
 | scan.overlap_posts | 10 | Incremental stop condition |

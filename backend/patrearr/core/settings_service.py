@@ -6,7 +6,7 @@ import logging
 import threading
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
 
 from patrearr.core.errors import ValidationFailed
@@ -23,8 +23,16 @@ class PatreonSettings(BaseModel):
     cookies_txt: str = ""
     user_agent: str = DEFAULT_USER_AGENT
     requests_per_second: float = Field(default=1.0, ge=0.1, le=10)
+    random_delay_min: float = Field(default=0.0, ge=0.0, le=60)
+    random_delay_max: float = Field(default=0.0, ge=0.0, le=120)
     http_backend: Literal["httpx", "curl_cffi"] = "httpx"
     impersonate_target: str = "chrome"
+
+    @model_validator(mode="after")
+    def _delay_order(self) -> PatreonSettings:
+        if self.random_delay_max and self.random_delay_max < self.random_delay_min:
+            self.random_delay_max = self.random_delay_min
+        return self
 
 
 class OnlyFansSettings(BaseModel):
@@ -34,10 +42,20 @@ class OnlyFansSettings(BaseModel):
     cookies_txt: str = ""
     user_agent: str = ""
     requests_per_second: float = Field(default=0.5, ge=0.1, le=5)
-    dynamic_rules_url: str = "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json"
+    random_delay_min: float = Field(default=0.0, ge=0.0, le=60)
+    random_delay_max: float = Field(default=0.0, ge=0.0, le=120)
+    dynamic_rules_url: str = (
+        "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json"
+    )
     include_archived: bool = True
     http_backend: Literal["httpx", "curl_cffi"] = "httpx"
     impersonate_target: str = "chrome"
+
+    @model_validator(mode="after")
+    def _delay_order(self) -> OnlyFansSettings:
+        if self.random_delay_max and self.random_delay_max < self.random_delay_min:
+            self.random_delay_max = self.random_delay_min
+        return self
 
 
 class ScanSettings(BaseModel):

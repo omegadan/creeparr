@@ -19,6 +19,12 @@ export function OnlyFansSettings({ settings }: { settings: Settings }) {
           <Field label="Requests per second" hint="Keep this low; OnlyFans flags aggressive automation.">
             <input type="number" step="0.1" min="0.1" max="5" className="input" value={f.form.requests_per_second} onChange={(e) => f.set("requests_per_second", num(e.target.value, 0.5))} />
           </Field>
+          <Field label="Random delay min (s)" hint="Extra random pause before each request.">
+            <input type="number" step="0.1" min="0" className="input" value={f.form.random_delay_min} onChange={(e) => f.set("random_delay_min", num(e.target.value, 0))} />
+          </Field>
+          <Field label="Random delay max (s)" hint="0 in both disables it. Helps avoid detection.">
+            <input type="number" step="0.1" min="0" className="input" value={f.form.random_delay_max} onChange={(e) => f.set("random_delay_max", num(e.target.value, 0))} />
+          </Field>
           <Field label="Dynamic rules URL" hint="Community-maintained signing rules; refreshed hourly." className="sm:col-span-2">
             <input className="input font-mono text-xs" value={f.form.dynamic_rules_url} onChange={(e) => f.set("dynamic_rules_url", e.target.value)} />
           </Field>

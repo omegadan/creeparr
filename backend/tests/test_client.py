@@ -216,3 +216,25 @@ async def test_stream_does_not_send_cookies_to_cdn(client, respx_mock):
     assert req.headers["range"] == "bytes=1-"
     assert req.headers["referer"] == "https://www.patreon.com/"
     await resp.aclose()
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_adds_random_delay(monkeypatch):
+    import patrearr.patreon.transport as tp
+
+    monkeypatch.setattr(tp.random, "uniform", lambda a, b: b)  # deterministic max
+    slept: list[float] = []
+
+    async def fake_sleep(s):
+        slept.append(s)
+
+    monkeypatch.setattr(tp.asyncio, "sleep", fake_sleep)
+    rl = tp.RateLimiter(1000, (0.1, 0.3))
+    await rl.wait()
+    await rl.wait()
+    assert 0.3 in slept  # the random delay was applied
+    # ordering guard: max clamped up to min is handled in settings, limiter takes as given
+    rl2 = tp.RateLimiter(0, (0.0, 0.0))
+    slept.clear()
+    await rl2.wait()
+    assert slept == []  # nothing to wait on

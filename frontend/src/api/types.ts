@@ -241,6 +241,8 @@ export interface Settings {
     has_cookies_txt: boolean;
     user_agent: string;
     requests_per_second: number;
+    random_delay_min: number;
+    random_delay_max: number;
     http_backend: "httpx" | "curl_cffi";
     impersonate_target: string;
   };
@@ -252,6 +254,8 @@ export interface Settings {
     has_cookies_txt: boolean;
     user_agent: string;
     requests_per_second: number;
+    random_delay_min: number;
+    random_delay_max: number;
     dynamic_rules_url: string;
     include_archived: boolean;
     http_backend: "httpx" | "curl_cffi";

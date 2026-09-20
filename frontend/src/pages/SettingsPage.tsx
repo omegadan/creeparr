@@ -4,6 +4,7 @@ import { PageHeader } from "../components/layout/AppShell";
 import { Spinner } from "../components/ui/Misc";
 import { AccountSettings } from "../components/settings/AccountSettings";
 import { OnlyFansSettings } from "../components/settings/OnlyFansSettings";
+import { PatreonSettings } from "../components/settings/PatreonSettings";
 import { GeneralSettings } from "../components/settings/GeneralSettings";
 import { DownloadSettings } from "../components/settings/DownloadSettings";
 import { ScanSettings } from "../components/settings/ScanSettings";
@@ -11,6 +12,7 @@ import { cx } from "../lib/format";
 
 const TABS = [
   { id: "accounts", label: "Accounts" },
+  { id: "patreon", label: "Patreon" },
   { id: "onlyfans", label: "OnlyFans" },
   { id: "scanning", label: "Scanning" },
   { id: "downloads", label: "Downloads" },
@@ -35,6 +37,7 @@ export function SettingsPage() {
       ) : (
         <div className="max-w-3xl">
           {tab === "accounts" && <AccountSettings settings={settings.data} />}
+          {tab === "patreon" && <PatreonSettings settings={settings.data} />}
           {tab === "onlyfans" && <OnlyFansSettings settings={settings.data} />}
           {tab === "scanning" && <ScanSettings settings={settings.data} />}
           {tab === "downloads" && <DownloadSettings settings={settings.data} />}
