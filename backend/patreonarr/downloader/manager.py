@@ -445,6 +445,7 @@ class DownloadManager:
                     ffmpeg_location=self.env.resolve_ffmpeg(),
                     fragment_concurrency=settings.downloads.hls_fragment_concurrency,
                     impersonate=settings.patreon.http_backend == "curl_cffi",
+                    remote_components=settings.downloads.ytdlp_remote_components,
                 )
                 reporter.set_stage("downloading")
                 produced = await asyncio.to_thread(run_ytdlp, url, tmp_dir, opts, reporter, label)

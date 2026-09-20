@@ -144,6 +144,12 @@ class SchedulerService:
             self._session_check,
         )
         self._register("prune", "Delete old history and job rows", 24 * 3600, self._prune)
+        self._register(
+            "reresolve_media",
+            "Re-run the media resolver on stored post data (after an update)",
+            None,
+            self._reresolve_media,
+        )
         self.scheduler.start()
 
     def shutdown(self) -> None:
@@ -194,6 +200,16 @@ class SchedulerService:
     async def _session_check(self) -> dict[str, bool]:
         ok = await self.services.patreon.check_session()
         return {"ok": ok}
+
+    async def _reresolve_media(self) -> dict[str, int]:
+        from patreonarr.scanner.scanner import reresolve_all
+
+        result = await asyncio.to_thread(
+            reresolve_all, self.services.session_factory, self.services.bus
+        )
+        if result["queued"]:
+            self.services.downloads.notify()
+        return result
 
     async def _prune(self) -> dict[str, int]:
         h = self.services.settings.get().history

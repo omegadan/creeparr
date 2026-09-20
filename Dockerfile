@@ -27,6 +27,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# yt-dlp needs a JavaScript runtime for YouTube; deno is its default.
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 
 WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./

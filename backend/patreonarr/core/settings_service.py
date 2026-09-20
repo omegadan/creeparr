@@ -48,6 +48,7 @@ class DownloadSettings(BaseModel):
     hls_fragment_concurrency: int = Field(default=4, ge=1, le=16)
     compute_sha256: bool = True
     video_format: str = "bv*+ba/b"
+    ytdlp_remote_components: bool = True
 
 
 class NamingSettings(BaseModel):

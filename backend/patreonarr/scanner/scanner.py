@@ -134,6 +134,14 @@ def sync_media_items(
             item.status_reason = None
         apply_creator_prefs(creator, item)
 
+    # Rows the resolver no longer produces (resolver fix or edited post): drop them unless
+    # a file was already archived.
+    wanted_keys = {spec.media_key for spec in specs}
+    for item in list(post.media_items):
+        if item.media_key not in wanted_keys and item.status != MediaStatus.COMPLETED:
+            post.media_items.remove(item)
+            session.delete(item)
+
     if not post.current_user_can_view:
         for item in post.media_items:
             if item.status in (MediaStatus.DISCOVERED, MediaStatus.QUEUED, MediaStatus.FAILED):
@@ -173,6 +181,42 @@ def sync_post(
         queued = auto_queue_post(session, creator, post)
     recompute_post_status(post)
     return post, is_new, changed, queued
+
+
+def reresolve_post(session: Session, creator: Creator, post: Post) -> int:
+    """Re-run the media resolver on the stored raw JSON (after a resolver fix)."""
+    raw = post.raw_json or {}
+    data = raw.get("data")
+    if not isinstance(data, dict):
+        return 0
+    from patreonarr.patreon.parsing import IncludedIndex, post_from_resource
+
+    pr = post_from_resource(data, IncludedIndex({"included": raw.get("included") or []}))
+    sync_media_items(session, creator, post, resolve_media(pr))
+    queued = auto_queue_post(session, creator, post)
+    recompute_post_status(post)
+    return queued
+
+
+def reresolve_all(session_factory: SessionFactory, bus: EventBus | None = None) -> dict[str, int]:
+    posts_done = 0
+    queued = 0
+    with session_scope(session_factory) as s:
+        ids = s.execute(select(Post.id)).scalars().all()
+    for pid in ids:
+        with session_scope(session_factory) as s:
+            post = s.execute(
+                select(Post).options(selectinload(Post.media_items)).where(Post.id == pid)
+            ).scalar_one_or_none()
+            if post is None:
+                continue
+            creator = s.get(Creator, post.creator_id)
+            if creator is None:
+                continue
+            queued += reresolve_post(s, creator, post)
+            posts_done += 1
+            publish_post_changed(bus, post)
+    return {"posts": posts_done, "queued": queued}
 
 
 # ---- async scanner -------------------------------------------------------------------

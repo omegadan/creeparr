@@ -167,3 +167,35 @@ async def test_auth_error_marks_invalid_and_raises(session_factory, settings, bu
 
 def test_patreon_service_is_real_type():
     assert PatreonService is not None
+
+
+@pytest.mark.asyncio
+async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory, settings, bus):
+    from patreonarr.scanner.scanner import reresolve_all
+
+    cid = make_creator(session_factory)
+    bad_embed = fx.post_resource(
+        "p1",
+        post_type="link",
+        embed={"provider": "Patreon", "url": "https://www.patreon.com/collection/1"},
+    )
+    scanner = Scanner(session_factory, settings, bus, FakePatreon(FakeClient([[bad_embed]])))
+    await scanner.scan_creator(cid, ScanMode.FULL)
+    # Simulate a row produced by an older resolver version.
+    with session_scope(session_factory) as s:
+        post = s.execute(select(Post)).scalar_one()
+        s.add(
+            MediaItem(
+                post_id=post.id,
+                creator_id=cid,
+                media_key="embed:p1",
+                kind="video",
+                source="embed_other",
+                status=MediaStatus.FAILED_PERMANENT,
+            )
+        )
+    result = reresolve_all(session_factory, bus)
+    assert result["posts"] == 1
+    with session_scope(session_factory) as s:
+        assert s.execute(select(MediaItem)).scalars().all() == []
+        assert s.execute(select(Post)).scalar_one().status == PostStatus.NO_MEDIA

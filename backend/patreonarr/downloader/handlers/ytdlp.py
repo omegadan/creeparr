@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,7 @@ class YtDlpOptions:
     ffmpeg_location: str | None
     fragment_concurrency: int
     impersonate: bool = False
+    remote_components: bool = True
 
 
 class _LoggerAdapter:
@@ -72,6 +74,19 @@ class _LoggerAdapter:
 
     def error(self, msg: str) -> None:
         log.error("%s %s", self.prefix, msg)
+
+
+JS_RUNTIMES = ("deno", "node", "bun", "quickjs")
+
+
+def available_js_runtimes() -> dict[str, dict[str, str]]:
+    """JS runtimes yt-dlp may use (YouTube needs one). Empty dict keeps yt-dlp's default."""
+    found: dict[str, dict[str, str]] = {}
+    for name in JS_RUNTIMES:
+        path = shutil.which(name)
+        if path:
+            found[name] = {"path": path}
+    return found
 
 
 def normalise_vimeo_url(url: str) -> str:
@@ -133,7 +148,8 @@ def run_ytdlp(
             reporter.set_stage("merging")
 
     ydl_opts: dict[str, Any] = {
-        "outtmpl": str(tmp_dir / "%(title).150B [%(id)s].%(ext)s"),
+        # Fixed name: generic HLS ids/titles can be hundreds of bytes and overflow NAME_MAX.
+        "outtmpl": str(tmp_dir / "media.%(ext)s"),
         "format": opts.video_format,
         "merge_output_format": "mp4",
         "http_headers": opts.headers,
@@ -153,6 +169,12 @@ def run_ytdlp(
     }
     if opts.cookiefile:
         ydl_opts["cookiefile"] = opts.cookiefile
+    runtimes = available_js_runtimes()
+    if runtimes:
+        ydl_opts["js_runtimes"] = runtimes
+    if opts.remote_components:
+        # Lets yt-dlp fetch its YouTube challenge-solver script (yt-dlp-ejs) from GitHub.
+        ydl_opts["remote_components"] = {"ejs:github"}
     if opts.ffmpeg_location:
         ydl_opts["ffmpeg_location"] = opts.ffmpeg_location
     if opts.impersonate:

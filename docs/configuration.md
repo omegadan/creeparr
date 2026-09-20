@@ -26,6 +26,7 @@ See the table in the README. They cover paths, port and log level only.
 | downloads.hls_fragment_concurrency | 4 | yt-dlp `concurrent_fragment_downloads` |
 | downloads.compute_sha256 | true | |
 | downloads.video_format | `bv*+ba/b` | yt-dlp format selector |
+| downloads.ytdlp_remote_components | true | Let yt-dlp fetch its YouTube challenge solver (ejs) from GitHub |
 | naming.post_folder_template | `{creator}/{published:%Y-%m-%d} - {title} [{post_id}]` | |
 | naming.file_template | `{filename}` | |
 | naming.max_component_length | 150 | bytes |

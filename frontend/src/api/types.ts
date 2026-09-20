@@ -252,6 +252,7 @@ export interface Settings {
     hls_fragment_concurrency: number;
     compute_sha256: boolean;
     video_format: string;
+    ytdlp_remote_components: boolean;
   };
   naming: {
     post_folder_template: string;

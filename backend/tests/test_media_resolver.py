@@ -84,3 +84,26 @@ def test_prefs():
     p = CreatorPrefs()
     assert p.wants(MediaKind.VIDEO) and not p.wants(MediaKind.IMAGE)
     assert CreatorPrefs(include_attachments=True).wants(MediaKind.ATTACHMENT)
+
+
+def test_patreon_internal_embed_is_ignored():
+    res = fx.post_resource(
+        "p9",
+        post_type="link",
+        embed={"provider": "Patreon", "url": "https://www.patreon.com/collection/123"},
+    )
+    assert resolve_media(_post(res)) == []
+
+
+def test_generic_media_video_duplicate_is_skipped_when_post_file_exists():
+    dup = fx.media_resource(
+        "v1", file_name=None, mimetype="video/mp4", download_url=f"{fx.CDN}/v1/dead.mp4"
+    )
+    res = fx.native_video_post("p10", hls=True)
+    res["relationships"]["media"] = {"data": [{"type": "media", "id": "v1"}]}
+    specs = resolve_media(_post(res, [dup]))
+    assert [s.media_key for s in specs] == ["postfile:p10"]
+    # but without a native video the generic media video is kept
+    res2 = fx.post_resource("p11", post_type="video_external_file")
+    res2["relationships"]["media"] = {"data": [{"type": "media", "id": "v1"}]}
+    assert [s.media_key for s in resolve_media(_post(res2, [dup]))] == ["media:v1"]

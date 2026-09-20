@@ -47,6 +47,11 @@ def name_ext(name: str | None) -> str:
     return PurePosixPath(name).suffix.lstrip(".").lower()
 
 
+def is_patreon_url(url: str | None) -> bool:
+    host = urlparse(url or "").netloc.lower()
+    return host == "patreon.com" or host.endswith(".patreon.com")
+
+
 def is_hls_url(url: str | None) -> bool:
     if not url:
         return False
@@ -140,8 +145,9 @@ def resolve_media(post: PostResource) -> list[MediaSpec]:
         spec.order_index = counters[spec.kind]
         specs.append(spec)
 
-    # 1. Embedded video (YouTube / Vimeo / other)
-    if post.embed_url:
+    # 1. Embedded video (YouTube / Vimeo / other). Links back into patreon.com
+    #    (collections, other posts) are navigation, not media.
+    if post.embed_url and not is_patreon_url(post.embed_url):
         add(
             MediaSpec(
                 media_key=f"embed:{post.id}",
@@ -188,9 +194,17 @@ def resolve_media(post: PostResource) -> list[MediaSpec]:
             if kind not in (MediaKind.VIDEO, MediaKind.AUDIO):
                 kind = MediaKind.ATTACHMENT
             add(_spec_from_media(m, kind, "attachment"))
+    has_native_video = any(
+        s.kind == MediaKind.VIDEO and s.media_key.startswith("postfile:") for s in specs
+    )
     for m in post.media:
         if m.relationship == "media":
-            add(_spec_from_media(m, _media_kind(m), "media"))
+            kind = _media_kind(m)
+            if kind == MediaKind.VIDEO and has_native_video:
+                # The generic `media` entry is the same asset as post_file, usually with
+                # a download link that 404s. Skip it.
+                continue
+            add(_spec_from_media(m, kind, "media"))
 
     return specs
 
