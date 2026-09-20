@@ -179,6 +179,27 @@ class OnlyFansProvider(ProviderService):
         async for page in client.iter_posts(external_id):
             yield page
 
+    async def _iter_archived(self, external_id: str) -> AsyncIterator[PostPage]:
+        client = await self._client_for_use()
+        async for page in client.iter_archived(external_id):
+            yield page
+
+    async def _iter_messages(self, external_id: str) -> AsyncIterator[PostPage]:
+        client = await self._client_for_use()
+        async for page in client.iter_messages(external_id):
+            yield page
+
+    def iter_sources(self, external_id: str) -> list[tuple[str, AsyncIterator[PostPage]]]:
+        of = self.group_settings()
+        sources: list[tuple[str, AsyncIterator[PostPage]]] = [
+            ("posts", self.iter_posts(external_id))
+        ]
+        if of.include_archived:
+            sources.append(("archived", self._iter_archived(external_id)))
+        if of.include_messages:
+            sources.append(("messages", self._iter_messages(external_id)))
+        return sources
+
     async def get_post(self, external_id: str, post_id: str) -> PostResource:
         return await (await self._client_for_use()).get_post(external_id, post_id)
 

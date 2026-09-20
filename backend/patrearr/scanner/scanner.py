@@ -383,39 +383,40 @@ class Scanner:
         status = ScanStatus.OK
         error: str | None = None
         try:
-            consecutive_known = 0
-            async for page in provider.iter_posts(creator.campaign_id):
-                if cancel is not None and cancel.is_set():
-                    raise ScanCancelled()
-                stats = await asyncio.to_thread(
-                    self._process_page,
-                    creator_id,
-                    run_id,
-                    page.posts,
-                    overlap,
-                    provider.resolve_media,
-                )
-                self.bus.publish(
-                    "scan.progress",
-                    {
-                        "scan_run_id": run_id,
-                        "creator_id": creator_id,
-                        "seen": stats.seen,
-                        "new": stats.new,
-                    },
-                )
-                # Track "known & unchanged" across pages for incremental stop.
-                if stats.new == 0 and stats.updated == 0:
-                    consecutive_known += stats.seen
-                else:
-                    consecutive_known = stats.consecutive_known
-                if effective_mode == ScanMode.INCREMENTAL and consecutive_known >= overlap:
-                    log.info(
-                        "incremental scan of %s: %d known posts in a row, stopping",
-                        creator.name,
-                        consecutive_known,
+            for source_name, page_iter in provider.iter_sources(creator.campaign_id):
+                consecutive_known = 0
+                async for page in page_iter:
+                    if cancel is not None and cancel.is_set():
+                        raise ScanCancelled()
+                    stats = await asyncio.to_thread(
+                        self._process_page,
+                        creator_id,
+                        run_id,
+                        page.posts,
+                        overlap,
+                        provider.resolve_media,
                     )
-                    break
+                    self.bus.publish(
+                        "scan.progress",
+                        {
+                            "scan_run_id": run_id,
+                            "creator_id": creator_id,
+                            "seen": stats.seen,
+                            "new": stats.new,
+                        },
+                    )
+                    if stats.new == 0 and stats.updated == 0:
+                        consecutive_known += stats.seen
+                    else:
+                        consecutive_known = stats.consecutive_known
+                    if effective_mode == ScanMode.INCREMENTAL and consecutive_known >= overlap:
+                        log.info(
+                            "incremental scan of %s [%s]: %d known in a row, next source",
+                            creator.name,
+                            source_name,
+                            consecutive_known,
+                        )
+                        break
         except ScanCancelled:
             status, error = ScanStatus.CANCELLED, "cancelled"
         except (AuthError, CloudflareChallengeError) as exc:

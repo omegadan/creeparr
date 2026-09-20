@@ -258,6 +258,7 @@ export interface Settings {
     random_delay_max: number;
     dynamic_rules_url: string;
     include_archived: boolean;
+    include_messages: boolean;
     http_backend: "httpx" | "curl_cffi";
     impersonate_target: string;
   };

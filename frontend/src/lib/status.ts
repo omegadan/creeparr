@@ -48,6 +48,8 @@ export const POST_TYPES: Record<string, string> = {
   poll: "Poll",
   link: "Link",
   livestream_youtube: "Livestream",
+  onlyfans_post: "Post",
+  onlyfans_message: "Message",
 };
 
 export function postTypeLabel(t: string | null): string {

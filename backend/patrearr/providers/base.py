@@ -107,6 +107,11 @@ class ProviderService(ABC):
     @abstractmethod
     def iter_posts(self, external_id: str) -> AsyncIterator[PostPage]: ...
 
+    def iter_sources(self, external_id: str) -> list[tuple[str, AsyncIterator[PostPage]]]:
+        """Ordered (source name, page iterator) pairs. Each source is scanned separately
+        so incremental scans get an independent overlap window per source."""
+        return [("posts", self.iter_posts(external_id))]
+
     @abstractmethod
     async def get_post(self, external_id: str, post_id: str) -> PostResource: ...
 

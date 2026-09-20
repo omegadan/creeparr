@@ -49,6 +49,9 @@ class FakeProvider:
     def iter_posts(self, campaign_id):
         return self.client.iter_posts(campaign_id)
 
+    def iter_sources(self, campaign_id):
+        return [("posts", self.client.iter_posts(campaign_id))]
+
     def resolve_media(self, pr):
         return resolve_media(pr)
 

@@ -144,3 +144,4 @@ class PostPage:
     posts: list[PostResource]
     next_url: str | None
     raw: dict[str, Any] = field(default_factory=dict)
+    source: str = "posts"

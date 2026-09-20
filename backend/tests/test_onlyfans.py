@@ -80,3 +80,40 @@ def test_no_access_post_yields_no_media():
         ).OnlyFansProvider
     )
     assert prov.resolve_media(post) == []
+
+
+def test_message_parsing_and_kind():
+    msg = {
+        "id": 900,
+        "text": "here you go 💋",
+        "createdAt": "2026-02-01T10:00:00+00:00",
+        "canPurchase": False,
+        "media": [
+            {
+                "id": 5,
+                "type": "video",
+                "canView": True,
+                "files": {"full": {"url": "https://cdn.onlyfans.com/5.mp4"}},
+            }
+        ],
+    }
+    pr = OnlyFansClient._message_from_json(msg, "123")
+    assert pr.id == "msg-900" and pr.post_type == "onlyfans_message"
+    assert pr.campaign_id == "123" and pr.current_user_can_view is True
+    assert pr.raw["_kind"] == "message"
+    from patrearr.providers.onlyfans.client import rebuild_post
+
+    rebuilt = rebuild_post({"data": pr.raw})
+    assert rebuilt is not None and rebuilt.id == "msg-900"
+
+
+def test_locked_ppv_message_not_viewable():
+    msg = {
+        "id": 1,
+        "text": "unlock me",
+        "canPurchase": True,
+        "createdAt": "2026-01-01T00:00:00+00:00",
+        "media": [{"id": 2, "type": "video", "canView": False, "files": {}}],
+    }
+    pr = OnlyFansClient._message_from_json(msg, "9")
+    assert pr.current_user_can_view is False

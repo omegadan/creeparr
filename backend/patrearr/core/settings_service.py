@@ -48,6 +48,7 @@ class OnlyFansSettings(BaseModel):
         "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json"
     )
     include_archived: bool = True
+    include_messages: bool = True
     http_backend: Literal["httpx", "curl_cffi"] = "httpx"
     impersonate_target: str = "chrome"
 

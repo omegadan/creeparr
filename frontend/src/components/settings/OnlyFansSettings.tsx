@@ -32,7 +32,10 @@ export function OnlyFansSettings({ settings }: { settings: Settings }) {
             <input className="input font-mono text-xs" placeholder="(default Chrome UA)" value={f.form.user_agent} onChange={(e) => f.set("user_agent", e.target.value)} />
           </Field>
         </div>
-        <Toggle checked={f.form.include_archived} onChange={(v) => f.set("include_archived", v)} label="Include archived posts" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Toggle checked={f.form.include_archived} onChange={(v) => f.set("include_archived", v)} label="Include archived posts" />
+          <Toggle checked={f.form.include_messages} onChange={(v) => f.set("include_messages", v)} label="Include messages / paid DMs" hint="Archives media from your chats with the creator." />
+        </div>
         <div className="flex justify-end"><Button variant="primary" disabled={!f.dirty} loading={f.saving} onClick={f.save}>Save</Button></div>
       </Section>
     </div>

@@ -194,7 +194,9 @@ class OnlyFansClient:
             offset += 50
         return out
 
-    async def iter_posts(self, external_id: str) -> AsyncIterator[PostPage]:
+    async def _iter_timeline_like(
+        self, path: str, kind: str, source: str
+    ) -> AsyncIterator[PostPage]:
         limit = 50
         params = {"limit": str(limit), "order": "publish_date_desc", "skip_users": "all"}
         before: str | None = None
@@ -203,42 +205,68 @@ class OnlyFansClient:
             page_params = dict(params)
             if before:
                 page_params["beforePublishTime"] = before
-            data = await self._get(f"/users/{external_id}/posts", page_params)
+            data = await self._get(path, page_params)
             items = data.get("list") if isinstance(data, dict) else data
             if not isinstance(items, list) or not items:
-                log.debug("OnlyFans posts: empty page after %d posts", seen)
-                yield PostPage(posts=[], next_url=None)
+                yield PostPage(posts=[], next_url=None, source=source)
                 return
             has_more_flag = data.get("hasMore") if isinstance(data, dict) else None
             last = items[-1]
             next_before = last.get("postedAtPrecise") or last.get("postedAt")
             seen += len(items)
-            log.debug(
-                "OnlyFans posts page: %d items (total %d), hasMore=%s, next before=%s",
-                len(items),
-                seen,
-                has_more_flag,
-                next_before,
-            )
+            log.debug("OnlyFans %s page: %d items (total %d)", kind, len(items), seen)
             posts = [self._post_from_json(p) for p in items]
-            # Trust hasMore when present; otherwise keep going while pages are full.
-            more = has_more_flag if has_more_flag is not None else (len(items) >= limit)
-            more = bool(more and next_before)
+            more_flag = has_more_flag if has_more_flag is not None else len(items) >= limit
+            more = bool(more_flag and next_before)
             before = str(next_before) if next_before is not None else None
-            yield PostPage(posts=posts, next_url="more" if more else None)
+            yield PostPage(posts=posts, next_url="more" if more else None, source=source)
+            if not more:
+                return
+
+    def iter_posts(self, external_id: str) -> AsyncIterator[PostPage]:
+        return self._iter_timeline_like(f"/users/{external_id}/posts", "posts", "posts")
+
+    def iter_archived(self, external_id: str) -> AsyncIterator[PostPage]:
+        return self._iter_timeline_like(
+            f"/users/{external_id}/posts/archived", "archived", "archived"
+        )
+
+    async def iter_messages(self, external_id: str) -> AsyncIterator[PostPage]:
+        limit = 50
+        before_id: str | None = None
+        seen = 0
+        while True:
+            params = {"limit": str(limit), "order": "desc", "skip_users": "all"}
+            if before_id:
+                params["id"] = before_id
+            data = await self._get(f"/chats/{external_id}/messages", params)
+            items = data.get("list") if isinstance(data, dict) else data
+            if not isinstance(items, list) or not items:
+                yield PostPage(posts=[], next_url=None, source="messages")
+                return
+            has_more = bool(data.get("hasMore")) if isinstance(data, dict) else False
+            seen += len(items)
+            log.debug("OnlyFans messages page: %d items (total %d)", len(items), seen)
+            posts = [self._message_from_json(m, external_id) for m in items]
+            before_id = str(items[-1].get("id"))
+            more = bool(has_more and before_id)
+            yield PostPage(posts=posts, next_url="more" if more else None, source="messages")
             if not more:
                 return
 
     async def get_post(self, external_id: str, post_id: str) -> PostResource:
+        if post_id.startswith("msg-"):
+            # Single messages cannot be re-fetched cheaply; signal no-refresh.
+            raise NotFoundError("message media cannot be refreshed individually")
         data = await self._get(f"/posts/{post_id}", {"skip_users": "all"})
         if not isinstance(data, dict) or not data.get("id"):
             raise NotFoundError(f"post {post_id} not found")
         return self._post_from_json(data)
 
     @staticmethod
-    def _post_from_json(p: dict[str, Any]) -> PostResource:
+    def _media_list(item: dict[str, Any]) -> list[MediaResource]:
         media: list[MediaResource] = []
-        for m in p.get("media") or []:
+        for m in item.get("media") or []:
             if not isinstance(m, dict):
                 continue
             files = m.get("files") or {}
@@ -251,7 +279,6 @@ class OnlyFansClient:
                     id=str(m.get("id")),
                     relationship=str(m.get("type") or "media"),
                     download_url=url,
-                    mimetype=None,
                     metadata={
                         "of_type": m.get("type"),
                         "can_view": m.get("canView", True),
@@ -261,17 +288,43 @@ class OnlyFansClient:
                     raw=m,
                 )
             )
+        return media
+
+    @classmethod
+    def _post_from_json(cls, p: dict[str, Any]) -> PostResource:
         return PostResource(
             id=str(p.get("id")),
             title=(p.get("text") or "").strip()[:200] or f"Post {p.get('id')}",
             post_type="onlyfans_post",
             content=p.get("rawText") or p.get("text"),
-            url=(f"https://onlyfans.com/{p.get('id')}").rstrip("/"),
+            url=f"https://onlyfans.com/{p.get('id')}",
             published_at=_parse_dt(p.get("postedAt")),
             current_user_can_view=bool(p.get("canViewMedia", True)),
             campaign_id=str((p.get("author") or {}).get("id") or ""),
-            media=media,
+            media=cls._media_list(p),
             raw=p,
+        )
+
+    @classmethod
+    def _message_from_json(cls, m: dict[str, Any], creator_id: str) -> PostResource:
+        media_items = m.get("media") or []
+        if media_items:
+            can_view = not m.get("canPurchase", False) and any(
+                md.get("canView", True) for md in media_items
+            )
+        else:
+            can_view = True
+        return PostResource(
+            id=f"msg-{m.get('id')}",
+            title=(m.get("text") or "").strip()[:200] or f"Message {m.get('id')}",
+            post_type="onlyfans_message",
+            content=m.get("text"),
+            url=f"https://onlyfans.com/my/chats/chat/{creator_id}",
+            published_at=_parse_dt(m.get("createdAt")),
+            current_user_can_view=bool(can_view),
+            campaign_id=str(creator_id),
+            media=cls._media_list(m),
+            raw={**m, "_kind": "message", "_creator_id": creator_id},
         )
 
 
@@ -279,4 +332,6 @@ def rebuild_post(raw: dict[str, Any]) -> PostResource | None:
     data = raw.get("data")
     if not isinstance(data, dict):
         return None
+    if data.get("_kind") == "message":
+        return OnlyFansClient._message_from_json(data, str(data.get("_creator_id") or ""))
     return OnlyFansClient._post_from_json(data)
