@@ -73,16 +73,20 @@ The folder and file templates are editable in **Settings → Naming & general**.
 
 ## Configuration
 
-Environment variables (container-level):
+Copy `.env.example` to `.env` next to `docker-compose.yml` and edit it; Compose picks it up
+automatically. Every variable is documented in that file. Summary:
 
-| Variable                  | Default      | Purpose                              |
-| ------------------------- | ------------ | ------------------------------------ |
-| `PUID` / `PGID`           | `1000`       | User/group that owns files           |
-| `TZ`                      | `Etc/UTC`    | Time zone                            |
-| `PATREARR_CONFIG_DIR`   | `/config`    | Database, logs, cookie file          |
-| `PATREARR_DOWNLOAD_DIR` | `/downloads` | Archive root                         |
-| `PATREARR_PORT`         | `7979`       | HTTP port                            |
-| `PATREARR_LOG_LEVEL`    | `INFO`       | `DEBUG`, `INFO`, `WARNING`, `ERROR`  |
+| Variable               | Default       | Purpose                                                |
+| ---------------------- | ------------- | ------------------------------------------------------ |
+| `PUID` / `PGID`        | `1000`        | User/group that owns files                             |
+| `TZ`                   | `Etc/UTC`     | Time zone                                              |
+| `CONFIG_DIR`           | `./config`    | Host path mounted at `/config` (database, logs)        |
+| `DOWNLOADS_DIR`        | `./downloads` | Host path mounted at `/downloads` (archive root)       |
+| `PORT`                 | `7979`        | Host port for the web UI                               |
+| `PATREARR_LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`                    |
+| `PATREARR_CONFIG_DIR`  | `/config`     | In-container config path (only when not using Docker) |
+| `PATREARR_DOWNLOAD_DIR`| `/downloads`  | In-container archive path (only when not using Docker) |
+| `PATREARR_PORT`        | `7979`        | Port the server listens on                             |
 
 Everything else (scan interval, concurrency, retries, naming, per-kind toggles, HTTP backend)
 lives in the database and is edited in the UI. See [docs/configuration.md](docs/configuration.md).
