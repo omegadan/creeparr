@@ -24,6 +24,9 @@ export function PatreonSettings({ settings }: { settings: Settings }) {
           <Field label="Random delay max (s)" hint="0 in both disables the random delay.">
             <input type="number" step="0.1" min="0" className="input" value={f.form.random_delay_max} onChange={(e) => f.set("random_delay_max", num(e.target.value, 0))} />
           </Field>
+          <Field label="Downloads per hour" hint="Cap how many downloads start per hour. 0 = unlimited.">
+            <input type="number" min="0" className="input" value={f.form.downloads_per_hour} onChange={(e) => f.set("downloads_per_hour", num(e.target.value, 0))} />
+          </Field>
           <Field label="User-Agent" hint="The Patreon mobile app UA is what works best." className="sm:col-span-2">
             <input className="input font-mono text-xs" value={f.form.user_agent} onChange={(e) => f.set("user_agent", e.target.value)} />
           </Field>

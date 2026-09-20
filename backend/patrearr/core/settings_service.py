@@ -25,6 +25,7 @@ class PatreonSettings(BaseModel):
     requests_per_second: float = Field(default=1.0, ge=0.1, le=10)
     random_delay_min: float = Field(default=0.0, ge=0.0, le=60)
     random_delay_max: float = Field(default=0.0, ge=0.0, le=120)
+    downloads_per_hour: int = Field(default=0, ge=0)
     http_backend: Literal["httpx", "curl_cffi"] = "httpx"
     impersonate_target: str = "chrome"
 
@@ -62,6 +63,7 @@ class OnlyFansSettings(BaseModel):
 class YouTubeSettings(BaseModel):
     cookies_txt: str = ""
     max_videos: int = Field(default=0, ge=0)
+    downloads_per_hour: int = Field(default=0, ge=0)
 
 
 class ScanSettings(BaseModel):

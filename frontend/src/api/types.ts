@@ -246,6 +246,7 @@ export interface Settings {
     requests_per_second: number;
     random_delay_min: number;
     random_delay_max: number;
+    downloads_per_hour: number;
     http_backend: "httpx" | "curl_cffi";
     impersonate_target: string;
   };
@@ -260,6 +261,7 @@ export interface Settings {
     random_delay_min: number;
     random_delay_max: number;
     dynamic_rules_url: string;
+    downloads_per_hour: number;
     include_archived: boolean;
     include_messages: boolean;
     http_backend: "httpx" | "curl_cffi";
@@ -269,6 +271,7 @@ export interface Settings {
     cookies_txt: string;
     has_cookies_txt: boolean;
     max_videos: number;
+    downloads_per_hour: number;
   };
   scan: {
     interval_minutes: number;

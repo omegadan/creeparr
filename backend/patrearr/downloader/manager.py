@@ -9,6 +9,7 @@ import mimetypes
 import random
 import threading
 import time
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -130,6 +131,7 @@ class DownloadManager:
         self._last_disk_check = 0.0
         self._disk_ok = True
         self._claim_lock = threading.Lock()
+        self._recent_starts: dict[str, deque[float]] = defaultdict(deque)
 
     # ---- lifecycle -----------------------------------------------------------------
 
@@ -265,6 +267,23 @@ class DownloadManager:
 
     # ---- claiming ------------------------------------------------------------------
 
+    def _provider_hourly_limit(self, provider: str) -> int:
+        group = getattr(self.settings.get(), provider, None)
+        return int(getattr(group, "downloads_per_hour", 0) or 0)
+
+    def _provider_allowed(self, provider: str) -> bool:
+        limit = self._provider_hourly_limit(provider)
+        if limit <= 0:
+            return True
+        window = self._recent_starts[provider]
+        cutoff = time.monotonic() - 3600
+        while window and window[0] < cutoff:
+            window.popleft()
+        return len(window) < limit
+
+    def _record_start(self, provider: str) -> None:
+        self._recent_starts[provider].append(time.monotonic())
+
     def _claim_next(self, worker_id: str) -> JobContext | None:
         with self._claim_lock:
             return self._claim_next_locked(worker_id)
@@ -301,7 +320,10 @@ class DownloadManager:
                 media = job.media_item
                 if media is None or media.post is None:
                     continue
-                if media.post.creator.provider in blocked and media.source not in EMBED_SOURCES:
+                provider = media.post.creator.provider
+                if provider in blocked and media.source not in EMBED_SOURCES:
+                    continue
+                if not self._provider_allowed(provider):
                     continue
                 # Conditional update so a job can never be claimed twice.
                 claimed = s.execute(
@@ -320,6 +342,7 @@ class DownloadManager:
                 s.refresh(job)
                 media.status = MediaStatus.DOWNLOADING
                 s.flush()
+                self._record_start(provider)
                 ctx = self._context(job, media, media.post, media.post.creator)
                 self.bus.publish(
                     "job.started",
