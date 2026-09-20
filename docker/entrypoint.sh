@@ -21,10 +21,21 @@ else
     usermod -o -u "$PUID" abc
 fi
 
-mkdir -p /config/logs /config/cookies /downloads
-chown -R abc:abc /config
+mkdir -p /config/logs /config/cookies /downloads || true
+# Best effort: on some shares (Unraid /mnt/user, NFS) chown can fail for individual
+# files; the app reports clearly if it cannot write, so do not abort startup here.
+if ! chown -R abc:abc /config 2>/dev/null; then
+    echo "patrearr: warning: could not change ownership of everything under /config"
+fi
 # Never chown the media tree recursively: it may be huge and belong to other apps.
 chown abc:abc /downloads 2>/dev/null || true
+if ! gosu abc test -w /config; then
+    echo "patrearr: ERROR: /config is not writable by uid $PUID gid $PGID. Fix the host folder's permissions or PUID/PGID." >&2
+    exit 1
+fi
+if ! gosu abc test -w /downloads; then
+    echo "patrearr: warning: /downloads is not writable by uid $PUID gid $PGID; downloads will pause until fixed" >&2
+fi
 
 echo "patrearr: running as uid=$(id -u abc) gid=$(id -g abc), tz=${TZ:-UTC}"
 exec gosu abc "$@"
