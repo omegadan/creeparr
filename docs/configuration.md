@@ -15,6 +15,8 @@ See the table in the README. They cover paths, port and log level only. `PATREAR
 | patreon.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) added before each request; 0/0 disables |
 | onlyfans.requests_per_second | 0.5 | Steady API rate limit (0.1–5) |
 | onlyfans.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) before each OnlyFans request |
+| youtube.max_videos | 0 | Cap videos per channel (0 = all) |
+| youtube.cookies_txt | "" | Optional cookies for members-only/age-restricted videos |
 | patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |
 | scan.interval_minutes | 60 | 0 disables scheduled scans |
 | scan.overlap_posts | 10 | Incremental stop condition |

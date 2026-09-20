@@ -27,6 +27,7 @@ const FIELDS: Record<string, FieldSpec> = {
 const INTRO: Record<string, string> = {
   patreon: "Reads posts your Patreon account already has access to. Locked posts stay locked.",
   onlyfans: "Reads content your OnlyFans account is subscribed to. Signing rules are fetched automatically. OnlyFans is strict about automation; use a low request rate and expect DRM videos to be skipped.",
+  youtube: "Public YouTube channels need no login. Add a cookies.txt only for members-only or age-restricted videos.",
 };
 
 function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings: Settings }) {

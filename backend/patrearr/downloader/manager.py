@@ -88,6 +88,7 @@ class JobContext:
     post_ext_id: str
     post_title: str
     post_published_at: datetime | None
+    post_first_seen: datetime | None
     post_type: str | None
     post_thumbnail_url: str | None
     post_sidecars_written: bool
@@ -347,6 +348,7 @@ class DownloadManager:
             post_ext_id=post.post_id,
             post_title=post.title,
             post_published_at=post.published_at,
+            post_first_seen=post.first_seen_at,
             post_type=post.post_type,
             post_thumbnail_url=post.thumbnail_url,
             post_sidecars_written=post.sidecars_written,
@@ -458,7 +460,10 @@ class DownloadManager:
                     remote_components=settings.downloads.ytdlp_remote_components,
                 )
                 reporter.set_stage("downloading")
-                produced = await asyncio.to_thread(run_ytdlp, url, tmp_dir, opts, reporter, label)
+                produced, yt_meta = await asyncio.to_thread(
+                    run_ytdlp, url, tmp_dir, opts, reporter, label
+                )
+                await self._backfill_date(ctx, yt_meta)
                 reporter.set_stage("verifying")
                 result = await asyncio.to_thread(
                     self._finalise_ytdlp, ctx, post_dir, produced, settings.downloads.compute_sha256
@@ -478,6 +483,32 @@ class DownloadManager:
             result = await self._embed_metadata(ctx, provider, result, reporter)
         remove_tree(tmp_dir)
         await asyncio.to_thread(self._complete_job, ctx, result)
+
+    async def _backfill_date(self, ctx: JobContext, meta: dict[str, Any]) -> None:
+        """Fill a missing publish date from yt-dlp metadata (YouTube has none until now)."""
+        if ctx.post_published_at is not None:
+            return
+        published = None
+        if meta.get("timestamp"):
+            published = datetime.fromtimestamp(meta["timestamp"], tz=UTC)
+        elif meta.get("upload_date"):
+            try:
+                published = datetime.strptime(meta["upload_date"], "%Y%m%d").replace(tzinfo=UTC)
+            except ValueError:
+                published = None
+        if published is None:
+            return
+        ctx.post_published_at = published
+
+        def _apply() -> None:
+            with session_scope(self._factory) as s:
+                post = s.get(Post, ctx.post_id)
+                if post is not None and post.published_at is None:
+                    post.published_at = published
+                    if not post.content_html and meta.get("description"):
+                        post.content_html = meta["description"]
+
+        await asyncio.to_thread(_apply)
 
     async def _embed_metadata(
         self, ctx: JobContext, provider, result: DownloadResult, reporter: ProgressReporter
@@ -692,7 +723,9 @@ class DownloadManager:
             "campaign_id": ctx.campaign_id,
             "title": ctx.post_title or "untitled",
             "post_id": ctx.post_ext_id,
-            "published": ctx.post_published_at or datetime(1970, 1, 1, tzinfo=UTC),
+            "published": (
+                ctx.post_published_at or ctx.post_first_seen or datetime(1970, 1, 1, tzinfo=UTC)
+            ),
             "post_type": ctx.post_type or "",
             "media_kind": ctx.kind,
             "media_index": ctx.order_index,

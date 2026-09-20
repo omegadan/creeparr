@@ -17,6 +17,7 @@ from patrearr.downloader.manager import DownloadManager
 from patrearr.providers.onlyfans.provider import OnlyFansProvider
 from patrearr.providers.patreon import PatreonProvider
 from patrearr.providers.registry import ProviderRegistry
+from patrearr.providers.youtube import YouTubeProvider
 from patrearr.scanner.scan_manager import ScanManager
 from patrearr.scanner.scanner import Scanner
 from patrearr.scheduler import SchedulerService
@@ -51,6 +52,7 @@ def build_services(env: EnvConfig) -> Services:
         [
             PatreonProvider(env, settings, factory, bus),
             OnlyFansProvider(env, settings, factory, bus),
+            YouTubeProvider(env, settings, factory, bus),
         ]
     )
     scanner = Scanner(factory, settings, bus, providers)

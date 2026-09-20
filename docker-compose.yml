@@ -9,10 +9,12 @@ services:
       - TZ=${TZ:-America/Los_Angeles}
       - PATREARR_LOG_LEVEL=${PATREARR_LOG_LEVEL:-INFO}
       - PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans
+      - PATREARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube
     volumes:
       - ${CONFIG_DIR}:/config
       - ${DOWNLOAD_DIR}:/downloads
       - ${ONLYFANS_DOWNLOAD_DIR}:/downloads-onlyfans
+      - ${YOUTUBE_DOWNLOAD_DIR}:/downloads-youtube
     ports:
       - "${PORT:-7979}:7979"
     restart: unless-stopped

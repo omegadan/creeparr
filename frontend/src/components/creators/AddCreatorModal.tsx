@@ -13,6 +13,7 @@ import { useToast } from "../ui/Toast";
 const PLACEHOLDER: Record<string, string> = {
   patreon: "https://www.patreon.com/c/somecreator",
   onlyfans: "https://onlyfans.com/somecreator",
+  youtube: "https://www.youtube.com/@channel  or  @handle",
 };
 
 export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () => void }) {

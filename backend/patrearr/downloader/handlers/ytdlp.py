@@ -118,7 +118,7 @@ def classify_ytdlp_error(exc: Exception) -> Exception:
 
 def run_ytdlp(
     url: str, tmp_dir: Path, opts: YtDlpOptions, reporter: ProgressReporter, label: str
-) -> Path:
+) -> tuple[Path, dict[str, Any]]:
     """Blocking. Downloads `url` into `tmp_dir` and returns the produced file."""
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -198,7 +198,16 @@ def run_ytdlp(
     produced = _find_output(info, tmp_dir)
     if produced is None:
         raise RetryableDownloadError("yt-dlp finished but no output file was found", "ytdlp")
-    return produced
+    entry = info
+    if info and info.get("_type") == "playlist" and info.get("entries"):
+        entry = next((e for e in info["entries"] if e), info)
+    meta = {
+        "title": (entry or {}).get("title"),
+        "description": (entry or {}).get("description"),
+        "upload_date": (entry or {}).get("upload_date"),
+        "timestamp": (entry or {}).get("timestamp"),
+    }
+    return produced, meta
 
 
 def _find_output(info: dict[str, Any] | None, tmp_dir: Path) -> Path | None:

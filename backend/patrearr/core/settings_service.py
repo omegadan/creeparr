@@ -59,6 +59,11 @@ class OnlyFansSettings(BaseModel):
         return self
 
 
+class YouTubeSettings(BaseModel):
+    cookies_txt: str = ""
+    max_videos: int = Field(default=0, ge=0)
+
+
 class ScanSettings(BaseModel):
     interval_minutes: int = Field(default=60, ge=0, le=10080)
     overlap_posts: int = Field(default=10, ge=1, le=500)
@@ -116,6 +121,7 @@ class HistorySettings(BaseModel):
 class AppSettings(BaseModel):
     patreon: PatreonSettings = Field(default_factory=PatreonSettings)
     onlyfans: OnlyFansSettings = Field(default_factory=OnlyFansSettings)
+    youtube: YouTubeSettings = Field(default_factory=YouTubeSettings)
     scan: ScanSettings = Field(default_factory=ScanSettings)
     downloads: DownloadSettings = Field(default_factory=DownloadSettings)
     naming: NamingSettings = Field(default_factory=NamingSettings)
@@ -128,6 +134,7 @@ SECRET_FIELDS: dict[str, set[str]] = {
     "patreon": {"session_id", "cookies_txt"},
     "onlyfans": {"sess", "auth_id", "x_bc", "cookies_txt"},
     "security": {"password_hash"},
+    "youtube": {"cookies_txt"},
 }
 TEXT_SECRETS = {"cookies_txt"}
 

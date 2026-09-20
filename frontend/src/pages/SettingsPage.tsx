@@ -4,6 +4,7 @@ import { PageHeader } from "../components/layout/AppShell";
 import { Spinner } from "../components/ui/Misc";
 import { AccountSettings } from "../components/settings/AccountSettings";
 import { OnlyFansSettings } from "../components/settings/OnlyFansSettings";
+import { YouTubeSettings } from "../components/settings/YouTubeSettings";
 import { NotificationSettings } from "../components/settings/NotificationSettings";
 import { SecuritySettings } from "../components/settings/SecuritySettings";
 import { PatreonSettings } from "../components/settings/PatreonSettings";
@@ -16,6 +17,7 @@ const TABS = [
   { id: "accounts", label: "Accounts" },
   { id: "patreon", label: "Patreon" },
   { id: "onlyfans", label: "OnlyFans" },
+  { id: "youtube", label: "YouTube" },
   { id: "scanning", label: "Scanning" },
   { id: "downloads", label: "Downloads" },
   { id: "notifications", label: "Notifications" },
@@ -43,6 +45,7 @@ export function SettingsPage() {
           {tab === "accounts" && <AccountSettings settings={settings.data} />}
           {tab === "patreon" && <PatreonSettings settings={settings.data} />}
           {tab === "onlyfans" && <OnlyFansSettings settings={settings.data} />}
+          {tab === "youtube" && <YouTubeSettings settings={settings.data} />}
           {tab === "scanning" && <ScanSettings settings={settings.data} />}
           {tab === "downloads" && <DownloadSettings settings={settings.data} />}
           {tab === "notifications" && <NotificationSettings settings={settings.data} />}

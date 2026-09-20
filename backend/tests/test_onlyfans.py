@@ -117,3 +117,38 @@ def test_locked_ppv_message_not_viewable():
     }
     pr = OnlyFansClient._message_from_json(msg, "9")
     assert pr.current_user_can_view is False
+
+
+def test_youtube_channel_url_and_entry_parsing():
+    from patrearr.providers.youtube import YouTubeProvider, _parse_rss
+
+    u = YouTubeProvider._channel_videos_url
+    assert u("https://www.youtube.com/@TED").endswith("/@TED/videos")
+    assert u("https://www.youtube.com/@TED/streams").endswith("/@TED/videos")
+    assert u("UCAuUUnT6oDeKwE6v1NGQxug").endswith("/channel/UCAuUUnT6oDeKwE6v1NGQxug/videos")
+    assert u("@TED").endswith("/@TED/videos")
+
+    prov = object.__new__(YouTubeProvider)
+    pr = YouTubeProvider._post_from_entry(
+        prov,
+        {
+            "id": "abc123",
+            "title": "Hi",
+            "url": "https://www.youtube.com/watch?v=abc123",
+            "timestamp": 1735689600,
+        },
+        "UC123",
+    )
+    assert pr.id == "abc123" and pr.post_type == "youtube_video" and pr.campaign_id == "UC123"
+    assert pr.published_at is not None
+    specs = YouTubeProvider.resolve_media(prov, pr)
+    assert (
+        len(specs) == 1
+        and specs[0].source == "embed_youtube"
+        and specs[0].media_key == "video:abc123"
+    )
+
+    rss = _parse_rss(
+        '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015"><entry><yt:videoId>xyz</yt:videoId><published>2026-01-02T03:04:05+00:00</published></entry></feed>'
+    )
+    assert "xyz" in rss and rss["xyz"].year == 2026
