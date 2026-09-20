@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import type { Creator } from "../../api/types";
 import { usePatchCreator } from "../../api/hooks/useCreators";
-import { pct, timeAgo, cx } from "../../lib/format";
+import { formatBytes, pct, timeAgo, cx } from "../../lib/format";
 import { ProgressBar } from "../ui/ProgressBar";
 import { Avatar } from "../ui/Misc";
 import { Badge } from "../ui/Badge";
@@ -32,6 +32,7 @@ export function CreatorCard({ creator }: { creator: Creator }) {
         <ProgressBar value={done} tone={done === 100 && s.media_total > 0 ? "ok" : "accent"} />
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-fg-dim">
           <span>{s.posts_total} posts</span>
+          {s.bytes > 0 && <span>{formatBytes(s.bytes)}</span>}
           {s.posts_pending > 0 && <Badge tone="info">{s.posts_pending} pending</Badge>}
           {s.posts_no_access > 0 && <Badge tone="muted">{s.posts_no_access} locked</Badge>}
           {s.posts_unsupported > 0 && <Badge tone="danger">{s.posts_unsupported} DRM</Badge>}

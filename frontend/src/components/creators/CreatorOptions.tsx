@@ -27,9 +27,14 @@ export function CreatorOptions({ value, onChange, showFolder, compact }: Props) 
         />
       </Field>
       {showFolder && (
-        <Field label="Folder name override" hint="Used for {creator} in the naming template">
-          <input className="input" value={value.folder_name ?? ""} placeholder="(creator name)" onChange={(e) => set("folder_name", e.target.value)} />
-        </Field>
+        <>
+          <Field label="Scan interval override (minutes)" hint="Blank uses the global interval; 0 never auto-scans.">
+            <input type="number" min="0" className="input" value={value.scan_interval_minutes ?? ""} placeholder="(global)" onChange={(e) => set("scan_interval_minutes", e.target.value === "" ? null : Number(e.target.value))} />
+          </Field>
+          <Field label="Folder name override" hint="Used for {creator} in the naming template">
+            <input className="input" value={value.folder_name ?? ""} placeholder="(creator name)" onChange={(e) => set("folder_name", e.target.value)} />
+          </Field>
+        </>
       )}
     </div>
   );

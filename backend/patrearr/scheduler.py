@@ -118,11 +118,11 @@ class SchedulerService:
     # ---- lifecycle -----------------------------------------------------------------
 
     def start(self) -> None:
-        s = self.services.settings.get()
+        # Fixed cadence; per-creator due-ness (global or per-creator interval) decides who scans.
         self._register(
             "scan_monitored",
-            "Scan monitored creators for new posts",
-            s.scan.interval_minutes * 60 if s.scan.interval_minutes else None,
+            "Scan creators whose configured interval has elapsed",
+            300,
             self._scan_monitored,
         )
         self._register(
@@ -157,17 +157,30 @@ class SchedulerService:
             self.scheduler.shutdown(wait=False)
 
     def apply_settings(self) -> None:
-        s = self.services.settings.get()
-        seconds = s.scan.interval_minutes * 60 if s.scan.interval_minutes else None
-        info = self.tasks.get("scan_monitored")
-        if info is None or info.interval_seconds == seconds:
-            return
-        self._register("scan_monitored", info.description, seconds, info.fn)
+        # scan_monitored runs on a fixed cadence; interval changes take effect via due-ness.
+        return
 
     # ---- tasks ---------------------------------------------------------------------
 
     async def _scan_monitored(self) -> dict[str, int]:
-        n = self.services.scan_manager.request_scan_all(ScanMode.AUTO, trigger="schedule")
+        global_interval = self.services.settings.get().scan.interval_minutes
+        now = datetime.now(UTC)
+        due: list[int] = []
+        with session_scope(self.services.session_factory) as s:
+            for cid, last_scan, override in s.execute(
+                select(Creator.id, Creator.last_scan_at, Creator.scan_interval_minutes).where(
+                    Creator.monitored.is_(True)
+                )
+            ).all():
+                interval = override if override is not None else global_interval
+                if not interval or interval <= 0:
+                    continue
+                if last_scan is None or (now - last_scan) >= timedelta(minutes=interval):
+                    due.append(cid)
+        n = 0
+        for cid in due:
+            if self.services.scan_manager.request_scan(cid, ScanMode.AUTO, trigger="schedule"):
+                n += 1
         return {"queued": n}
 
     async def _full_rescan(self) -> dict[str, int]:

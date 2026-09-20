@@ -37,7 +37,10 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Max path component length (bytes)"><input type="number" min="20" max="240" className="input" value={naming.form.max_component_length} onChange={(e) => naming.set("max_component_length", num(e.target.value, 150))} /></Field>
-          <div className="pt-6"><Toggle checked={naming.form.write_sidecars} onChange={(v) => naming.set("write_sidecars", v)} label="Write post.json / post.md / post.html sidecars" /></div>
+          <div className="grid gap-3 pt-6">
+            <Toggle checked={naming.form.write_sidecars} onChange={(v) => naming.set("write_sidecars", v)} label="Write post.json / post.md / post.html sidecars" />
+            <Toggle checked={naming.form.write_nfo} onChange={(v) => naming.set("write_nfo", v)} label="Write .nfo for videos (Kodi / Jellyfin / Plex)" />
+          </div>
         </div>
         <div className="flex justify-end"><Button variant="primary" disabled={!naming.dirty} loading={naming.saving} onClick={naming.save}>Save naming</Button></div>
       </Section>

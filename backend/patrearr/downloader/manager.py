@@ -43,7 +43,7 @@ from patrearr.downloader.handlers.base import (
 from patrearr.downloader.handlers.direct import download_direct
 from patrearr.downloader.handlers.ytdlp import YtDlpOptions, normalise_vimeo_url, run_ytdlp
 from patrearr.downloader.queue import enqueue_media, publish_post_changed, recompute_post_status
-from patrearr.downloader.sidecars import write_text_sidecars
+from patrearr.downloader.sidecars import write_nfo, write_text_sidecars
 from patrearr.patreon.drm import probe_hls_drm
 from patrearr.providers.errors import (
     AuthError,
@@ -627,8 +627,21 @@ class DownloadManager:
                 return True
         return False
 
+    def _maybe_write_nfo(self, ctx: JobContext, result: DownloadResult) -> None:
+        if ctx.kind != MediaKind.VIDEO or not self.settings.get().naming.write_nfo:
+            return
+        with session_scope(self._factory) as s:
+            post = s.get(Post, ctx.post_id)
+            creator = s.get(Creator, ctx.creator_id)
+            if post and creator:
+                try:
+                    write_nfo(result.path.parent, post, creator, result.path.name)
+                except OSError as exc:
+                    log.debug("nfo write failed: %s", exc)
+
     def _complete_job(self, ctx: JobContext, result: DownloadResult) -> None:
         self._dedupe(ctx, result)
+        self._maybe_write_nfo(ctx, result)
         rel = str(result.path.relative_to(self.env.download_root(ctx.provider)))
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)

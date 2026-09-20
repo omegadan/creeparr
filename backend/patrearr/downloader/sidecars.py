@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import json
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 from markdownify import markdownify
 
@@ -57,3 +58,22 @@ def write_text_sidecars(post_dir: Path, post: Post, creator: Creator) -> list[Pa
     )
     written.append(md_path)
     return written
+
+
+def write_nfo(post_dir: Path, post: Post, creator: Creator, video_name: str) -> Path:
+    """Write a Kodi/Jellyfin-style .nfo next to a video file."""
+    stem = Path(video_name).stem
+    path = post_dir / f"{stem}.nfo"
+    date = post.published_at.date().isoformat() if post.published_at else ""
+    plot = (post.content_html or post.teaser_text or "").strip()
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<movie>\n'
+        f"  <title>{xml_escape(post.title or stem)}</title>\n"
+        f"  <studio>{xml_escape(creator.name)}</studio>\n"
+        f"  <premiered>{date}</premiered>\n"
+        f"  <plot>{xml_escape(plot)}</plot>\n"
+        f'  <uniqueid type="patrearr">{xml_escape(post.post_id)}</uniqueid>\n'
+        "</movie>\n"
+    )
+    path.write_text(xml, "utf-8")
+    return path

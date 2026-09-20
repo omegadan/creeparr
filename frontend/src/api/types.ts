@@ -7,6 +7,7 @@ export interface CreatorStats {
   media_total: number;
   media_completed: number;
   active_jobs: number;
+  bytes: number;
 }
 
 export interface Creator {
@@ -25,6 +26,7 @@ export interface Creator {
   include_audio: boolean;
   include_attachments: boolean;
   download_since: string | null;
+  scan_interval_minutes: number | null;
   folder_name: string | null;
   last_scan_at: string | null;
   last_full_scan_at: string | null;
@@ -42,6 +44,7 @@ export interface CreatorDefaults {
   include_audio?: boolean;
   include_attachments?: boolean;
   download_since?: string | null;
+  scan_interval_minutes?: number | null;
   folder_name?: string | null;
 }
 
@@ -290,6 +293,7 @@ export interface Settings {
     file_template: string;
     max_component_length: number;
     write_sidecars: boolean;
+    write_nfo: boolean;
   };
   notifications: {
     webhook_url: string;
@@ -324,7 +328,7 @@ export interface SystemStatus {
   scan: { running: { creator_id: number; mode: string } | null; pending: { creator_id: number; mode: string; trigger: string }[] };
   next_scan_at: string | null;
   downloads: { paused: boolean; paused_reason: string | null; workers: number; running_jobs: number[]; free_bytes: number };
-  counts: { creators: number; posts: number; media_completed: number; media_bytes: number; queued: number; running: number; failed: number };
+  counts: { creators: number; posts: number; media_completed: number; media_bytes: number; provider_bytes: Record<string, number>; queued: number; running: number; failed: number };
   disk: { free_bytes: number | null; total_bytes: number | null; used_bytes: number | null };
   paths: { config_dir: string; download_dir: string; onlyfans_download_dir: string | null };
   ffmpeg: string | null;

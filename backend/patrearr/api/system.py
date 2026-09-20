@@ -84,6 +84,14 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
         media_bytes = s.execute(
             select(func.coalesce(func.sum(MediaItem.file_size_bytes), 0))
         ).scalar_one()
+        provider_bytes = dict(
+            s.execute(
+                select(Creator.provider, func.coalesce(func.sum(MediaItem.file_size_bytes), 0))
+                .join(MediaItem, MediaItem.creator_id == Creator.id)
+                .where(MediaItem.status == MediaStatus.COMPLETED)
+                .group_by(Creator.provider)
+            ).all()
+        )
         queued = s.execute(
             select(func.count())
             .select_from(DownloadJob)
@@ -121,6 +129,7 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
             "posts": posts,
             "media_completed": media_done,
             "media_bytes": media_bytes,
+            "provider_bytes": provider_bytes,
             "queued": queued,
             "running": running,
             "failed": failed,

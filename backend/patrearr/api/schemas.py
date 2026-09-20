@@ -41,6 +41,7 @@ class CreatorStats(BaseModel):
     media_total: int = 0
     media_completed: int = 0
     active_jobs: int = 0
+    bytes: int = 0
 
 
 class CreatorOut(ORMModel):
@@ -59,6 +60,7 @@ class CreatorOut(ORMModel):
     include_audio: bool
     include_attachments: bool
     download_since: datetime | None
+    scan_interval_minutes: int | None
     folder_name: str | None
     last_scan_at: datetime | None
     last_full_scan_at: datetime | None
@@ -76,6 +78,7 @@ class CreatorDefaults(BaseModel):
     include_audio: bool | None = None
     include_attachments: bool | None = None
     download_since: datetime | None = None
+    scan_interval_minutes: int | None = None
 
 
 class CreatorCreate(CreatorDefaults):

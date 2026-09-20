@@ -30,7 +30,7 @@ export function SystemStatusPage() {
       <PageHeader title="System status" subtitle={`Patrearr v${s.version} · up ${formatDuration(s.uptime_seconds)}`} />
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Patreon session" value={<Badge tone={s.auth.state === "valid" ? "ok" : s.auth.state === "unknown" ? "warn" : "danger"}>{s.auth.state}</Badge>} sub={s.auth.user_name ?? s.auth.error ?? `checked ${timeAgo(s.auth.checked_at)}`} />
-        <Stat label="Archive" value={`${s.counts.media_completed} files`} sub={`${formatBytes(s.counts.media_bytes)} across ${s.counts.posts} posts from ${s.counts.creators} creators`} />
+        <Stat label="Archive" value={`${formatBytes(s.counts.media_bytes)}`} sub={`${s.counts.media_completed} files · ${Object.entries(s.counts.provider_bytes || {}).map(([p, b]) => `${p}: ${formatBytes(b)}`).join(" · ") || `${s.counts.posts} posts`}`} />
         <Stat label="Queue" value={`${s.counts.running} running · ${s.counts.queued} queued`} sub={`${s.counts.failed} failed · ${s.downloads.workers} workers${s.downloads.paused ? ` · paused (${s.downloads.paused_reason})` : ""}`} />
         <Stat label="Disk" value={formatBytes(s.disk.free_bytes) + " free"} sub={diskPct !== null ? `${diskPct}% used of ${formatBytes(s.disk.total_bytes)}` : undefined} />
         <Stat label="Next scan" value={s.next_scan_at ? timeAgo(s.next_scan_at).replace("in ", "in ") : "disabled"} sub={s.scan.running ? `scanning creator #${s.scan.running.creator_id}` : `${s.scan.pending.length} pending`} />

@@ -89,6 +89,7 @@ class Creator(TimestampMixin, Base):
     include_audio: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     include_attachments: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     download_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    scan_interval_minutes: Mapped[int | None] = mapped_column(Integer)
     folder_name: Mapped[str | None] = mapped_column(String(255))
 
     last_scan_at: Mapped[datetime | None] = mapped_column(UTCDateTime)

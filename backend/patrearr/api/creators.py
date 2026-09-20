@@ -80,6 +80,12 @@ def creator_stats(session: Session, creator_ids: list[int]) -> dict[int, Creator
         stats[cid].media_total += n
         if st == MediaStatus.COMPLETED:
             stats[cid].media_completed += n
+    for cid, total in session.execute(
+        select(MediaItem.creator_id, func.coalesce(func.sum(MediaItem.file_size_bytes), 0))
+        .where(MediaItem.creator_id.in_(creator_ids), MediaItem.status == MediaStatus.COMPLETED)
+        .group_by(MediaItem.creator_id)
+    ).all():
+        stats[cid].bytes = total
     rows = session.execute(
         select(DownloadJob.creator_id, func.count())
         .where(
