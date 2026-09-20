@@ -5,6 +5,9 @@ import { RouterProvider } from "react-router";
 import { router } from "./router";
 import { ToastProvider } from "./components/ui/Toast";
 import "./styles/global.css";
+import { applyTheme, getTheme } from "./lib/theme";
+
+applyTheme(getTheme());
 
 const queryClient = new QueryClient({
   defaultOptions: {

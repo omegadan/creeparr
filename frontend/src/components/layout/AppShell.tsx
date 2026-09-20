@@ -3,6 +3,7 @@ import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, Sett
 import { useServerEvents } from "../../api/events";
 import { useSystemStatus } from "../../api/hooks/useSystem";
 import { cx } from "../../lib/format";
+import { ThemeToggle } from "../ui/ThemeToggle";
 
 const NAV = [
   { to: "/creators", label: "Creators", icon: Users },
@@ -66,7 +67,10 @@ export function AppShell() {
               {connected.length ? connected.map((p) => p.auth.user_name ?? p.label).join(", ") : anyConfigured ? "Session problem" : "Not connected"}
             </span>
           </Link>
-          <div className="mt-1 text-[var(--color-sidebar-muted)]">v{status.data?.version ?? "…"}</div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-[var(--color-sidebar-muted)]">v{status.data?.version ?? "…"}</span>
+            <ThemeToggle />
+          </div>
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

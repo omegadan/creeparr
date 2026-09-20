@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#3d2e73" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("patrearr-theme") || "auto";
+          document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "auto");
+        }
+      })();
+    </script>
     <title>Patrearr</title>
   </head>
   <body>

@@ -6,7 +6,7 @@ Patrearr backs up every post you have access to, then keeps checking for new one
 - Archives **native Patreon video** (direct files and Mux streams), **YouTube / Vimeo embeds**,
   and optionally images, audio and attachments per creator.
 - **Import your pledges** in one click, or add creators by URL / vanity name / campaign id.
-- Sonarr-like dark web UI: creators grid, per-creator post list with per-file status, live
+- Light/dark/auto web UI (theme switch in the sidebar; auto follows your OS): creators grid, per-creator post list with per-file status, live
   download queue, history, settings, system status and logs.
 - Scheduled incremental scans, full back-fills, retries with back-off, DRM detection,
   disk-space guard, resumable downloads, `post.json` / `post.md` / `post.html` sidecars.
