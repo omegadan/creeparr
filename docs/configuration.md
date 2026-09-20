@@ -58,3 +58,9 @@ Interactive docs at `/api/docs`. Main endpoints:
 - `GET /api/v1/history`
 - `GET/PUT /api/v1/settings`, `PUT/DELETE /settings/patreon-auth`,
   `POST /settings/patreon-auth/test`, `POST /settings/naming-preview`
+
+## Maintenance tasks
+
+System → Status lists runnable tasks. `embed_metadata_backlog` embeds metadata and cover
+art into videos already on disk that lack it (enable `naming.embed_metadata` first).
+`reresolve_media` re-applies the media resolver to stored post data after an update.

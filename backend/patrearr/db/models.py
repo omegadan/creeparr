@@ -182,6 +182,7 @@ class MediaItem(TimestampMixin, Base):
     file_path: Mapped[str | None] = mapped_column(String(2048))
     file_size_bytes: Mapped[int | None] = mapped_column(Integer)
     sha256: Mapped[str | None] = mapped_column(String(64))
+    metadata_embedded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

@@ -31,6 +31,7 @@ class DownloadResult:
     path: Path
     size: int
     sha256: str | None = None
+    metadata_embedded: bool = False
 
 
 class ProgressReporter:

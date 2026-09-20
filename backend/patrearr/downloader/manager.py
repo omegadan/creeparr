@@ -503,10 +503,12 @@ class DownloadManager:
             if thumb_path and thumb_path.exists():
                 thumb_path.unlink(missing_ok=True)
             if not changed:
-                return result
+                return DownloadResult(
+                    result.path, result.size, result.sha256, metadata_embedded=True
+                )
             size = result.path.stat().st_size
             sha = sha256_file(result.path) if self.settings.get().downloads.compute_sha256 else None
-            return DownloadResult(result.path, size, sha)
+            return DownloadResult(result.path, size, sha, metadata_embedded=True)
 
         return await asyncio.to_thread(_do)
 
@@ -526,6 +528,90 @@ class DownloadManager:
         except Exception as exc:  # noqa: BLE001
             log.debug("thumbnail fetch failed: %s", exc)
             return None
+
+    async def embed_backlog(self) -> dict[str, Any]:
+        """Embed metadata + cover into already-downloaded videos that lack it."""
+        naming = self.settings.get().naming
+        if not naming.embed_metadata:
+            return {"skipped": True, "reason": "enable 'Embed metadata' in Settings first"}
+        ffmpeg = self.env.resolve_ffmpeg()
+        if not ffmpeg:
+            return {"skipped": True, "reason": "ffmpeg not found"}
+        with session_scope(self._factory) as s:
+            ids = (
+                s.execute(
+                    select(MediaItem.id).where(
+                        MediaItem.status == MediaStatus.COMPLETED,
+                        MediaItem.kind == MediaKind.VIDEO,
+                        MediaItem.file_path.is_not(None),
+                        MediaItem.metadata_embedded.is_(False),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        embedded = 0
+        for mid in ids:
+            try:
+                if await self._embed_existing(mid, ffmpeg):
+                    embedded += 1
+            except Exception:  # noqa: BLE001
+                log.exception("backlog embed failed for media %s", mid)
+        if embedded:
+            self.bus.publish("queue.changed", {})
+        return {"embedded": embedded, "candidates": len(ids)}
+
+    async def _embed_existing(self, media_id: int, ffmpeg: str) -> bool:
+        with session_scope(self._factory) as s:
+            media = s.execute(
+                select(MediaItem)
+                .options(selectinload(MediaItem.post).selectinload(Post.creator))
+                .where(MediaItem.id == media_id)
+            ).scalar_one_or_none()
+            if media is None or media.post is None or media.file_path is None:
+                return False
+            post, creator = media.post, media.post.creator
+            provider_name = creator.provider if creator else "patreon"
+            file_rel = media.file_path
+            title = post.title or ""
+            creator_name = creator.name if creator else ""
+            description = html_to_text(post.content_html or post.teaser_text)
+            date = post.published_at.strftime("%Y-%m-%d") if post.published_at else ""
+            thumb_url = post.thumbnail_url
+        abs_path = (self.env.download_root(provider_name) / file_rel).resolve()
+        if not abs_path.exists():
+            return False
+        provider = self.providers.get(provider_name)
+        metadata = {
+            "title": title,
+            "artist": creator_name,
+            "album_artist": creator_name,
+            "comment": description,
+            "description": description,
+            "date": date,
+        }
+        thumb_path: Path | None = None
+        if thumb_url:
+            thumb_path = await self._fetch_thumbnail(
+                provider, thumb_url, abs_path.with_name(".patrearr-cover.jpg")
+            )
+
+        def _do() -> tuple[int, str | None]:
+            embed_metadata(ffmpeg, abs_path, metadata, thumb_path)
+            if thumb_path and thumb_path.exists():
+                thumb_path.unlink(missing_ok=True)
+            size = abs_path.stat().st_size
+            sha = sha256_file(abs_path) if self.settings.get().downloads.compute_sha256 else None
+            return size, sha
+
+        size, sha = await asyncio.to_thread(_do)
+        with session_scope(self._factory) as s:
+            media = s.get(MediaItem, media_id)
+            if media is not None:
+                media.file_size_bytes = size
+                media.sha256 = sha
+                media.metadata_embedded = True
+        return True
 
     async def _refresh_post(self, ctx: JobContext) -> None:
         provider = self.providers.get(ctx.provider)
@@ -713,6 +799,7 @@ class DownloadManager:
             media.file_path = rel
             media.file_size_bytes = result.size
             media.sha256 = result.sha256
+            media.metadata_embedded = result.metadata_embedded
             media.completed_at = now
             media.last_error = None
             media.next_retry_at = None

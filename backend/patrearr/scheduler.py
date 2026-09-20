@@ -150,6 +150,12 @@ class SchedulerService:
             None,
             self._reresolve_media,
         )
+        self._register(
+            "embed_metadata_backlog",
+            "Embed metadata + cover into already-downloaded videos that lack it",
+            None,
+            self._embed_backlog,
+        )
         self.scheduler.start()
 
     def shutdown(self) -> None:
@@ -212,6 +218,9 @@ class SchedulerService:
 
     async def _session_check(self) -> dict[str, bool]:
         return {p.name: await p.check_session() for p in self.services.providers}
+
+    async def _embed_backlog(self) -> dict:
+        return await self.services.downloads.embed_backlog()
 
     async def _reresolve_media(self) -> dict[str, int]:
         from patrearr.scanner.scanner import reresolve_all
