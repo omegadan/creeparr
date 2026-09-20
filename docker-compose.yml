@@ -1,0 +1,16 @@
+services:
+  patreonarr:
+    build: .
+    # image: ghcr.io/<you>/patreonarr:latest
+    container_name: patreonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - PATREONARR_LOG_LEVEL=INFO
+    volumes:
+      - ./config:/config
+      - ./downloads:/downloads
+    ports:
+      - "7979:7979"
+    restart: unless-stopped
