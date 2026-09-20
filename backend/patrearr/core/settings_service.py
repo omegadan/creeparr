@@ -34,9 +34,7 @@ class OnlyFansSettings(BaseModel):
     cookies_txt: str = ""
     user_agent: str = ""
     requests_per_second: float = Field(default=0.5, ge=0.1, le=5)
-    dynamic_rules_url: str = (
-        "https://raw.githubusercontent.com/deviint/onlyfans-dynamic-rules/main/dynamicRules.json"
-    )
+    dynamic_rules_url: str = "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json"
     include_archived: bool = True
     http_backend: Literal["httpx", "curl_cffi"] = "httpx"
     impersonate_target: str = "chrome"

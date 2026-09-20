@@ -31,6 +31,7 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
     setup_logging(env.log_level, env.log_dir)
     run_migrations(env.database_url)
     services = build_services(env)
+    _normalize_settings(services)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -92,6 +93,16 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
 
     _mount_spa(app, env.resolved_static_dir)
     return app
+
+
+def _normalize_settings(services: Services) -> None:
+    """One-time cleanup of retired defaults stored in the DB."""
+    from patrearr.providers.onlyfans.provider import DEAD_RULES_URLS, DEFAULT_RULES_URL
+
+    of = services.settings.get().onlyfans
+    if of.dynamic_rules_url.strip() in DEAD_RULES_URLS:
+        services.settings.update({"onlyfans": {"dynamic_rules_url": DEFAULT_RULES_URL}})
+        log.info("upgraded stored OnlyFans rules URL to the current default")
 
 
 async def _initial_session_check(services: Services) -> None:

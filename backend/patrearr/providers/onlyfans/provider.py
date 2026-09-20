@@ -33,15 +33,13 @@ from patrearr.providers.onlyfans.signing import DynamicRules
 
 log = logging.getLogger("patrearr.onlyfans")
 
-# Fallback rules; refreshed from the configured URL. Values here are placeholders and
-# will not sign correctly on their own -- the live rules must be fetched at runtime.
-_FALLBACK_RULES = {
-    "static_param": "",
-    "format": "{}:{:x}",
-    "checksum_indexes": [],
-    "checksum_constant": 0,
-    "app_token": "33d57ade8c02dbc5a333db99ff9ae26a",
-    "remove_headers": [],
+DEFAULT_RULES_URL = (
+    "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json"
+)
+# Known-dead URLs that were shipped as defaults in earlier builds; silently upgraded.
+DEAD_RULES_URLS = {
+    "https://raw.githubusercontent.com/deviint/onlyfans-dynamic-rules/main/dynamicRules.json",
+    "",
 }
 
 _KIND_MAP = {
@@ -96,20 +94,29 @@ class OnlyFansProvider(ProviderService):
     async def _dynamic_rules(self) -> DynamicRules:
         if self._rules is not None and time.monotonic() - self._rules_fetched < 3600:
             return self._rules
-        url = self.settings.get().onlyfans.dynamic_rules_url
+        url = self.settings.get().onlyfans.dynamic_rules_url.strip()
+        if url in DEAD_RULES_URLS:
+            log.info("configured OnlyFans rules URL is empty/retired; using the default")
+            url = DEFAULT_RULES_URL
         transport = build_transport("httpx")
         try:
             resp = await transport.request("GET", url)
-            data = json.loads(resp.text)
-            self._rules = DynamicRules.from_json(data)
-            log.info("loaded OnlyFans dynamic rules from %s", url)
+            if resp.status != 200:
+                raise ProviderError(f"rules URL returned HTTP {resp.status}")
+            self._rules = DynamicRules.from_json(json.loads(resp.text))
+            self._rules_fetched = time.monotonic()
+            log.info("loaded OnlyFans dynamic signing rules from %s", url)
+            return self._rules
         except Exception as exc:  # noqa: BLE001
-            log.warning("could not fetch OnlyFans dynamic rules (%s); using fallback", exc)
-            self._rules = DynamicRules.from_json(_FALLBACK_RULES)
+            if self._rules is not None:
+                log.warning("could not refresh OnlyFans rules (%s); using cached rules", exc)
+                return self._rules
+            raise ProviderError(
+                f"could not load OnlyFans signing rules from {url}: {exc}. "
+                "Set a working rules URL in Settings -> OnlyFans."
+            ) from exc
         finally:
             await transport.aclose()
-        self._rules_fetched = time.monotonic()
-        return self._rules
 
     async def _get_client(self, submitted: dict[str, str] | None = None) -> OnlyFansClient:
         creds = self._creds(submitted)
