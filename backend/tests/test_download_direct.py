@@ -110,3 +110,16 @@ async def test_cancel_mid_stream(client, respx_mock, tmp_path: Path):
     rep.cancel_event.set()
     with pytest.raises(DownloadCancelled):
         await download_direct(client, URL, tmp_path / "v.bin", rep)
+
+
+def test_try_hardlink_dedupe(tmp_path):
+    from patrearr.downloader.fs import try_hardlink
+
+    src = tmp_path / "a.bin"
+    src.write_bytes(b"same-content")
+    dst = tmp_path / "b.bin"
+    dst.write_bytes(b"same-content")
+    assert dst.stat().st_ino != src.stat().st_ino
+    assert try_hardlink(dst, src) is True
+    assert dst.stat().st_ino == src.stat().st_ino  # now linked
+    assert dst.read_bytes() == b"same-content"

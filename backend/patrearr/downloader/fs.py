@@ -49,3 +49,21 @@ def is_writable_dir(path: Path) -> bool:
         return True
     except OSError:
         return False
+
+
+def try_hardlink(target: Path, source: Path) -> bool:
+    """Replace `target` with a hardlink to `source` (same content). Same filesystem only."""
+    try:
+        if not source.exists() or not target.exists():
+            return False
+        ts, ss = target.stat(), source.stat()
+        if ts.st_dev != ss.st_dev:
+            return False
+        if ts.st_ino == ss.st_ino:
+            return True  # already the same inode
+        tmp = target.with_name(target.name + ".dedupe-tmp")
+        os.link(source, tmp)
+        os.replace(tmp, target)
+        return True
+    except OSError:
+        return False

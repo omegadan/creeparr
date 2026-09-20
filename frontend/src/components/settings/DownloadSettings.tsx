@@ -39,7 +39,8 @@ export function DownloadSettings({ settings }: { settings: Settings }) {
           <Field label="HLS fragment concurrency"><input type="number" min="1" max="16" className="input" value={f.form.hls_fragment_concurrency} onChange={(e) => f.set("hls_fragment_concurrency", num(e.target.value, 4))} /></Field>
         </div>
         <Toggle checked={f.form.ytdlp_remote_components} onChange={(v) => f.set("ytdlp_remote_components", v)} label="Allow yt-dlp to fetch its YouTube challenge-solver script from GitHub" hint="Needed for full YouTube format availability; the script runs in the local JS runtime (node/deno)." />
-        <Toggle checked={f.form.compute_sha256} onChange={(v) => f.set("compute_sha256", v)} label="Record SHA-256 of archived files" hint="Costs a little CPU; useful for integrity checks." />
+        <Toggle checked={f.form.compute_sha256} onChange={(v) => f.set("compute_sha256", v)} label="Record SHA-256 of archived files" hint="Needed for deduplication and integrity checks." />
+        <Toggle checked={f.form.deduplicate} onChange={(v) => f.set("deduplicate", v)} label="Deduplicate identical files" hint="Hardlinks files with the same content (same disk) to save space. OnlyFans reuses media a lot." />
       </Section>
       <div className="flex justify-end"><Button variant="primary" disabled={!f.dirty} loading={f.saving} onClick={f.save}>Save</Button></div>
     </div>

@@ -79,6 +79,7 @@ class DownloadSettings(BaseModel):
     url_max_age_minutes: int = Field(default=30, ge=1)
     hls_fragment_concurrency: int = Field(default=4, ge=1, le=16)
     compute_sha256: bool = True
+    deduplicate: bool = True
     video_format: str = "bv*+ba/b"
     ytdlp_remote_components: bool = True
 

@@ -281,6 +281,7 @@ export interface Settings {
     url_max_age_minutes: number;
     hls_fragment_concurrency: number;
     compute_sha256: boolean;
+    deduplicate: boolean;
     video_format: string;
     ytdlp_remote_components: boolean;
   };

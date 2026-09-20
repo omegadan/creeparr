@@ -32,7 +32,7 @@ from patrearr.db.enums import (
     MediaStatus,
 )
 from patrearr.db.models import Creator, DownloadJob, MediaItem, Post
-from patrearr.downloader.fs import free_space_bytes, remove_tree
+from patrearr.downloader.fs import free_space_bytes, remove_tree, try_hardlink
 from patrearr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadResult,
@@ -602,7 +602,33 @@ class DownloadManager:
         except Exception:  # noqa: BLE001
             log.debug("progress write failed", exc_info=True)
 
+    def _dedupe(self, ctx: JobContext, result: DownloadResult) -> bool:
+        """If another completed file has the same sha256, hardlink to it to save disk."""
+        if not (self.settings.get().downloads.deduplicate and result.sha256):
+            return False
+        with session_scope(self._factory) as s:
+            twin = s.execute(
+                select(MediaItem)
+                .where(
+                    MediaItem.sha256 == result.sha256,
+                    MediaItem.id != ctx.media_id,
+                    MediaItem.status == MediaStatus.COMPLETED,
+                    MediaItem.file_path.is_not(None),
+                )
+                .limit(1)
+            ).scalar_one_or_none()
+            twin_rel = twin.file_path if twin else None
+        if not twin_rel:
+            return False
+        for root in self.env.download_roots().values():
+            source = root / twin_rel
+            if source.exists() and try_hardlink(result.path, source):
+                log.info("[job %s] deduplicated (sha %s)", ctx.job_id, result.sha256[:12])
+                return True
+        return False
+
     def _complete_job(self, ctx: JobContext, result: DownloadResult) -> None:
+        self._dedupe(ctx, result)
         rel = str(result.path.relative_to(self.env.download_root(ctx.provider)))
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)
