@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { EmptyState, Spinner } from "../components/ui/Misc";
 import { CreatorCard } from "../components/creators/CreatorCard";
 import { AddCreatorModal } from "../components/creators/AddCreatorModal";
-import { ImportPledgesModal } from "../components/creators/ImportPledgesModal";
+import { ImportSubscriptionsModal } from "../components/creators/ImportSubscriptionsModal";
 import { useToast } from "../components/ui/Toast";
 
 export function CreatorsPage() {
@@ -43,7 +43,7 @@ export function CreatorsPage() {
             <Button icon={<RefreshCw className="h-4 w-4" />} loading={scanAll.isPending} onClick={() => scanAll.mutate(undefined, { onSuccess: (d) => toast(`Queued ${d.queued} scans`), onError: (e) => error(e) })}>
               Scan all
             </Button>
-            <Button icon={<Import className="h-4 w-4" />} onClick={() => setImp(true)}>Import pledges</Button>
+            <Button icon={<Import className="h-4 w-4" />} onClick={() => setImp(true)}>Import subscriptions</Button>
             <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setAdd(true)}>Add creator</Button>
           </>
         }
@@ -60,7 +60,7 @@ export function CreatorsPage() {
           action={
             !filter && (
               <div className="flex gap-2">
-                <Button onClick={() => setImp(true)}>Import pledges</Button>
+                <Button onClick={() => setImp(true)}>Import subscriptions</Button>
                 <Button variant="primary" onClick={() => setAdd(true)}>Add creator</Button>
               </div>
             )
@@ -72,7 +72,7 @@ export function CreatorsPage() {
         </div>
       )}
       <AddCreatorModal open={add} onClose={() => setAdd(false)} />
-      <ImportPledgesModal open={imp} onClose={() => setImp(false)} />
+      <ImportSubscriptionsModal open={imp} onClose={() => setImp(false)} />
     </>
   );
 }

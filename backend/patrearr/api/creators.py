@@ -13,17 +13,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from patrearr.api.deps import get_db, get_services
 from patrearr.api.schemas import (
-    CampaignPreview,
     CreatorCreate,
     CreatorDefaults,
     CreatorOut,
     CreatorPatch,
+    CreatorPreview,
     CreatorStats,
-    ImportPledgesRequest,
+    ImportSubscriptionsRequest,
     LookupRequest,
-    PledgeOut,
+    ProviderOut,
     ScanRequestBody,
     ScanRunOut,
+    SubscriptionOut,
 )
 from patrearr.core.errors import Conflict, NotFound, UpstreamError, ValidationFailed
 from patrearr.core.history import record_event
@@ -32,13 +33,14 @@ from patrearr.db.enums import EventType, JobStatus, MediaStatus, PostStatus, Sca
 from patrearr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
 from patrearr.downloader.fs import remove_tree
 from patrearr.downloader.queue import apply_creator_prefs, enqueue_media, recompute_post_status
-from patrearr.patreon.errors import (
+from patrearr.providers.base import ProviderService
+from patrearr.providers.errors import (
     AuthError,
     CloudflareChallengeError,
     NotFoundError,
-    PatreonError,
+    ProviderError,
 )
-from patrearr.patreon.models import CampaignInfo, PledgeInfo
+from patrearr.providers.models import CreatorInfo, SubscriptionInfo
 from patrearr.scanner.scanner import should_auto_queue
 from patrearr.services import Services
 
@@ -126,31 +128,38 @@ def _defaults(services: Services, body: CreatorDefaults) -> dict[str, Any]:
 
 
 def _create_creator(
-    services: Services, info: CampaignInfo | PledgeInfo, defaults: dict[str, Any]
+    services: Services,
+    provider: ProviderService,
+    info: CreatorInfo | SubscriptionInfo,
+    defaults: dict[str, Any],
 ) -> int:
     with session_scope(services.session_factory) as s:
         existing = s.execute(
-            select(Creator).where(Creator.campaign_id == info.campaign_id)
+            select(Creator).where(
+                Creator.provider == provider.name, Creator.campaign_id == info.external_id
+            )
         ).scalar_one_or_none()
         if existing is not None:
             raise Conflict(f"{existing.name} is already added", code="already_added")
         creator = Creator(
-            campaign_id=info.campaign_id,
-            vanity=info.vanity,
+            provider=provider.name,
+            campaign_id=info.external_id,
+            vanity=info.handle,
             name=info.name,
             url=info.url,
             avatar_url=info.avatar_url,
             **defaults,
         )
-        if isinstance(info, CampaignInfo):
+        if isinstance(info, CreatorInfo):
             creator.cover_url = info.cover_url
-            creator.creation_name = info.creation_name
+            creator.creation_name = info.description
             creator.is_nsfw = info.is_nsfw
-            creator.creator_user_id = info.creator_user_id
+            creator.creator_user_id = info.owner_user_id
             creator.raw_json = info.raw
         else:
             creator.pledge_active = True
             creator.pledge_checked_at = datetime.now(UTC)
+            creator.raw_json = info.raw
         s.add(creator)
         s.flush()
         record_event(
@@ -172,8 +181,21 @@ def _get_out(services: Services, creator_id: int) -> CreatorOut:
         return to_out(creator, stats, services.scan_manager.is_busy(creator.id))
 
 
-def _upstream(exc: PatreonError) -> UpstreamError:
-    return UpstreamError(f"Patreon request failed: {exc}", code=exc.code, detail=exc.detail)
+def _upstream(provider: ProviderService, exc: ProviderError) -> UpstreamError:
+    if isinstance(exc, (AuthError, CloudflareChallengeError)):
+        provider.mark_auth_invalid(exc)
+    return UpstreamError(
+        f"{provider.label} request failed: {exc}", code=exc.code, detail=exc.detail
+    )
+
+
+def _existing_ids(services: Services, provider_name: str) -> dict[str, int]:
+    with session_scope(services.session_factory) as s:
+        return dict(
+            s.execute(
+                select(Creator.campaign_id, Creator.id).where(Creator.provider == provider_name)
+            ).all()
+        )
 
 
 # ---- endpoints ------------------------------------------------------------------------
@@ -186,54 +208,47 @@ def list_creators(db: Session = Depends(get_db), services: Services = Depends(ge
     return [to_out(c, stats[c.id], services.scan_manager.is_busy(c.id)) for c in creators]
 
 
-@router.post("/creators/lookup", response_model=CampaignPreview)
+@router.get("/providers", response_model=list[ProviderOut])
+def list_providers(services: Services = Depends(get_services)):
+    return services.providers.describe_all()
+
+
+@router.post("/creators/lookup", response_model=CreatorPreview)
 async def lookup_creator(body: LookupRequest, services: Services = Depends(get_services)):
-    client = services.patreon.client
+    provider = services.providers.get(body.provider)
     try:
-        campaign_id = await client.resolve_campaign_id(body.query)
-        info = await client.get_campaign(campaign_id)
+        info = await provider.resolve_creator(body.query)
     except NotFoundError as exc:
         raise NotFound(str(exc)) from exc
-    except (AuthError, CloudflareChallengeError) as exc:
-        services.patreon.mark_auth_invalid(exc)
-        raise _upstream(exc) from exc
-    except PatreonError as exc:
-        raise _upstream(exc) from exc
-
-    def _existing() -> int | None:
-        with session_scope(services.session_factory) as s:
-            return s.execute(
-                select(Creator.id).where(Creator.campaign_id == info.campaign_id)
-            ).scalar_one_or_none()
-
-    existing = await asyncio.to_thread(_existing)
-    return CampaignPreview(
-        campaign_id=info.campaign_id,
+    except ProviderError as exc:
+        raise _upstream(provider, exc) from exc
+    existing = await asyncio.to_thread(_existing_ids, services, provider.name)
+    return CreatorPreview(
+        provider=provider.name,
+        external_id=info.external_id,
         name=info.name,
-        vanity=info.vanity,
+        handle=info.handle,
         url=info.url,
         avatar_url=info.avatar_url,
-        creation_name=info.creation_name,
+        description=info.description,
         is_nsfw=info.is_nsfw,
-        already_added=existing is not None,
-        creator_id=existing,
+        already_added=info.external_id in existing,
+        creator_id=existing.get(info.external_id),
     )
 
 
 @router.post("/creators", response_model=CreatorOut, status_code=status.HTTP_201_CREATED)
 async def add_creator(body: CreatorCreate, services: Services = Depends(get_services)):
-    client = services.patreon.client
+    provider = services.providers.get(body.provider)
     try:
-        campaign_id = await client.resolve_campaign_id(body.query)
-        info = await client.get_campaign(campaign_id)
+        info = await provider.resolve_creator(body.query)
     except NotFoundError as exc:
         raise NotFound(str(exc)) from exc
-    except (AuthError, CloudflareChallengeError) as exc:
-        services.patreon.mark_auth_invalid(exc)
-        raise _upstream(exc) from exc
-    except PatreonError as exc:
-        raise _upstream(exc) from exc
-    creator_id = await asyncio.to_thread(_create_creator, services, info, _defaults(services, body))
+    except ProviderError as exc:
+        raise _upstream(provider, exc) from exc
+    creator_id = await asyncio.to_thread(
+        _create_creator, services, provider, info, _defaults(services, body)
+    )
     try:
         services.scan_manager.request_scan(creator_id, ScanMode.FULL, trigger="add")
     except Conflict:
@@ -241,58 +256,54 @@ async def add_creator(body: CreatorCreate, services: Services = Depends(get_serv
     return await asyncio.to_thread(_get_out, services, creator_id)
 
 
-@router.get("/patreon/pledges", response_model=list[PledgeOut])
-async def list_pledges(services: Services = Depends(get_services)):
+@router.get("/providers/{provider_name}/subscriptions", response_model=list[SubscriptionOut])
+async def list_subscriptions(provider_name: str, services: Services = Depends(get_services)):
+    provider = services.providers.get(provider_name)
     try:
-        pledges = await services.patreon.client.get_pledges()
-    except (AuthError, CloudflareChallengeError) as exc:
-        services.patreon.mark_auth_invalid(exc)
-        raise _upstream(exc) from exc
-    except PatreonError as exc:
-        raise _upstream(exc) from exc
-
-    def _existing() -> dict[str, int]:
-        with session_scope(services.session_factory) as s:
-            return dict(s.execute(select(Creator.campaign_id, Creator.id)).all())
-
-    existing = await asyncio.to_thread(_existing)
+        subs = await provider.list_subscriptions()
+    except ProviderError as exc:
+        raise _upstream(provider, exc) from exc
+    existing = await asyncio.to_thread(_existing_ids, services, provider.name)
     return [
-        PledgeOut(
-            campaign_id=p.campaign_id,
+        SubscriptionOut(
+            provider=provider.name,
+            external_id=p.external_id,
             name=p.name,
-            vanity=p.vanity,
+            handle=p.handle,
             url=p.url,
             avatar_url=p.avatar_url,
-            is_free_member=p.is_free_member,
-            is_free_trial=p.is_free_trial,
-            already_added=p.campaign_id in existing,
-            creator_id=existing.get(p.campaign_id),
+            is_free=p.is_free,
+            is_trial=p.is_trial,
+            already_added=p.external_id in existing,
+            creator_id=existing.get(p.external_id),
         )
-        for p in pledges
+        for p in subs
     ]
 
 
-@router.post("/creators/import-pledges", response_model=list[CreatorOut], status_code=201)
-async def import_pledges(body: ImportPledgesRequest, services: Services = Depends(get_services)):
+@router.post("/creators/import-subscriptions", response_model=list[CreatorOut], status_code=201)
+async def import_subscriptions(
+    body: ImportSubscriptionsRequest, services: Services = Depends(get_services)
+):
+    provider = services.providers.get(body.provider)
     try:
-        pledges = {p.campaign_id: p for p in await services.patreon.client.get_pledges()}
-    except (AuthError, CloudflareChallengeError) as exc:
-        services.patreon.mark_auth_invalid(exc)
-        raise _upstream(exc) from exc
-    except PatreonError as exc:
-        raise _upstream(exc) from exc
+        subs = {p.external_id: p for p in await provider.list_subscriptions()}
+    except ProviderError as exc:
+        raise _upstream(provider, exc) from exc
     defaults = _defaults(services, body.defaults)
     created: list[int] = []
-    for cid in body.campaign_ids:
-        info: PledgeInfo | CampaignInfo | None = pledges.get(cid)
+    for ext_id in body.ids:
+        info: SubscriptionInfo | CreatorInfo | None = subs.get(ext_id)
         if info is None:
             try:
-                info = await services.patreon.client.get_campaign(cid)
-            except PatreonError as exc:
-                log.warning("skipping campaign %s: %s", cid, exc)
+                info = await provider.get_creator(ext_id)
+            except ProviderError as exc:
+                log.warning("skipping %s %s: %s", provider.name, ext_id, exc)
                 continue
         try:
-            created.append(await asyncio.to_thread(_create_creator, services, info, defaults))
+            created.append(
+                await asyncio.to_thread(_create_creator, services, provider, info, defaults)
+            )
         except Conflict:
             continue
     for creator_id in created:
@@ -455,25 +466,27 @@ def list_scans(
 
 @router.post("/creators/{creator_id}/refresh-metadata", response_model=CreatorOut)
 async def refresh_metadata(creator_id: int, services: Services = Depends(get_services)):
-    def _campaign_id() -> str:
+    def _ids() -> tuple[str, str]:
         with session_scope(services.session_factory) as s:
-            return load_creator(s, creator_id).campaign_id
+            c = load_creator(s, creator_id)
+            return c.provider, c.campaign_id
 
-    campaign_id = await asyncio.to_thread(_campaign_id)
+    provider_name, external_id = await asyncio.to_thread(_ids)
+    provider = services.providers.get(provider_name)
     try:
-        info = await services.patreon.client.get_campaign(campaign_id)
-    except PatreonError as exc:
-        raise _upstream(exc) from exc
+        info = await provider.get_creator(external_id)
+    except ProviderError as exc:
+        raise _upstream(provider, exc) from exc
 
     def _apply() -> None:
         with session_scope(services.session_factory) as s:
             c = load_creator(s, creator_id)
             c.name = info.name
-            c.vanity = info.vanity
+            c.vanity = info.handle
             c.url = info.url
             c.avatar_url = info.avatar_url
             c.cover_url = info.cover_url
-            c.creation_name = info.creation_name
+            c.creation_name = info.description
             c.is_nsfw = info.is_nsfw
             c.raw_json = info.raw
 

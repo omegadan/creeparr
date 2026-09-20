@@ -46,7 +46,9 @@ Images are published to `ghcr.io/omegadan/patrearr` by GitHub Actions on every p
 is private the package is private too, so `docker login ghcr.io` with a token that has
 `read:packages` before pulling.
 
-Then, in **Settings → Patreon**:
+Then, in **Settings → Accounts**, connect a provider:
+
+**Patreon:**
 
 1. Log in to patreon.com in your browser.
 2. Open DevTools → Application → Cookies → `https://www.patreon.com` and copy the value of

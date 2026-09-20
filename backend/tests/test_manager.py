@@ -11,7 +11,6 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from patrearr.core.patreon_service import PatreonService
 from patrearr.db.engine import session_scope
 from patrearr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus
 from patrearr.db.models import Creator, DownloadJob, History, MediaItem, Post
@@ -20,6 +19,8 @@ from patrearr.downloader.queue import enqueue_media
 from patrearr.patreon.client import API_URL
 from patrearr.patreon.media_resolver import resolve_media
 from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+from patrearr.providers.patreon import PatreonProvider
+from patrearr.providers.registry import ProviderRegistry
 from patrearr.scanner.scanner import sync_media_items, upsert_post
 from tests import patreon_fixtures as fx
 from tests.conftest import json_response
@@ -55,30 +56,32 @@ def job_status(session_factory, job_id):
 
 
 @pytest.fixture
-def patreon(env, settings, session_factory, bus):
+def providers(env, settings, session_factory, bus):
     settings.update(
         {"patreon": {"session_id": "sid-123", "requests_per_second": 10}}, allow_secrets=True
     )
-    p = PatreonService(env, settings, session_factory, bus)
-    p._set_auth_status(AuthState.VALID, user_name="Test Patron")
-    return p
+    registry = ProviderRegistry([PatreonProvider(env, settings, session_factory, bus)])
+    registry.get("patreon")._set_auth_status(AuthState.VALID, user_name="Test Patron")
+    return registry
 
 
 @pytest.mark.asyncio
-async def test_direct_download_end_to_end(env, session_factory, settings, bus, patreon, respx_mock):
+async def test_direct_download_end_to_end(
+    env, session_factory, settings, bus, providers, respx_mock
+):
     body = b"\x00\x01" * 50_000
     respx_mock.get(VIDEO_URL).mock(
         return_value=httpx.Response(200, content=body, headers={"content-length": str(len(body))})
     )
     post_id, job_id = seed(session_factory, fx.native_video_post("p1", title="Ep 1: Intro"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, patreon)
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
     finally:
         await mgr.stop()
-        await patreon.aclose()
+        await providers.aclose_all()
     with session_scope(session_factory) as s:
         media = s.execute(select(MediaItem)).scalar_one()
         post = s.get(Post, post_id)
@@ -104,7 +107,7 @@ async def test_direct_download_end_to_end(env, session_factory, settings, bus, p
 
 @pytest.mark.asyncio
 async def test_failed_download_gets_backoff_then_permanent(
-    env, session_factory, settings, bus, patreon, respx_mock
+    env, session_factory, settings, bus, providers, respx_mock
 ):
     settings.update({"downloads": {"max_attempts": 2, "retry_base_seconds": 5}})
     respx_mock.get(VIDEO_URL).mock(return_value=httpx.Response(500, content=b"boom"))
@@ -113,7 +116,7 @@ async def test_failed_download_gets_backoff_then_permanent(
     )
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, patreon)
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.FAILED)
@@ -132,7 +135,7 @@ async def test_failed_download_gets_backoff_then_permanent(
         assert await wait_for(lambda: job_status(session_factory, job2_id) == JobStatus.FAILED)
     finally:
         await mgr.stop()
-        await patreon.aclose()
+        await providers.aclose_all()
     with session_scope(session_factory) as s:
         media = s.execute(select(MediaItem).options(selectinload(MediaItem.post))).scalar_one()
         assert media.status == MediaStatus.FAILED_PERMANENT
@@ -140,7 +143,9 @@ async def test_failed_download_gets_backoff_then_permanent(
 
 
 @pytest.mark.asyncio
-async def test_hls_drm_marks_unsupported(env, session_factory, settings, bus, patreon, respx_mock):
+async def test_hls_drm_marks_unsupported(
+    env, session_factory, settings, bus, providers, respx_mock
+):
     respx_mock.get(fx.MUX_URL.split("?")[0]).mock(
         return_value=httpx.Response(
             200, text=fx.MUX_MASTER_DRM, headers={"content-type": "application/vnd.apple.mpegurl"}
@@ -148,13 +153,13 @@ async def test_hls_drm_marks_unsupported(env, session_factory, settings, bus, pa
     )
     _, job_id = seed(session_factory, fx.native_video_post("p1", hls=True))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, patreon)
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.FAILED)
     finally:
         await mgr.stop()
-        await patreon.aclose()
+        await providers.aclose_all()
     with session_scope(session_factory) as s:
         media = s.execute(select(MediaItem).options(selectinload(MediaItem.post))).scalar_one()
         assert media.status == MediaStatus.UNSUPPORTED_DRM
@@ -165,12 +170,12 @@ async def test_hls_drm_marks_unsupported(env, session_factory, settings, bus, pa
 
 
 @pytest.mark.asyncio
-async def test_disk_full_pauses(env, session_factory, settings, bus, patreon, monkeypatch):
+async def test_disk_full_pauses(env, session_factory, settings, bus, providers, monkeypatch):
     settings.update({"downloads": {"min_free_mb": 1}})
     monkeypatch.setattr("patrearr.downloader.manager.free_space_bytes", lambda _p: 0)
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, patreon)
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
     await mgr.start()
     try:
         assert await wait_for(lambda: mgr.paused_reason == "disk_full", timeout=5)
@@ -178,19 +183,19 @@ async def test_disk_full_pauses(env, session_factory, settings, bus, patreon, mo
         assert job_status(session_factory, job_id) == JobStatus.QUEUED
     finally:
         await mgr.stop()
-        await patreon.aclose()
+        await providers.aclose_all()
 
 
 @pytest.mark.asyncio
-async def test_recover_stale_jobs(env, session_factory, settings, bus, patreon):
+async def test_recover_stale_jobs(env, session_factory, settings, bus, providers):
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
     with session_scope(session_factory) as s:
         job = s.get(DownloadJob, job_id)
         job.status = JobStatus.RUNNING
         s.get(MediaItem, job.media_item_id).status = MediaStatus.DOWNLOADING
-    mgr = DownloadManager(env, session_factory, settings, bus, patreon)
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
     mgr._recover_stale_jobs()
     with session_scope(session_factory) as s:
         assert s.get(DownloadJob, job_id).status == JobStatus.QUEUED
         assert s.execute(select(MediaItem)).scalar_one().status == MediaStatus.QUEUED
-    await patreon.aclose()
+    await providers.aclose_all()

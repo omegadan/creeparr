@@ -7,6 +7,8 @@ import { ProgressBar } from "../ui/ProgressBar";
 import { Avatar } from "../ui/Misc";
 import { Badge } from "../ui/Badge";
 
+const PROVIDER_LABEL: Record<string, string> = { patreon: "Patreon", onlyfans: "OnlyFans" };
+
 export function CreatorCard({ creator }: { creator: Creator }) {
   const patch = usePatchCreator(creator.id);
   const s = creator.stats;
@@ -16,7 +18,7 @@ export function CreatorCard({ creator }: { creator: Creator }) {
       <Link to={`/creators/${creator.id}`} className="flex items-center gap-3 p-4">
         <Avatar src={creator.avatar_url} name={creator.name} size={48} />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold">{creator.name}</div>
+          <div className="flex items-center gap-1.5"><span className="truncate font-semibold">{creator.name}</span>{creator.provider !== "patreon" && <Badge tone="muted">{PROVIDER_LABEL[creator.provider] ?? creator.provider}</Badge>}</div>
           <div className="truncate text-xs text-fg-muted">{creator.vanity ? `@${creator.vanity}` : creator.campaign_id}</div>
         </div>
       </Link>

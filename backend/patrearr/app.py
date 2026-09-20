@@ -19,7 +19,7 @@ from patrearr.config import EnvConfig, get_env_config
 from patrearr.core.errors import AppError
 from patrearr.db.migrate import run_migrations
 from patrearr.logging_setup import setup_logging
-from patrearr.patreon.errors import PatreonError
+from patrearr.providers.errors import ProviderError
 from patrearr.services import Services, build_services
 
 log = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
     async def lifespan(app: FastAPI):
         loop = asyncio.get_running_loop()
         services.bus.bind(loop)
-        services.patreon.write_cookie_file()
+        services.providers.write_cookie_files()
         if start_background:
             await services.scan_manager.start()
             await services.downloads.start()
@@ -50,7 +50,7 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
                 services.scheduler.shutdown()
                 await services.scan_manager.stop()
                 await services.downloads.stop()
-            await services.patreon.aclose()
+            await services.providers.aclose_all()
             services.engine.dispose()
 
     app = FastAPI(title="Patrearr", version=__version__, lifespan=lifespan, docs_url="/api/docs")
@@ -63,8 +63,8 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
             content={"error": {"code": exc.code, "message": exc.message, "detail": exc.detail}},
         )
 
-    @app.exception_handler(PatreonError)
-    async def _patreon_error(_: Request, exc: PatreonError):
+    @app.exception_handler(ProviderError)
+    async def _provider_error(_: Request, exc: ProviderError):
         return JSONResponse(
             status_code=502,
             content={"error": {"code": exc.code, "message": str(exc), "detail": exc.detail}},
@@ -95,10 +95,11 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
 
 
 async def _initial_session_check(services: Services) -> None:
-    try:
-        await services.patreon.check_session()
-    except Exception:  # noqa: BLE001
-        log.exception("initial session check failed")
+    for provider in services.providers:
+        try:
+            await provider.check_session()
+        except Exception:  # noqa: BLE001
+            log.exception("initial %s session check failed", provider.name)
 
 
 def _mount_spa(app: FastAPI, static_dir: Path) -> None:

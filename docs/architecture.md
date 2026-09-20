@@ -45,6 +45,18 @@ All API traffic goes through `PatreonClient`; yt-dlp only ever gets media/embed 
 Patreon-hosted downloads (embeds continue), shows a banner, and records history. A daily
 `session_check` and a successful **Test connection** clear it.
 
+## Providers
+
+Anything provider-specific lives behind `patrearr/providers/base.py:ProviderService`: fetch the
+logged-in user, resolve a creator from a URL/handle, list subscriptions, iterate posts, turn a
+post into `MediaSpec`s, and stream media. `PatreonProvider` wraps the original Patreon client;
+`OnlyFansProvider` implements OnlyFans' signed private API (rules fetched at runtime). The
+`ProviderRegistry` maps `creators.provider` to the right service; the scanner, downloader, API
+and scheduler are provider-neutral and go through it. Auth status is tracked per provider.
+
+Adding a provider: implement `ProviderService`, register it in `services.py`, add a settings
+group, and it appears in the UI automatically (Add-creator picker, Accounts tab, badges).
+
 ## Not yet implemented / ideas
 
 - NFO/poster sidecars for Jellyfin/Plex (`naming.write_nfo` reserved)

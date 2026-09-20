@@ -26,7 +26,6 @@ from patrearr.patreon.errors import (
     TransportFailure,
     UnexpectedResponse,
 )
-from patrearr.patreon.models import CampaignInfo, PledgeInfo, PostPage, PostResource, UserInfo
 from patrearr.patreon.parsing import (
     IncludedIndex,
     campaign_from_resource,
@@ -34,6 +33,13 @@ from patrearr.patreon.parsing import (
     post_from_resource,
 )
 from patrearr.patreon.transport import RateLimiter, Transport, TransportResponse
+from patrearr.providers.models import (
+    CreatorInfo,
+    PostPage,
+    PostResource,
+    SubscriptionInfo,
+    UserInfo,
+)
 
 log = logging.getLogger(__name__)
 
@@ -304,7 +310,7 @@ class PatreonClient:
             image_url=attrs.get("image_url"),
         )
 
-    async def get_pledges(self) -> list[PledgeInfo]:
+    async def get_pledges(self) -> list[SubscriptionInfo]:
         payload = await self.api_get(
             "current_user",
             {
@@ -316,7 +322,7 @@ class PatreonClient:
             },
         )
         index = IncludedIndex(payload)
-        pledges: list[PledgeInfo] = []
+        pledges: list[SubscriptionInfo] = []
         seen: set[str] = set()
         for item in payload.get("included") or []:
             if item.get("type") != "member":
@@ -332,14 +338,15 @@ class PatreonClient:
             info = campaign_from_resource(camp)
             mattrs = item.get("attributes") or {}
             pledges.append(
-                PledgeInfo(
-                    campaign_id=info.campaign_id,
+                SubscriptionInfo(
+                    external_id=info.external_id,
                     name=info.name,
-                    vanity=info.vanity,
+                    handle=info.handle,
                     url=info.url,
                     avatar_url=info.avatar_url,
-                    is_free_member=mattrs.get("is_free_member"),
-                    is_free_trial=mattrs.get("is_free_trial"),
+                    is_free=mattrs.get("is_free_member"),
+                    is_trial=mattrs.get("is_free_trial"),
+                    raw=item,
                 )
             )
         # Fallback: some responses include campaigns without member rows.
@@ -347,14 +354,15 @@ class PatreonClient:
             for item in payload.get("included") or []:
                 if item.get("type") == "campaign" and str(item.get("id")) not in seen:
                     info = campaign_from_resource(item)
-                    seen.add(info.campaign_id)
+                    seen.add(info.external_id)
                     pledges.append(
-                        PledgeInfo(
-                            campaign_id=info.campaign_id,
+                        SubscriptionInfo(
+                            external_id=info.external_id,
                             name=info.name,
-                            vanity=info.vanity,
+                            handle=info.handle,
                             url=info.url,
                             avatar_url=info.avatar_url,
+                            raw=item,
                         )
                     )
         pledges.sort(key=lambda p: p.name.lower())
@@ -429,7 +437,7 @@ class PatreonClient:
             raise NotFoundError(f"no campaign found for user {user_id}")
         raise NotFoundError(f"could not resolve '{query}'")
 
-    async def get_campaign(self, campaign_id: str) -> CampaignInfo:
+    async def get_campaign(self, campaign_id: str) -> CreatorInfo:
         payload = await self.api_get(
             f"campaigns/{campaign_id}",
             {

@@ -1,7 +1,7 @@
 import { Link, NavLink, Outlet } from "react-router";
 import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, Settings, Users } from "lucide-react";
 import { useServerEvents } from "../../api/events";
-import { useAuthStatus, useSystemStatus } from "../../api/hooks/useSystem";
+import { useSystemStatus } from "../../api/hooks/useSystem";
 import { cx } from "../../lib/format";
 
 const NAV = [
@@ -18,10 +18,13 @@ const NAV = [
 
 export function AppShell() {
   useServerEvents();
-  const auth = useAuthStatus();
   const status = useSystemStatus();
   const queued = (status.data?.counts.queued ?? 0) + (status.data?.counts.running ?? 0);
-  const authBad = auth && ["invalid", "challenge", "unconfigured", "error"].includes(auth.state);
+  const providers = status.data?.providers ?? [];
+  const connected = providers.filter((p) => p.auth.state === "valid");
+  const broken = providers.filter((p) => p.configured && ["invalid", "challenge", "error"].includes(p.auth.state));
+  const anyConfigured = providers.some((p) => p.configured);
+  const authBad = broken.length > 0 || (!anyConfigured && providers.length > 0);
 
   return (
     <div className="flex h-full">
@@ -56,9 +59,9 @@ export function AppShell() {
         </nav>
         <div className="border-t border-line px-4 py-3 text-xs">
           <Link to="/settings/patreon" className="flex items-center gap-2">
-            <span className={cx("h-2 w-2 rounded-full", auth?.state === "valid" ? "bg-ok" : authBad ? "bg-danger" : "bg-warn")} />
+            <span className={cx("h-2 w-2 rounded-full", broken.length ? "bg-danger" : connected.length ? "bg-ok" : "bg-warn")} />
             <span className="truncate text-fg-muted">
-              {auth?.state === "valid" ? auth.user_name ?? "Connected" : auth?.state === "unconfigured" ? "Not connected" : auth?.state ?? "…"}
+              {connected.length ? connected.map((p) => p.auth.user_name ?? p.label).join(", ") : anyConfigured ? "Session problem" : "Not connected"}
             </span>
           </Link>
           <div className="mt-1 text-fg-dim">v{status.data?.version ?? "…"}</div>
@@ -68,11 +71,9 @@ export function AppShell() {
         {authBad && (
           <Link to="/settings/patreon" className="flex items-center gap-2 border-b border-danger/30 bg-danger/10 px-5 py-2 text-sm text-danger">
             <AlertTriangle className="h-4 w-4" />
-            {auth?.state === "unconfigured"
-              ? "Patreon session not configured. Add your session cookie in Settings to start archiving."
-              : auth?.state === "challenge"
-                ? "Cloudflare challenge blocked Patreon requests. Try the curl_cffi backend or paste a full cookies.txt in Settings."
-                : `Patreon session problem: ${auth?.error ?? "invalid"}. Scans are paused until it is fixed.`}
+            {broken.length
+              ? `${broken.map((p) => p.label).join(", ")} session problem. Fix it in Settings → Accounts; scans for that provider are paused.`
+              : "No provider is connected. Add your session in Settings → Accounts to start archiving."}
           </Link>
         )}
         {status.data?.downloads.paused && (

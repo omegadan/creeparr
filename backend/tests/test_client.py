@@ -114,7 +114,7 @@ async def test_transient_retry(client, respx_mock):
         httpx.Response(503, text="bad"),
         json_response(fx.campaign_response()),
     ]
-    assert (await client.get_campaign("1")).campaign_id == fx.CAMPAIGN_ID
+    assert (await client.get_campaign("1")).external_id == fx.CAMPAIGN_ID
     route.side_effect = [httpx.Response(500, text="x")] * 3
     with pytest.raises(TransientError):
         await client.get_campaign("1")
@@ -198,7 +198,7 @@ async def test_get_pledges(client, respx_mock):
         return_value=json_response(fx.pledges_response())
     )
     pledges = await client.get_pledges()
-    assert [(p.campaign_id, p.is_free_member) for p in pledges] == [
+    assert [(p.external_id, p.is_free) for p in pledges] == [
         ("7654321", True),
         (fx.CAMPAIGN_ID, False),
     ]

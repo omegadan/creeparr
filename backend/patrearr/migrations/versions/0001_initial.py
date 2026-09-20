@@ -49,7 +49,6 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("campaign_id"),
     )
     op.create_table(
         "settings",
@@ -93,10 +92,10 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["creator_id"], ["creators.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("post_id"),
     )
     with op.batch_alter_table("posts", schema=None) as batch_op:
         batch_op.create_index(batch_op.f("ix_posts_creator_id"), ["creator_id"], unique=False)
+        batch_op.create_index(batch_op.f("ix_posts_post_id"), ["post_id"], unique=False)
         batch_op.create_index(
             "ix_posts_creator_published", ["creator_id", "published_at"], unique=False
         )

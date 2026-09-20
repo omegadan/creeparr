@@ -30,7 +30,7 @@ from patrearr.downloader.queue import (
     publish_post_changed,
     recompute_post_status,
 )
-from patrearr.patreon.errors import PatreonError
+from patrearr.providers.errors import ProviderError
 from patrearr.scanner.scanner import sync_post
 from patrearr.services import Services
 
@@ -244,21 +244,22 @@ def unskip_post(
 
 @router.post("/posts/{post_id}/refresh", response_model=PostDetailOut)
 async def refresh_post(post_id: int, services: Services = Depends(get_services)):
-    def _ext_id() -> tuple[str, int]:
+    def _ext_id() -> tuple[str, int, str, str]:
         with session_scope(services.session_factory) as s:
             post = load_post(s, post_id)
-            return post.post_id, post.creator_id
+            return post.post_id, post.creator_id, post.creator.provider, post.creator.campaign_id
 
-    ext_id, creator_id = await asyncio.to_thread(_ext_id)
+    ext_id, creator_id, provider_name, external_id = await asyncio.to_thread(_ext_id)
+    provider = services.providers.get(provider_name)
     try:
-        pr = await services.patreon.client.get_post(ext_id)
-    except PatreonError as exc:
-        raise UpstreamError(f"Patreon request failed: {exc}", code=exc.code) from exc
+        pr = await provider.get_post(external_id, ext_id)
+    except ProviderError as exc:
+        raise UpstreamError(f"{provider.label} request failed: {exc}", code=exc.code) from exc
 
     def _apply() -> PostDetailOut:
         with session_scope(services.session_factory) as s:
             creator = s.get(Creator, creator_id)
-            post, _, _, queued = sync_post(s, creator, pr)
+            post, _, _, queued = sync_post(s, creator, pr, provider.resolve_media)
             s.flush()
             publish_post_changed(services.bus, post)
             if queued:

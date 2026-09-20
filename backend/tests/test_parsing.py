@@ -39,10 +39,10 @@ def test_unresolved_relationship_keeps_stub():
 def test_campaign_from_resource_with_creator():
     payload = fx.campaign_response()
     info = campaign_from_resource(payload["data"], IncludedIndex(payload))
-    assert info.campaign_id == fx.CAMPAIGN_ID
-    assert info.vanity == fx.VANITY
-    assert info.creator_user_id == "42"
-    assert info.creator_name == "Example Person"
+    assert info.external_id == fx.CAMPAIGN_ID
+    assert info.handle == fx.VANITY
+    assert info.owner_user_id == "42"
+    assert info.owner_name == "Example Person"
     assert info.avatar_url.endswith("avatar.jpg")
 
 

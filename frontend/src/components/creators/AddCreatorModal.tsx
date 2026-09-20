@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Search } from "lucide-react";
-import { useAddCreator, useLookupCreator } from "../../api/hooks/useCreators";
-import type { CampaignPreview, CreatorDefaults } from "../../api/types";
+import { useAddCreator, useLookupCreator, useProviders } from "../../api/hooks/useCreators";
+import type { CreatorPreview, CreatorDefaults } from "../../api/types";
 import { useSettings } from "../../api/hooks/useSettings";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -10,9 +10,16 @@ import { Avatar } from "../ui/Misc";
 import { CreatorOptions } from "./CreatorOptions";
 import { useToast } from "../ui/Toast";
 
+const PLACEHOLDER: Record<string, string> = {
+  patreon: "https://www.patreon.com/c/somecreator",
+  onlyfans: "https://onlyfans.com/somecreator",
+};
+
 export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const providers = useProviders();
+  const [provider, setProvider] = useState("patreon");
   const [query, setQuery] = useState("");
-  const [preview, setPreview] = useState<CampaignPreview | null>(null);
+  const [preview, setPreview] = useState<CreatorPreview | null>(null);
   const settings = useSettings();
   const [opts, setOpts] = useState<CreatorDefaults | null>(null);
   const lookup = useLookupCreator();
@@ -37,12 +44,12 @@ export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () 
 
   const doLookup = () => {
     if (!query.trim()) return;
-    lookup.mutate(query.trim(), { onSuccess: setPreview, onError: (e) => error(e, "Lookup failed") });
+    lookup.mutate({ query: query.trim(), provider }, { onSuccess: setPreview, onError: (e) => error(e, "Lookup failed") });
   };
 
   const doAdd = () => {
     add.mutate(
-      { query: preview?.campaign_id ?? query.trim(), ...defaults },
+      { query: preview?.external_id ?? query.trim(), provider, ...defaults },
       {
         onSuccess: (c) => {
           toast(`Added ${c.name}; full scan started`, "success");
@@ -53,6 +60,8 @@ export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () 
       },
     );
   };
+
+  const providerList = providers.data ?? [{ name: "patreon", label: "Patreon" }, { name: "onlyfans", label: "OnlyFans" }];
 
   return (
     <Modal
@@ -69,13 +78,29 @@ export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () 
       }
     >
       <div className="grid gap-4">
+        {providerList.length > 1 && (
+          <div>
+            <label className="label">Provider</label>
+            <div className="flex gap-2">
+              {providerList.map((p) => (
+                <button
+                  key={p.name}
+                  onClick={() => { setProvider(p.name); setPreview(null); }}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${provider === p.name ? "border-accent bg-accent/15 text-fg" : "border-line text-fg-muted hover:text-fg"}`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
-          <label className="label">Patreon URL, vanity name or campaign id</label>
+          <label className="label">Profile URL, handle or id</label>
           <div className="flex gap-2">
             <input
               className="input"
               autoFocus
-              placeholder="https://www.patreon.com/c/somecreator"
+              placeholder={PLACEHOLDER[provider] ?? "creator URL or handle"}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && doLookup()}
@@ -91,7 +116,7 @@ export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () 
             <div className="min-w-0 flex-1">
               <div className="truncate font-semibold">{preview.name}</div>
               <div className="truncate text-xs text-fg-muted">
-                {preview.creation_name ?? preview.vanity ?? preview.campaign_id} · id {preview.campaign_id}
+                {preview.handle ? `@${preview.handle}` : preview.external_id} · id {preview.external_id}
               </div>
             </div>
             {preview.already_added && <span className="text-xs text-warn">Already added</span>}

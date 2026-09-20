@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import logging
 from pathlib import Path
+from typing import Protocol
 
 from patrearr.downloader.fs import atomic_replace
 from patrearr.downloader.handlers.base import (
@@ -14,10 +15,14 @@ from patrearr.downloader.handlers.base import (
     ProgressReporter,
     RetryableDownloadError,
 )
-from patrearr.patreon.client import PatreonClient
-from patrearr.patreon.errors import TransportFailure
+from patrearr.patreon.transport import TransportResponse
+from patrearr.providers.errors import TransportFailure
 
 log = logging.getLogger(__name__)
+
+
+class MediaFetcher(Protocol):
+    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse: ...
 
 
 def _hash_existing(path: Path) -> hashlib._Hash:  # type: ignore[name-defined]
@@ -37,7 +42,7 @@ def _content_range_total(value: str | None) -> int | None:
 
 
 async def download_direct(
-    client: PatreonClient,
+    client: MediaFetcher,
     url: str,
     dest: Path,
     reporter: ProgressReporter,
@@ -49,7 +54,7 @@ async def download_direct(
     existing = part.stat().st_size if part.exists() else 0
 
     try:
-        resp = await client.stream(url, range_start=existing, headers=client.media_headers())
+        resp = await client.stream(url, range_start=existing)
     except TransportFailure as exc:
         raise RetryableDownloadError(str(exc), "network") from exc
 

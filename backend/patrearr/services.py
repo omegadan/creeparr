@@ -9,10 +9,12 @@ from sqlalchemy.engine import Engine
 
 from patrearr.config import EnvConfig
 from patrearr.core.events import EventBus
-from patrearr.core.patreon_service import PatreonService
 from patrearr.core.settings_service import SettingsService
 from patrearr.db.engine import SessionFactory, make_engine, make_session_factory
 from patrearr.downloader.manager import DownloadManager
+from patrearr.providers.onlyfans.provider import OnlyFansProvider
+from patrearr.providers.patreon import PatreonProvider
+from patrearr.providers.registry import ProviderRegistry
 from patrearr.scanner.scan_manager import ScanManager
 from patrearr.scanner.scanner import Scanner
 from patrearr.scheduler import SchedulerService
@@ -25,7 +27,7 @@ class Services:
     session_factory: SessionFactory
     settings: SettingsService
     bus: EventBus
-    patreon: PatreonService
+    providers: ProviderRegistry
     scanner: Scanner
     scan_manager: ScanManager
     downloads: DownloadManager
@@ -41,17 +43,22 @@ def build_services(env: EnvConfig) -> Services:
     factory = make_session_factory(engine)
     settings = SettingsService(factory)
     bus = EventBus()
-    patreon = PatreonService(env, settings, factory, bus)
-    scanner = Scanner(factory, settings, bus, patreon)
-    scan_manager = ScanManager(scanner, factory, patreon, bus)
-    downloads = DownloadManager(env, factory, settings, bus, patreon)
+    providers = ProviderRegistry(
+        [
+            PatreonProvider(env, settings, factory, bus),
+            OnlyFansProvider(env, settings, factory, bus),
+        ]
+    )
+    scanner = Scanner(factory, settings, bus, providers)
+    scan_manager = ScanManager(scanner, factory, providers, bus)
+    downloads = DownloadManager(env, factory, settings, bus, providers)
     return Services(
         env=env,
         engine=engine,
         session_factory=factory,
         settings=settings,
         bus=bus,
-        patreon=patreon,
+        providers=providers,
         scanner=scanner,
         scan_manager=scan_manager,
         downloads=downloads,

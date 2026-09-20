@@ -15,28 +15,32 @@ export function useUpdateSettings() {
   });
 }
 
-export function useSetPatreonAuth() {
+type Creds = Record<string, string>;
+
+export function useSetAuth(provider: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { session_id?: string; cookies_txt?: string }) => put<AuthTestResult & { settings: Settings["patreon"] }>("/settings/patreon-auth", body),
+    mutationFn: (body: Creds) => put<AuthTestResult & { settings: Record<string, unknown> }>(`/settings/auth/${provider}`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["system"] });
+      qc.invalidateQueries({ queryKey: ["providers"] });
       qc.invalidateQueries({ queryKey: ["auth"] });
     },
   });
 }
 
-export const useTestPatreonAuth = () =>
-  useMutation({ mutationFn: (body?: { session_id?: string; cookies_txt?: string }) => post<AuthTestResult>("/settings/patreon-auth/test", body) });
+export const useTestAuth = (provider: string) =>
+  useMutation({ mutationFn: (body?: Creds) => post<AuthTestResult>(`/settings/auth/${provider}/test`, body) });
 
-export function useClearPatreonAuth() {
+export function useClearAuth(provider: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => del<{ ok: boolean }>("/settings/patreon-auth"),
+    mutationFn: () => del<{ ok: boolean }>(`/settings/auth/${provider}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["system"] });
+      qc.invalidateQueries({ queryKey: ["providers"] });
       qc.invalidateQueries({ queryKey: ["auth"] });
     },
   });

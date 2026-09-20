@@ -109,7 +109,8 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
         "version": __version__,
         "started_at": services.started_at.isoformat(),
         "uptime_seconds": int((datetime.now(UTC) - services.started_at).total_seconds()),
-        "auth": services.patreon.get_auth_status(),
+        "auth": services.providers.get("patreon").get_auth_status(),
+        "providers": services.providers.describe_all(),
         "scan": services.scan_manager.status(),
         "next_scan_at": next_scan.isoformat() if next_scan else None,
         "downloads": services.downloads.status(),
@@ -164,7 +165,9 @@ async def events(request: Request, services: Services = Depends(get_services)):
         try:
             yield {
                 "event": "hello",
-                "data": json.dumps({"auth": services.patreon.get_auth_status()}),
+                "data": json.dumps(
+                    {"providers": {p.name: p.get_auth_status() for p in services.providers}}
+                ),
             }
             while True:
                 if await request.is_disconnected():

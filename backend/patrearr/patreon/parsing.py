@@ -6,7 +6,7 @@ import re
 from datetime import datetime
 from typing import Any
 
-from patrearr.patreon.models import CampaignInfo, MediaResource, PostResource
+from patrearr.providers.models import CreatorInfo, MediaResource, PostResource
 
 MEDIA_RELATIONSHIPS = ("images", "audio", "attachments_media", "media")
 
@@ -119,9 +119,7 @@ def post_from_resource(item: dict[str, Any], index: IncludedIndex) -> PostResour
     )
 
 
-def campaign_from_resource(
-    item: dict[str, Any], index: IncludedIndex | None = None
-) -> CampaignInfo:
+def campaign_from_resource(item: dict[str, Any], index: IncludedIndex | None = None) -> CreatorInfo:
     attrs = item.get("attributes") or {}
     rels = item.get("relationships") or {}
     creator_id = None
@@ -137,17 +135,17 @@ def campaign_from_resource(
     if not avatar and isinstance(attrs.get("avatar_photo_image_urls"), dict):
         urls = attrs["avatar_photo_image_urls"]
         avatar = urls.get("default") or urls.get("original") or next(iter(urls.values()), None)
-    return CampaignInfo(
-        campaign_id=str(item.get("id")),
+    return CreatorInfo(
+        external_id=str(item.get("id")),
         name=attrs.get("name") or attrs.get("creation_name") or f"campaign {item.get('id')}",
-        vanity=attrs.get("vanity"),
+        handle=attrs.get("vanity"),
         url=attrs.get("url"),
         avatar_url=avatar,
         cover_url=attrs.get("cover_photo_url"),
-        creation_name=attrs.get("creation_name"),
+        description=attrs.get("creation_name"),
         is_nsfw=attrs.get("is_nsfw"),
-        creator_user_id=creator_id,
-        creator_name=creator_name,
+        owner_user_id=creator_id,
+        owner_name=creator_name,
         raw=item,
     )
 

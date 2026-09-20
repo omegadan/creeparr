@@ -6,13 +6,13 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from patrearr.core.patreon_service import PatreonService
 from patrearr.db.engine import session_scope
-from patrearr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus, ScanMode, ScanStatus
+from patrearr.db.enums import JobStatus, MediaStatus, PostStatus, ScanMode, ScanStatus
 from patrearr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
-from patrearr.patreon.errors import AuthError
-from patrearr.patreon.models import PostPage
+from patrearr.patreon.media_resolver import resolve_media
 from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+from patrearr.providers.errors import AuthError
+from patrearr.providers.models import PostPage
 from patrearr.scanner.scanner import Scanner
 from tests import patreon_fixtures as fx
 
@@ -38,10 +38,27 @@ class FakeClient:
             )
 
 
-class FakePatreon:
+class FakeProvider:
+    name = "patreon"
+    label = "Patreon"
+
     def __init__(self, client):
         self.client = client
         self.invalid = None
+
+    def iter_posts(self, campaign_id):
+        return self.client.iter_posts(campaign_id)
+
+    def resolve_media(self, pr):
+        return resolve_media(pr)
+
+    def post_from_raw(self, raw):
+        from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+
+        data = raw.get("data")
+        if not isinstance(data, dict):
+            return None
+        return post_from_resource(data, IncludedIndex({"included": raw.get("included") or []}))
 
     def mark_auth_invalid(self, exc):
         self.invalid = exc
@@ -49,8 +66,23 @@ class FakePatreon:
     async def check_session(self):
         return True
 
-    def get_auth_status(self):
-        return {"state": AuthState.VALID}
+    @property
+    def auth_blocked(self):
+        return False
+
+
+class FakeRegistry:
+    def __init__(self, provider):
+        self.provider = provider
+
+    def for_creator(self, creator):
+        return self.provider
+
+    def get(self, name):
+        return self.provider
+
+    def __iter__(self):
+        return iter([self.provider])
 
 
 def make_creator(session_factory, **kw) -> int:
@@ -75,7 +107,7 @@ async def test_full_scan_creates_posts_media_and_jobs(session_factory, settings,
     fake = FakeClient(
         [[fx.native_video_post("p1"), fx.image_post("p2", ["m1", "m2"])], [fx.youtube_post("p3")]]
     )
-    scanner = Scanner(session_factory, settings, bus, FakePatreon(fake))
+    scanner = Scanner(session_factory, settings, bus, FakeRegistry(FakeProvider(fake)))
     run_id = await scanner.scan_creator(cid, ScanMode.AUTO)
     posts, media, jobs = counts(session_factory)
     assert fake.calls == 2
@@ -106,12 +138,15 @@ async def test_incremental_scan_stops_after_overlap(session_factory, settings, b
     settings.update({"scan": {"overlap_posts": 2}})
     known = [fx.native_video_post(f"k{i}") for i in range(4)]
     scanner = Scanner(
-        session_factory, settings, bus, FakePatreon(FakeClient([known[:2], known[2:]]))
+        session_factory,
+        settings,
+        bus,
+        FakeRegistry(FakeProvider(FakeClient([known[:2], known[2:]]))),
     )
     await scanner.scan_creator(cid, ScanMode.FULL)
     # Second run: new post on page 1, then all-known pages; must stop before page 3.
     fake = FakeClient([[fx.native_video_post("new1"), known[0]], [known[1], known[2]], [known[3]]])
-    scanner = Scanner(session_factory, settings, bus, FakePatreon(fake))
+    scanner = Scanner(session_factory, settings, bus, FakeRegistry(FakeProvider(fake)))
     await scanner.scan_creator(cid, ScanMode.AUTO)
     assert fake.calls == 2
     posts, _, jobs = counts(session_factory)
@@ -122,13 +157,17 @@ async def test_incremental_scan_stops_after_overlap(session_factory, settings, b
 async def test_access_flip_and_edit_resync(session_factory, settings, bus):
     cid = make_creator(session_factory)
     locked = fx.native_video_post("p1", can_view=False)
-    scanner = Scanner(session_factory, settings, bus, FakePatreon(FakeClient([[locked]])))
+    scanner = Scanner(
+        session_factory, settings, bus, FakeRegistry(FakeProvider(FakeClient([[locked]])))
+    )
     await scanner.scan_creator(cid, ScanMode.FULL)
     with session_scope(session_factory) as s:
         post = s.execute(select(Post).options(selectinload(Post.media_items))).scalar_one()
         assert post.status == PostStatus.NO_ACCESS and post.media_items == []
     unlocked = fx.native_video_post("p1", edited_at="2026-04-01T00:00:00.000+00:00")
-    scanner = Scanner(session_factory, settings, bus, FakePatreon(FakeClient([[unlocked]])))
+    scanner = Scanner(
+        session_factory, settings, bus, FakeRegistry(FakeProvider(FakeClient([[unlocked]])))
+    )
     await scanner.scan_creator(cid, ScanMode.INCREMENTAL)
     with session_scope(session_factory) as s:
         post = s.execute(select(Post).options(selectinload(Post.media_items))).scalar_one()
@@ -143,7 +182,9 @@ async def test_download_since_and_auto_download_off(session_factory, settings, b
         fx.native_video_post("old", published_at="2026-01-01T00:00:00+00:00"),
         fx.native_video_post("new", published_at="2026-07-01T00:00:00+00:00"),
     ]
-    scanner = Scanner(session_factory, settings, bus, FakePatreon(FakeClient([posts])))
+    scanner = Scanner(
+        session_factory, settings, bus, FakeRegistry(FakeProvider(FakeClient([posts])))
+    )
     await scanner.scan_creator(cid, ScanMode.FULL)
     _, media, jobs = counts(session_factory)
     st = {m.media_key: m.status for m in media}
@@ -154,19 +195,15 @@ async def test_download_since_and_auto_download_off(session_factory, settings, b
 @pytest.mark.asyncio
 async def test_auth_error_marks_invalid_and_raises(session_factory, settings, bus):
     cid = make_creator(session_factory)
-    patreon = FakePatreon(FakeClient([], raise_auth=True))
-    scanner = Scanner(session_factory, settings, bus, patreon)
+    provider = FakeProvider(FakeClient([], raise_auth=True))
+    scanner = Scanner(session_factory, settings, bus, FakeRegistry(provider))
     with pytest.raises(AuthError):
         await scanner.scan_creator(cid, ScanMode.FULL)
-    assert patreon.invalid is not None
+    assert provider.invalid is not None
     with session_scope(session_factory) as s:
         run = s.execute(select(ScanRun)).scalar_one()
         assert run.status == ScanStatus.ERROR
         assert s.get(Creator, cid).last_scan_status == ScanStatus.ERROR
-
-
-def test_patreon_service_is_real_type():
-    assert PatreonService is not None
 
 
 @pytest.mark.asyncio
@@ -179,7 +216,9 @@ async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory,
         post_type="link",
         embed={"provider": "Patreon", "url": "https://www.patreon.com/collection/1"},
     )
-    scanner = Scanner(session_factory, settings, bus, FakePatreon(FakeClient([[bad_embed]])))
+    scanner = Scanner(
+        session_factory, settings, bus, FakeRegistry(FakeProvider(FakeClient([[bad_embed]])))
+    )
     await scanner.scan_creator(cid, ScanMode.FULL)
     # Simulate a row produced by an older resolver version.
     with session_scope(session_factory) as s:
@@ -194,7 +233,7 @@ async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory,
                 status=MediaStatus.FAILED_PERMANENT,
             )
         )
-    result = reresolve_all(session_factory, bus)
+    result = reresolve_all(session_factory, FakeRegistry(FakeProvider(None)), bus)
     assert result["posts"] == 1
     with session_scope(session_factory) as s:
         assert s.execute(select(MediaItem)).scalars().all() == []

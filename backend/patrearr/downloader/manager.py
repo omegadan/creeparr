@@ -21,12 +21,10 @@ from patrearr.config import EnvConfig
 from patrearr.core.events import EventBus
 from patrearr.core.history import record_event
 from patrearr.core.naming import render_template, sanitize_component, split_name, unique_path
-from patrearr.core.patreon_service import PatreonService
 from patrearr.core.settings_service import SettingsService
 from patrearr.core.state import get_state, set_state
 from patrearr.db.engine import SessionFactory, session_scope
 from patrearr.db.enums import (
-    AuthState,
     EventType,
     JobStatus,
     MediaKind,
@@ -47,14 +45,14 @@ from patrearr.downloader.handlers.ytdlp import YtDlpOptions, normalise_vimeo_url
 from patrearr.downloader.queue import enqueue_media, publish_post_changed, recompute_post_status
 from patrearr.downloader.sidecars import write_text_sidecars
 from patrearr.patreon.drm import probe_hls_drm
-from patrearr.patreon.errors import (
+from patrearr.providers.errors import (
     AuthError,
     CloudflareChallengeError,
     ForbiddenError,
     NotFoundError,
-    PatreonError,
+    ProviderError,
 )
-from patrearr.patreon.media_resolver import resolve_media
+from patrearr.providers.registry import ProviderRegistry
 from patrearr.scanner.scanner import sync_media_items, upsert_post
 
 log = logging.getLogger(__name__)
@@ -68,6 +66,7 @@ EMBED_SOURCES = {MediaSource.EMBED_YOUTUBE, MediaSource.EMBED_VIMEO, MediaSource
 class JobContext:
     job_id: int
     attempt: int
+    provider: str
     media_id: int
     post_id: int
     creator_id: int
@@ -78,6 +77,7 @@ class JobContext:
     remote_file_name: str | None
     mimetype: str | None
     order_index: int
+    remote_metadata: dict[str, Any]
     post_ext_id: str
     post_title: str
     post_published_at: datetime | None
@@ -107,13 +107,13 @@ class DownloadManager:
         session_factory: SessionFactory,
         settings: SettingsService,
         bus: EventBus,
-        patreon: PatreonService,
+        providers: ProviderRegistry,
     ) -> None:
         self.env = env
         self._factory = session_factory
         self.settings = settings
         self.bus = bus
-        self.patreon = patreon
+        self.providers = providers
         self._workers: list[asyncio.Task[None]] = []
         self._running: dict[int, RunningJob] = {}
         self._kick = asyncio.Event()
@@ -259,12 +259,7 @@ class DownloadManager:
             return self._claim_next_locked(worker_id)
 
     def _claim_next_locked(self, worker_id: str) -> JobContext | None:
-        auth_state = self.patreon.get_auth_status().get("state")
-        patreon_ok = auth_state not in (
-            AuthState.INVALID,
-            AuthState.CHALLENGE,
-            AuthState.UNCONFIGURED,
-        )
+        blocked = self.providers.blocked_names()
         cap = self.settings.get().downloads.max_per_creator
         with session_scope(self._factory) as s:
             running_counts = dict(
@@ -295,7 +290,7 @@ class DownloadManager:
                 media = job.media_item
                 if media is None or media.post is None:
                     continue
-                if not patreon_ok and media.source not in EMBED_SOURCES:
+                if media.post.creator.provider in blocked and media.source not in EMBED_SOURCES:
                     continue
                 # Conditional update so a job can never be claimed twice.
                 claimed = s.execute(
@@ -327,6 +322,7 @@ class DownloadManager:
         return JobContext(
             job_id=job.id,
             attempt=job.attempt,
+            provider=creator.provider,
             media_id=media.id,
             post_id=post.id,
             creator_id=creator.id,
@@ -337,6 +333,7 @@ class DownloadManager:
             remote_file_name=media.remote_file_name,
             mimetype=media.mimetype,
             order_index=media.order_index,
+            remote_metadata=media.remote_metadata or {},
             post_ext_id=post.post_id,
             post_title=post.title,
             post_published_at=post.published_at,
@@ -356,7 +353,7 @@ class DownloadManager:
 
     async def _run_job(self, ctx: JobContext, reporter: ProgressReporter) -> None:
         settings = self.settings.get()
-        client = self.patreon.client
+        provider = self.providers.get(ctx.provider)
         label = f"[job {ctx.job_id} media {ctx.media_id}]"
         log.info("%s starting %s %s", label, ctx.source, ctx.post_title)
 
@@ -370,7 +367,7 @@ class DownloadManager:
                 try:
                     await self._refresh_post(ctx)
                 except (AuthError, CloudflareChallengeError) as exc:
-                    self.patreon.mark_auth_invalid(exc)
+                    provider.mark_auth_invalid(exc)
                     await asyncio.to_thread(
                         self._fail_job, ctx, f"auth: {exc}", "auth", retryable=True, count=False
                     )
@@ -385,7 +382,7 @@ class DownloadManager:
                         self._fail_job, ctx, f"post gone: {exc}", "not_found", retryable=False
                     )
                     return
-                except PatreonError as exc:
+                except ProviderError as exc:
                     await asyncio.to_thread(self._fail_job, ctx, str(exc), "api", retryable=True)
                     return
             if not ctx.post_can_view:
@@ -403,11 +400,16 @@ class DownloadManager:
         post_dir = self.env.download_dir / self._post_dir(ctx)
         await asyncio.to_thread(self._write_sidecars, ctx, post_dir)
 
-        # 3. DRM probe for HLS.
+        # 3. DRM: flagged by the provider up front, or probed from the HLS playlist.
+        if ctx.remote_metadata.get("drm"):
+            await asyncio.to_thread(
+                self._fail_job, ctx, "DRM-protected media", "drm", retryable=False
+            )
+            return
         if ctx.source == MediaSource.NATIVE_HLS:
             try:
-                drm = await probe_hls_drm(client.fetch_text, ctx.url)
-            except PatreonError as exc:
+                drm = await probe_hls_drm(provider.fetch_text, ctx.url)
+            except ProviderError as exc:
                 await asyncio.to_thread(
                     self._fail_job, ctx, f"HLS probe failed: {exc}", "hls_probe", retryable=True
                 )
@@ -426,7 +428,7 @@ class DownloadManager:
                 dest = unique_path(post_dir / self._file_name(ctx, ext))
                 reporter.set_stage("downloading")
                 result = await download_direct(
-                    client,
+                    provider,
                     ctx.url,
                     dest,
                     reporter,
@@ -437,14 +439,12 @@ class DownloadManager:
                 if ctx.source == MediaSource.EMBED_VIMEO:
                     url = normalise_vimeo_url(url)
                 opts = YtDlpOptions(
-                    headers=client.media_headers(),
-                    cookiefile=str(self.env.cookies_file)
-                    if self.env.cookies_file.exists()
-                    else None,
+                    headers=provider.media_headers(),
+                    cookiefile=str(provider.cookie_file) if provider.cookie_file.exists() else None,
                     video_format=settings.downloads.video_format,
                     ffmpeg_location=self.env.resolve_ffmpeg(),
                     fragment_concurrency=settings.downloads.hls_fragment_concurrency,
-                    impersonate=settings.patreon.http_backend == "curl_cffi",
+                    impersonate=provider.ytdlp_impersonate,
                     remote_components=settings.downloads.ytdlp_remote_components,
                 )
                 reporter.set_stage("downloading")
@@ -468,7 +468,8 @@ class DownloadManager:
         await asyncio.to_thread(self._complete_job, ctx, result)
 
     async def _refresh_post(self, ctx: JobContext) -> None:
-        pr = await self.patreon.client.get_post(ctx.post_ext_id)
+        provider = self.providers.get(ctx.provider)
+        pr = await provider.get_post(ctx.campaign_id, ctx.post_ext_id)
 
         def _apply() -> None:
             with session_scope(self._factory) as s:
@@ -481,12 +482,13 @@ class DownloadManager:
                     return
                 creator = s.get(Creator, post.creator_id)
                 upsert_post(s, creator, pr)
-                sync_media_items(s, creator, post, resolve_media(pr))
+                sync_media_items(s, creator, post, provider.resolve_media(pr))
                 for m in post.media_items:
                     if m.id == ctx.media_id:
                         ctx.url = m.source_url
                         ctx.remote_file_name = m.remote_file_name
                         ctx.mimetype = m.mimetype
+                        ctx.remote_metadata = m.remote_metadata or {}
                         m.status = MediaStatus.DOWNLOADING
                 ctx.post_can_view = post.current_user_can_view
                 ctx.post_title = post.title

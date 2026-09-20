@@ -2,21 +2,23 @@ import { NavLink, useParams } from "react-router";
 import { useSettings } from "../api/hooks/useSettings";
 import { PageHeader } from "../components/layout/AppShell";
 import { Spinner } from "../components/ui/Misc";
-import { PatreonSettings } from "../components/settings/PatreonSettings";
+import { AccountSettings } from "../components/settings/AccountSettings";
+import { OnlyFansSettings } from "../components/settings/OnlyFansSettings";
 import { GeneralSettings } from "../components/settings/GeneralSettings";
 import { DownloadSettings } from "../components/settings/DownloadSettings";
 import { ScanSettings } from "../components/settings/ScanSettings";
 import { cx } from "../lib/format";
 
 const TABS = [
-  { id: "patreon", label: "Patreon" },
+  { id: "accounts", label: "Accounts" },
+  { id: "onlyfans", label: "OnlyFans" },
   { id: "scanning", label: "Scanning" },
   { id: "downloads", label: "Downloads" },
   { id: "general", label: "Naming & general" },
 ];
 
 export function SettingsPage() {
-  const tab = useParams().tab ?? "patreon";
+  const tab = useParams().tab ?? "accounts";
   const settings = useSettings();
   return (
     <>
@@ -32,7 +34,8 @@ export function SettingsPage() {
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : (
         <div className="max-w-3xl">
-          {tab === "patreon" && <PatreonSettings settings={settings.data} />}
+          {tab === "accounts" && <AccountSettings settings={settings.data} />}
+          {tab === "onlyfans" && <OnlyFansSettings settings={settings.data} />}
           {tab === "scanning" && <ScanSettings settings={settings.data} />}
           {tab === "downloads" && <DownloadSettings settings={settings.data} />}
           {tab === "general" && <GeneralSettings settings={settings.data} />}

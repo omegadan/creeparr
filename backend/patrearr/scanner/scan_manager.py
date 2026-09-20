@@ -13,11 +13,11 @@ from sqlalchemy import select
 
 from patrearr.core.errors import Conflict
 from patrearr.core.events import EventBus
-from patrearr.core.patreon_service import PatreonService
 from patrearr.db.engine import SessionFactory, session_scope
-from patrearr.db.enums import AuthState, ScanMode
+from patrearr.db.enums import ScanMode
 from patrearr.db.models import Creator
-from patrearr.patreon.errors import AuthError, CloudflareChallengeError
+from patrearr.providers.errors import AuthError, CloudflareChallengeError
+from patrearr.providers.registry import ProviderRegistry
 from patrearr.scanner.scanner import Scanner
 
 log = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ class ScanRequest:
     mode: ScanMode
     trigger: str
     requested_at: datetime
+    provider: str = "patreon"
 
 
 class ScanManager:
@@ -36,12 +37,12 @@ class ScanManager:
         self,
         scanner: Scanner,
         session_factory: SessionFactory,
-        patreon: PatreonService,
+        providers: ProviderRegistry,
         bus: EventBus,
     ) -> None:
         self.scanner = scanner
         self._factory = session_factory
-        self.patreon = patreon
+        self.providers = providers
         self.bus = bus
         self._queue: asyncio.Queue[ScanRequest] = asyncio.Queue()
         self._pending: dict[int, ScanRequest] = {}
@@ -69,10 +70,13 @@ class ScanManager:
         self, creator_id: int, mode: ScanMode = ScanMode.AUTO, trigger: str = "manual"
     ) -> bool:
         """Enqueue a scan; returns False if one is already pending/running for this creator."""
-        state = self.patreon.get_auth_status().get("state")
-        if state in (AuthState.INVALID, AuthState.CHALLENGE, AuthState.UNCONFIGURED):
+        with session_scope(self._factory) as s:
+            creator = s.get(Creator, creator_id)
+            provider_name = creator.provider if creator else "patreon"
+        provider = self.providers.get(provider_name)
+        if provider.auth_blocked:
             raise Conflict(
-                "Patreon session is not valid; fix it in Settings before scanning",
+                f"{provider.label} session is not valid; fix it in Settings before scanning",
                 code="auth_invalid",
             )
         if creator_id in self._pending:
@@ -82,7 +86,7 @@ class ScanManager:
             return False
         if self._current is not None and self._current.creator_id == creator_id:
             return False
-        req = ScanRequest(creator_id, mode, trigger, datetime.now(UTC))
+        req = ScanRequest(creator_id, mode, trigger, datetime.now(UTC), provider_name)
         self._pending[creator_id] = req
         self._queue.put_nowait(req)
         self.bus.publish("scan.queued", {"creator_id": creator_id, "mode": mode})
@@ -135,19 +139,31 @@ class ScanManager:
             try:
                 await self.scanner.scan_creator(req.creator_id, req.mode, req.trigger, self._cancel)
             except (AuthError, CloudflareChallengeError):
-                log.error("auth failure during scan; dropping %d pending scans", len(self._pending))
-                self._drain()
+                dropped = self._drain(req.provider)
+                log.error(
+                    "%s auth failure during scan; dropped %d pending scans", req.provider, dropped
+                )
             except Exception:  # noqa: BLE001
                 log.exception("scan worker error for creator %s", req.creator_id)
             finally:
                 self._current = None
                 self._queue.task_done()
 
-    def _drain(self) -> None:
-        self._pending.clear()
+    def _drain(self, provider: str) -> int:
+        """Drop pending scans for one provider; keep the others queued."""
+        keep: list[ScanRequest] = []
+        dropped = 0
         while not self._queue.empty():
             try:
-                self._queue.get_nowait()
-                self._queue.task_done()
+                req = self._queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
+            self._queue.task_done()
+            if req.provider == provider:
+                self._pending.pop(req.creator_id, None)
+                dropped += 1
+            else:
+                keep.append(req)
+        for req in keep:
+            self._queue.put_nowait(req)
+        return dropped

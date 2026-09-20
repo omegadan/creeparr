@@ -45,6 +45,7 @@ class CreatorStats(BaseModel):
 
 class CreatorOut(ORMModel):
     id: int
+    provider: str
     campaign_id: str
     vanity: str | None
     name: str
@@ -78,7 +79,8 @@ class CreatorDefaults(BaseModel):
 
 
 class CreatorCreate(CreatorDefaults):
-    query: str = Field(min_length=1, description="URL, vanity name or campaign id")
+    query: str = Field(min_length=1, description="URL, handle or id at the provider")
+    provider: str = "patreon"
 
 
 class CreatorPatch(CreatorDefaults):
@@ -87,35 +89,47 @@ class CreatorPatch(CreatorDefaults):
 
 class LookupRequest(BaseModel):
     query: str = Field(min_length=1)
+    provider: str = "patreon"
 
 
-class CampaignPreview(BaseModel):
-    campaign_id: str
+class CreatorPreview(BaseModel):
+    provider: str
+    external_id: str
     name: str
-    vanity: str | None
+    handle: str | None
     url: str | None
     avatar_url: str | None
-    creation_name: str | None = None
+    description: str | None = None
     is_nsfw: bool | None = None
     already_added: bool = False
     creator_id: int | None = None
 
 
-class PledgeOut(BaseModel):
-    campaign_id: str
+class SubscriptionOut(BaseModel):
+    provider: str
+    external_id: str
     name: str
-    vanity: str | None
+    handle: str | None
     url: str | None
     avatar_url: str | None
-    is_free_member: bool | None = None
-    is_free_trial: bool | None = None
+    is_free: bool | None = None
+    is_trial: bool | None = None
     already_added: bool = False
     creator_id: int | None = None
 
 
-class ImportPledgesRequest(BaseModel):
-    campaign_ids: list[str] = Field(min_length=1)
+class ImportSubscriptionsRequest(BaseModel):
+    provider: str = "patreon"
+    ids: list[str] = Field(min_length=1)
     defaults: CreatorDefaults = Field(default_factory=CreatorDefaults)
+
+
+class ProviderOut(BaseModel):
+    name: str
+    label: str
+    configured: bool
+    credential_fields: list[str]
+    auth: dict[str, Any]
 
 
 class ScanRequestBody(BaseModel):
@@ -271,9 +285,10 @@ class HistoryOut(BaseModel):
 # ---- settings -------------------------------------------------------------------------
 
 
-class PatreonAuthBody(BaseModel):
-    session_id: str | None = None
-    cookies_txt: str | None = None
+class AuthBody(BaseModel):
+    """Credential fields for one provider; unknown keys are rejected by the endpoint."""
+
+    model_config = ConfigDict(extra="allow")
 
 
 class NamingPreviewBody(BaseModel):

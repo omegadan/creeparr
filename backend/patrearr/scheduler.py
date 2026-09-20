@@ -198,14 +198,13 @@ class SchedulerService:
         return {"requeued": n}
 
     async def _session_check(self) -> dict[str, bool]:
-        ok = await self.services.patreon.check_session()
-        return {"ok": ok}
+        return {p.name: await p.check_session() for p in self.services.providers}
 
     async def _reresolve_media(self) -> dict[str, int]:
         from patrearr.scanner.scanner import reresolve_all
 
         result = await asyncio.to_thread(
-            reresolve_all, self.services.session_factory, self.services.bus
+            reresolve_all, self.services.session_factory, self.services.providers, self.services.bus
         )
         if result["queued"]:
             self.services.downloads.notify()

@@ -4,15 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from patrearr.core.events import EventBus
 from patrearr.core.history import record_event
-from patrearr.core.patreon_service import PatreonService
 from patrearr.core.settings_service import SettingsService
 from patrearr.db.engine import SessionFactory, session_scope
 from patrearr.db.enums import EventType, MediaStatus, PostStatus, ScanMode, ScanStatus
@@ -23,14 +24,19 @@ from patrearr.downloader.queue import (
     publish_post_changed,
     recompute_post_status,
 )
-from patrearr.patreon.errors import (
+from patrearr.providers.errors import (
     AuthError,
     CloudflareChallengeError,
     ForbiddenError,
-    PatreonError,
+    ProviderError,
 )
-from patrearr.patreon.media_resolver import resolve_media
-from patrearr.patreon.models import MediaSpec, PostResource
+from patrearr.providers.models import MediaSpec, PostResource
+
+if TYPE_CHECKING:
+    from patrearr.providers.base import ProviderService
+    from patrearr.providers.registry import ProviderRegistry
+
+MediaResolver = Callable[[PostResource], list[MediaSpec]]
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +61,9 @@ class ScanCancelled(Exception):
 def upsert_post(session: Session, creator: Creator, pr: PostResource) -> tuple[Post, bool, bool]:
     """Insert or update a post row. Returns (post, is_new, changed)."""
     post = session.execute(
-        select(Post).options(selectinload(Post.media_items)).where(Post.post_id == pr.id)
+        select(Post)
+        .options(selectinload(Post.media_items))
+        .where(Post.creator_id == creator.id, Post.post_id == pr.id)
     ).scalar_one_or_none()
     now = datetime.now(UTC)
     is_new = post is None
@@ -170,35 +178,40 @@ def auto_queue_post(session: Session, creator: Creator, post: Post) -> int:
 
 
 def sync_post(
-    session: Session, creator: Creator, pr: PostResource, *, queue: bool = True
+    session: Session,
+    creator: Creator,
+    pr: PostResource,
+    resolver: MediaResolver,
+    *,
+    queue: bool = True,
 ) -> tuple[Post, bool, bool, int]:
     """Upsert a post, its media items and (optionally) queue downloads."""
     post, is_new, changed = upsert_post(session, creator, pr)
     queued = 0
     if is_new or changed:
-        sync_media_items(session, creator, post, resolve_media(pr))
+        sync_media_items(session, creator, post, resolver(pr))
     if queue:
         queued = auto_queue_post(session, creator, post)
     recompute_post_status(post)
     return post, is_new, changed, queued
 
 
-def reresolve_post(session: Session, creator: Creator, post: Post) -> int:
+def reresolve_post(
+    session: Session, creator: Creator, post: Post, provider: ProviderService
+) -> int:
     """Re-run the media resolver on the stored raw JSON (after a resolver fix)."""
-    raw = post.raw_json or {}
-    data = raw.get("data")
-    if not isinstance(data, dict):
+    pr = provider.post_from_raw(post.raw_json or {})
+    if pr is None:
         return 0
-    from patrearr.patreon.parsing import IncludedIndex, post_from_resource
-
-    pr = post_from_resource(data, IncludedIndex({"included": raw.get("included") or []}))
-    sync_media_items(session, creator, post, resolve_media(pr))
+    sync_media_items(session, creator, post, provider.resolve_media(pr))
     queued = auto_queue_post(session, creator, post)
     recompute_post_status(post)
     return queued
 
 
-def reresolve_all(session_factory: SessionFactory, bus: EventBus | None = None) -> dict[str, int]:
+def reresolve_all(
+    session_factory: SessionFactory, providers: ProviderRegistry, bus: EventBus | None = None
+) -> dict[str, int]:
     posts_done = 0
     queued = 0
     with session_scope(session_factory) as s:
@@ -213,7 +226,7 @@ def reresolve_all(session_factory: SessionFactory, bus: EventBus | None = None) 
             creator = s.get(Creator, post.creator_id)
             if creator is None:
                 continue
-            queued += reresolve_post(s, creator, post)
+            queued += reresolve_post(s, creator, post, providers.for_creator(creator))
             posts_done += 1
             publish_post_changed(bus, post)
     return {"posts": posts_done, "queued": queued}
@@ -228,12 +241,12 @@ class Scanner:
         session_factory: SessionFactory,
         settings: SettingsService,
         bus: EventBus,
-        patreon: PatreonService,
+        providers: ProviderRegistry,
     ) -> None:
         self._factory = session_factory
         self.settings = settings
         self.bus = bus
-        self.patreon = patreon
+        self.providers = providers
 
     def _start_run(self, creator_id: int, mode: ScanMode, trigger: str) -> tuple[int, Creator]:
         with session_scope(self._factory) as s:
@@ -257,7 +270,12 @@ class Scanner:
             return run.id, creator
 
     def _process_page(
-        self, creator_id: int, run_id: int, posts: list[PostResource], overlap: int
+        self,
+        creator_id: int,
+        run_id: int,
+        posts: list[PostResource],
+        overlap: int,
+        resolver: MediaResolver,
     ) -> PageStats:
         stats = PageStats()
         with session_scope(self._factory) as s:
@@ -266,7 +284,7 @@ class Scanner:
                 raise ScanCancelled("creator deleted during scan")
             run = s.get(ScanRun, run_id)
             for pr in posts:
-                post, is_new, changed, queued = sync_post(s, creator, pr)
+                post, is_new, changed, queued = sync_post(s, creator, pr, resolver)
                 stats.seen += 1
                 stats.queued += queued
                 if is_new:
@@ -361,16 +379,21 @@ class Scanner:
             {"scan_run_id": run_id, "creator_id": creator_id, "mode": effective_mode},
         )
         overlap = self.settings.get().scan.overlap_posts
-        client = self.patreon.client
+        provider = self.providers.for_creator(creator)
         status = ScanStatus.OK
         error: str | None = None
         try:
             consecutive_known = 0
-            async for page in client.iter_posts(creator.campaign_id):
+            async for page in provider.iter_posts(creator.campaign_id):
                 if cancel is not None and cancel.is_set():
                     raise ScanCancelled()
                 stats = await asyncio.to_thread(
-                    self._process_page, creator_id, run_id, page.posts, overlap
+                    self._process_page,
+                    creator_id,
+                    run_id,
+                    page.posts,
+                    overlap,
+                    provider.resolve_media,
                 )
                 self.bus.publish(
                     "scan.progress",
@@ -397,7 +420,7 @@ class Scanner:
             status, error = ScanStatus.CANCELLED, "cancelled"
         except (AuthError, CloudflareChallengeError) as exc:
             status, error = ScanStatus.ERROR, str(exc)
-            self.patreon.mark_auth_invalid(exc)
+            provider.mark_auth_invalid(exc)
             await asyncio.to_thread(
                 self._finish_run, run_id, creator_id, status, effective_mode, error
             )
@@ -405,14 +428,14 @@ class Scanner:
         except ForbiddenError as exc:
             status, error = ScanStatus.ERROR, str(exc)
             # Could be an expired session; verify it so the UI can tell the user.
-            ok = await self.patreon.check_session()
+            ok = await provider.check_session()
             await asyncio.to_thread(
                 self._finish_run, run_id, creator_id, status, effective_mode, error
             )
             if not ok:
                 raise AuthError(str(exc)) from exc
             return run_id
-        except PatreonError as exc:
+        except ProviderError as exc:
             status, error = ScanStatus.ERROR, str(exc)
         except Exception as exc:  # noqa: BLE001
             log.exception("scan of creator %s crashed", creator_id)

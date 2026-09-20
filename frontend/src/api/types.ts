@@ -11,6 +11,7 @@ export interface CreatorStats {
 
 export interface Creator {
   id: number;
+  provider: string;
   campaign_id: string;
   vanity: string | null;
   name: string;
@@ -44,28 +45,38 @@ export interface CreatorDefaults {
   folder_name?: string | null;
 }
 
-export interface CampaignPreview {
-  campaign_id: string;
+export interface CreatorPreview {
+  provider: string;
+  external_id: string;
   name: string;
-  vanity: string | null;
+  handle: string | null;
   url: string | null;
   avatar_url: string | null;
-  creation_name: string | null;
+  description: string | null;
   is_nsfw: boolean | null;
   already_added: boolean;
   creator_id: number | null;
 }
 
-export interface Pledge {
-  campaign_id: string;
+export interface Subscription {
+  provider: string;
+  external_id: string;
   name: string;
-  vanity: string | null;
+  handle: string | null;
   url: string | null;
   avatar_url: string | null;
-  is_free_member: boolean | null;
-  is_free_trial: boolean | null;
+  is_free: boolean | null;
+  is_trial: boolean | null;
   already_added: boolean;
   creator_id: number | null;
+}
+
+export interface ProviderInfo {
+  name: string;
+  label: string;
+  configured: boolean;
+  credential_fields: string[];
+  auth: AuthStatus;
 }
 
 export interface ScanRun {
@@ -215,6 +226,7 @@ export interface HistoryEvent {
 }
 
 export interface AuthStatus {
+  provider?: string;
   state: "unknown" | "unconfigured" | "valid" | "invalid" | "challenge" | "error";
   checked_at: string | null;
   user_name: string | null;
@@ -229,6 +241,19 @@ export interface Settings {
     has_cookies_txt: boolean;
     user_agent: string;
     requests_per_second: number;
+    http_backend: "httpx" | "curl_cffi";
+    impersonate_target: string;
+  };
+  onlyfans: {
+    sess: string;
+    auth_id: string;
+    x_bc: string;
+    cookies_txt: string;
+    has_cookies_txt: boolean;
+    user_agent: string;
+    requests_per_second: number;
+    dynamic_rules_url: string;
+    include_archived: boolean;
     http_backend: "httpx" | "curl_cffi";
     impersonate_target: string;
   };
@@ -280,6 +305,7 @@ export interface SystemStatus {
   started_at: string;
   uptime_seconds: number;
   auth: AuthStatus;
+  providers: ProviderInfo[];
   scan: { running: { creator_id: number; mode: string } | null; pending: { creator_id: number; mode: string; trigger: string }[] };
   next_scan_at: string | null;
   downloads: { paused: boolean; paused_reason: string | null; workers: number; running_jobs: number[]; free_bytes: number };

@@ -18,7 +18,7 @@ def app(env):
     services.settings.update(
         {"patreon": {"session_id": "sid-123", "requests_per_second": 10}}, allow_secrets=True
     )
-    services.patreon._set_auth_status(AuthState.VALID, user_name="Test Patron")
+    services.providers.get("patreon")._set_auth_status(AuthState.VALID, user_name="Test Patron")
     return application
 
 
@@ -46,11 +46,11 @@ def test_patreon_auth_roundtrip(api, respx_mock):
     respx_mock.get(f"{API_URL}/current_user").mock(
         return_value=json_response(fx.current_user_response())
     )
-    r = api.post("/api/v1/settings/patreon-auth/test", json={"session_id": "candidate"})
+    r = api.post("/api/v1/settings/auth/patreon/test", json={"session_id": "candidate"})
     assert (
         r.status_code == 200 and r.json()["ok"] and r.json()["user"]["full_name"] == "Test Patron"
     )
-    r = api.put("/api/v1/settings/patreon-auth", json={"session_id": "newsid-abcdef"})
+    r = api.put("/api/v1/settings/auth/patreon", json={"session_id": "newsid-abcdef"})
     assert r.status_code == 200 and r.json()["ok"]
     assert r.json()["settings"]["session_id"].endswith("cdef")
     status = api.get("/api/v1/system/status").json()
@@ -58,7 +58,7 @@ def test_patreon_auth_roundtrip(api, respx_mock):
     respx_mock.get(f"{API_URL}/current_user").mock(
         return_value=httpx.Response(401, json={"errors": [{"detail": "nope"}]})
     )
-    r = api.post("/api/v1/settings/patreon-auth/test")
+    r = api.post("/api/v1/settings/auth/patreon/test")
     assert r.json() == {"ok": False, "reason": "auth_invalid", "detail": r.json()["detail"]}
     assert api.get("/api/v1/system/status").json()["auth"]["state"] == "invalid"
 
@@ -72,7 +72,7 @@ def test_lookup_add_and_list_creator(api, respx_mock):
         "/api/v1/creators/lookup", json={"query": "https://www.patreon.com/c/examplecreator"}
     )
     assert r.status_code == 200
-    assert r.json()["campaign_id"] == fx.CAMPAIGN_ID and not r.json()["already_added"]
+    assert r.json()["external_id"] == fx.CAMPAIGN_ID and not r.json()["already_added"]
 
     r = api.post("/api/v1/creators", json={"query": "examplecreator", "include_images": True})
     assert r.status_code == 201, r.text
@@ -117,16 +117,17 @@ def test_import_pledges(api, respx_mock):
     respx_mock.get(f"{API_URL}/current_user").mock(
         return_value=json_response(fx.pledges_response())
     )
-    r = api.get("/api/v1/patreon/pledges")
+    r = api.get("/api/v1/providers/patreon/subscriptions")
     assert r.status_code == 200 and len(r.json()) == 2
     r = api.post(
-        "/api/v1/creators/import-pledges", json={"campaign_ids": [fx.CAMPAIGN_ID, "7654321"]}
+        "/api/v1/creators/import-subscriptions",
+        json={"provider": "patreon", "ids": [fx.CAMPAIGN_ID, "7654321"]},
     )
     assert r.status_code == 201 and sorted(c["campaign_id"] for c in r.json()) == [
         fx.CAMPAIGN_ID,
         "7654321",
     ]
-    r = api.get("/api/v1/patreon/pledges")
+    r = api.get("/api/v1/providers/patreon/subscriptions")
     assert all(p["already_added"] for p in r.json())
 
 
@@ -134,7 +135,7 @@ def test_queue_pause_resume_and_scan_conflict_when_auth_invalid(api):
     assert api.post("/api/v1/queue/pause").json()["paused"] is True
     assert api.get("/api/v1/queue").json()["paused"] is True
     assert api.post("/api/v1/queue/resume").json()["paused"] is False
-    api.app.state.services.patreon._set_auth_status(AuthState.INVALID, error="x")
+    api.app.state.services.providers.get("patreon")._set_auth_status(AuthState.INVALID, error="x")
     r = api.post("/api/v1/creators/scan-all")
     assert r.status_code == 202 and r.json()["queued"] == 0
 

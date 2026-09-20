@@ -68,9 +68,12 @@ class TimestampMixin:
 
 class Creator(TimestampMixin, Base):
     __tablename__ = "creators"
+    __table_args__ = (UniqueConstraint("provider", "campaign_id", name="uq_creator_provider_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    campaign_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), default="patreon", nullable=False)
+    #: The provider's own id for this creator (Patreon campaign id, OnlyFans user id, ...).
+    campaign_id: Mapped[str] = mapped_column(String(64), nullable=False)
     vanity: Mapped[str | None] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str | None] = mapped_column(String(1024))
@@ -103,10 +106,13 @@ class Creator(TimestampMixin, Base):
 
 class Post(TimestampMixin, Base):
     __tablename__ = "posts"
-    __table_args__ = (Index("ix_posts_creator_published", "creator_id", "published_at"),)
+    __table_args__ = (
+        Index("ix_posts_creator_published", "creator_id", "published_at"),
+        UniqueConstraint("creator_id", "post_id", name="uq_post_creator_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    post_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    post_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     creator_id: Mapped[int] = mapped_column(
         ForeignKey("creators.id", ondelete="CASCADE"), nullable=False, index=True
     )

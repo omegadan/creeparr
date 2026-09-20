@@ -27,6 +27,21 @@ class PatreonSettings(BaseModel):
     impersonate_target: str = "chrome"
 
 
+class OnlyFansSettings(BaseModel):
+    sess: str = ""
+    auth_id: str = ""
+    x_bc: str = ""
+    cookies_txt: str = ""
+    user_agent: str = ""
+    requests_per_second: float = Field(default=0.5, ge=0.1, le=5)
+    dynamic_rules_url: str = (
+        "https://raw.githubusercontent.com/deviint/onlyfans-dynamic-rules/main/dynamicRules.json"
+    )
+    include_archived: bool = True
+    http_backend: Literal["httpx", "curl_cffi"] = "httpx"
+    impersonate_target: str = "chrome"
+
+
 class ScanSettings(BaseModel):
     interval_minutes: int = Field(default=60, ge=0, le=10080)
     overlap_posts: int = Field(default=10, ge=1, le=500)
@@ -65,13 +80,18 @@ class HistorySettings(BaseModel):
 
 class AppSettings(BaseModel):
     patreon: PatreonSettings = Field(default_factory=PatreonSettings)
+    onlyfans: OnlyFansSettings = Field(default_factory=OnlyFansSettings)
     scan: ScanSettings = Field(default_factory=ScanSettings)
     downloads: DownloadSettings = Field(default_factory=DownloadSettings)
     naming: NamingSettings = Field(default_factory=NamingSettings)
     history: HistorySettings = Field(default_factory=HistorySettings)
 
 
-SECRET_FIELDS: dict[str, set[str]] = {"patreon": {"session_id", "cookies_txt"}}
+SECRET_FIELDS: dict[str, set[str]] = {
+    "patreon": {"session_id", "cookies_txt"},
+    "onlyfans": {"sess", "auth_id", "x_bc", "cookies_txt"},
+}
+TEXT_SECRETS = {"cookies_txt"}
 
 
 def mask_secret(value: str) -> str:
@@ -148,7 +168,12 @@ class SettingsService:
 
     def masked(self) -> dict[str, Any]:
         data = self.get().model_dump()
-        data["patreon"]["session_id"] = mask_secret(data["patreon"]["session_id"])
-        data["patreon"]["has_cookies_txt"] = bool(data["patreon"]["cookies_txt"])
-        data["patreon"]["cookies_txt"] = ""
+        for group, names in SECRET_FIELDS.items():
+            for name in names:
+                value = data[group].get(name, "")
+                if name in TEXT_SECRETS:
+                    data[group][f"has_{name}"] = bool(value)
+                    data[group][name] = ""
+                else:
+                    data[group][name] = mask_secret(value)
         return data
