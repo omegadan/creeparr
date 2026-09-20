@@ -136,7 +136,7 @@ export function CreatorDetailPage() {
         onConfirm={() => remove.mutate({ id, deleteFiles }, { onSuccess: () => { toast(`Removed ${c.name}`); nav("/creators"); }, onError: (e) => error(e) })}
         message={
           <div className="grid gap-3">
-            <p>This removes the creator and all its post records from Patreonarr. Running downloads are cancelled.</p>
+            <p>This removes the creator and all its post records from Patrearr. Running downloads are cancelled.</p>
             <label className="flex items-center gap-2 text-fg"><input type="checkbox" checked={deleteFiles} onChange={(e) => setDeleteFiles(e.target.checked)} /> Also delete archived files from disk</label>
           </div>
         }

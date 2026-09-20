@@ -1,13 +1,13 @@
 services:
-  patreonarr:
+  patrearr:
     image: ghcr.io/omegadan/patrearr:latest
     # build: .   # uncomment to build from source instead
-    container_name: patreonarr
+    container_name: patrearr
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Etc/UTC
-      - PATREONARR_LOG_LEVEL=INFO
+      - PATREARR_LOG_LEVEL=INFO
     volumes:
       - ./config:/config
       - ./downloads:/downloads

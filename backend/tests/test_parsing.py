@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from patreonarr.patreon.parsing import (
+from patrearr.patreon.parsing import (
     IncludedIndex,
     campaign_from_resource,
     extract_bootstrap_campaign_id,

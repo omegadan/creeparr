@@ -41,6 +41,6 @@ jobs:
         with:
           context: .
           push: false
-          tags: patreonarr:ci
+          tags: patrearr:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max

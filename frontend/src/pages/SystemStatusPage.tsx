@@ -27,7 +27,7 @@ export function SystemStatusPage() {
   const diskPct = s.disk.total_bytes ? Math.round(((s.disk.used_bytes ?? 0) / s.disk.total_bytes) * 100) : null;
   return (
     <>
-      <PageHeader title="System status" subtitle={`Patreonarr v${s.version} · up ${formatDuration(s.uptime_seconds)}`} />
+      <PageHeader title="System status" subtitle={`Patrearr v${s.version} · up ${formatDuration(s.uptime_seconds)}`} />
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Patreon session" value={<Badge tone={s.auth.state === "valid" ? "ok" : s.auth.state === "unknown" ? "warn" : "danger"}>{s.auth.state}</Badge>} sub={s.auth.user_name ?? s.auth.error ?? `checked ${timeAgo(s.auth.checked_at)}`} />
         <Stat label="Archive" value={`${s.counts.media_completed} files`} sub={`${formatBytes(s.counts.media_bytes)} across ${s.counts.posts} posts from ${s.counts.creators} creators`} />

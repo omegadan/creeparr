@@ -11,16 +11,16 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from patreonarr.core.patreon_service import PatreonService
-from patreonarr.db.engine import session_scope
-from patreonarr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus
-from patreonarr.db.models import Creator, DownloadJob, History, MediaItem, Post
-from patreonarr.downloader.manager import DownloadManager
-from patreonarr.downloader.queue import enqueue_media
-from patreonarr.patreon.client import API_URL
-from patreonarr.patreon.media_resolver import resolve_media
-from patreonarr.patreon.parsing import IncludedIndex, post_from_resource
-from patreonarr.scanner.scanner import sync_media_items, upsert_post
+from patrearr.core.patreon_service import PatreonService
+from patrearr.db.engine import session_scope
+from patrearr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus
+from patrearr.db.models import Creator, DownloadJob, History, MediaItem, Post
+from patrearr.downloader.manager import DownloadManager
+from patrearr.downloader.queue import enqueue_media
+from patrearr.patreon.client import API_URL
+from patrearr.patreon.media_resolver import resolve_media
+from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+from patrearr.scanner.scanner import sync_media_items, upsert_post
 from tests import patreon_fixtures as fx
 from tests.conftest import json_response
 
@@ -99,7 +99,7 @@ async def test_direct_download_end_to_end(env, session_factory, settings, bus, p
         and (post_dir / "post.html").exists()
     )
     assert "Hello **world**" in (post_dir / "post.md").read_text()
-    assert not list(post_dir.glob(".patreonarr-tmp-*"))
+    assert not list(post_dir.glob(".patrearr-tmp-*"))
 
 
 @pytest.mark.asyncio
@@ -167,7 +167,7 @@ async def test_hls_drm_marks_unsupported(env, session_factory, settings, bus, pa
 @pytest.mark.asyncio
 async def test_disk_full_pauses(env, session_factory, settings, bus, patreon, monkeypatch):
     settings.update({"downloads": {"min_free_mb": 1}})
-    monkeypatch.setattr("patreonarr.downloader.manager.free_space_bytes", lambda _p: 0)
+    monkeypatch.setattr("patrearr.downloader.manager.free_space_bytes", lambda _p: 0)
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
     bus.bind(asyncio.get_running_loop())
     mgr = DownloadManager(env, session_factory, settings, bus, patreon)

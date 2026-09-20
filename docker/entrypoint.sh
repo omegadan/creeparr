@@ -26,5 +26,5 @@ chown -R abc:abc /config
 # Never chown the media tree recursively: it may be huge and belong to other apps.
 chown abc:abc /downloads 2>/dev/null || true
 
-echo "patreonarr: running as uid=$(id -u abc) gid=$(id -g abc), tz=${TZ:-UTC}"
+echo "patrearr: running as uid=$(id -u abc) gid=$(id -g abc), tz=${TZ:-UTC}"
 exec gosu abc "$@"

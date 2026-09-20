@@ -56,7 +56,7 @@ export function CreatorsPage() {
         <EmptyState
           icon={<Users className="h-10 w-10" />}
           title={filter ? "No creators match" : "No creators yet"}
-          hint={filter ? undefined : "Import the creators you pledge to, or add one by URL. Patreonarr will back-fill their posts and keep checking for new ones."}
+          hint={filter ? undefined : "Import the creators you pledge to, or add one by URL. Patrearr will back-fill their posts and keep checking for new ones."}
           action={
             !filter && (
               <div className="flex gap-2">

@@ -4,9 +4,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from patreonarr.app import create_app
-from patreonarr.db.enums import AuthState
-from patreonarr.patreon.client import API_URL
+from patrearr.app import create_app
+from patrearr.db.enums import AuthState
+from patrearr.patreon.client import API_URL
 from tests import patreon_fixtures as fx
 from tests.conftest import json_response
 

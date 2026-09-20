@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from patreonarr.patreon.client import API_URL, BASE_URL, PatreonClient
-from patreonarr.patreon.errors import (
+from patrearr.patreon.client import API_URL, BASE_URL, PatreonClient
+from patrearr.patreon.errors import (
     AuthError,
     CloudflareChallengeError,
     ForbiddenError,

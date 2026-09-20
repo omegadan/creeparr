@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from patreonarr.patreon.cookies import CookieSet, parse_netscape
+from patrearr.patreon.cookies import CookieSet, parse_netscape
 
 COOKIES_TXT = """# Netscape HTTP Cookie File
 .patreon.com\tTRUE\t/\tTRUE\t1900000000\tsession_id\tfrom-file

@@ -6,12 +6,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from patreonarr.downloader.handlers.base import (
+from patrearr.downloader.handlers.base import (
     PermanentDownloadError,
     ProgressReporter,
     RetryableDownloadError,
 )
-from patreonarr.downloader.handlers.direct import download_direct
+from patrearr.downloader.handlers.direct import download_direct
 
 URL = "https://c10.patreonusercontent.com/video.mp4?token=x"
 
@@ -99,7 +99,7 @@ async def test_status_classification(client, respx_mock, tmp_path: Path, status,
 
 @pytest.mark.asyncio
 async def test_cancel_mid_stream(client, respx_mock, tmp_path: Path):
-    from patreonarr.downloader.handlers.base import DownloadCancelled
+    from patrearr.downloader.handlers.base import DownloadCancelled
 
     async def stream():
         for _ in range(50):

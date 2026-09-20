@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from patreonarr.patreon.drm import first_variant_uri, is_drm_playlist, probe_hls_drm
+from patrearr.patreon.drm import first_variant_uri, is_drm_playlist, probe_hls_drm
 from tests import patreon_fixtures as fx
 
 

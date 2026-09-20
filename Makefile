@@ -5,8 +5,8 @@ dev:
 	$(MAKE) -j2 backend frontend
 
 backend:
-	cd backend && PATREONARR_CONFIG_DIR=../config PATREONARR_DOWNLOAD_DIR=../downloads \
-		uv run uvicorn patreonarr.app:create_app --factory --reload --port 7979
+	cd backend && PATREARR_CONFIG_DIR=../config PATREARR_DOWNLOAD_DIR=../downloads \
+		uv run uvicorn patrearr.app:create_app --factory --reload --port 7979
 
 frontend:
 	cd frontend && npm run dev
@@ -20,12 +20,12 @@ lint:
 
 build:
 	cd frontend && npm ci && npm run build
-	rm -rf backend/patreonarr/static && mkdir -p backend/patreonarr/static
-	cp -r frontend/dist/. backend/patreonarr/static/
+	rm -rf backend/patrearr/static && mkdir -p backend/patrearr/static
+	cp -r frontend/dist/. backend/patrearr/static/
 
 docker:
-	docker build -t patreonarr:dev .
+	docker build -t patrearr:dev .
 
 # usage: make migration m="add foo column"
 migration:
-	cd backend && PATREONARR_CONFIG_DIR=../config uv run alembic revision --autogenerate -m "$(m)"
+	cd backend && PATREARR_CONFIG_DIR=../config uv run alembic revision --autogenerate -m "$(m)"

@@ -5,7 +5,7 @@ Single container, single process:
 ```
 FastAPI (uvicorn)
 ├── /api/v1/*         REST + SSE (/api/v1/events)
-├── /                 built React SPA (backend/patreonarr/static)
+├── /                 built React SPA (backend/patrearr/static)
 ├── ScanManager       one worker; walks posts via PatreonClient, upserts rows, queues media
 ├── DownloadManager   N asyncio workers; claims jobs, runs handlers, retries with back-off
 ├── APScheduler       scan_monitored / full_rescan / requeue_failed / session_check / prune

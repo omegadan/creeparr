@@ -8,14 +8,14 @@ import httpx
 import pytest
 import respx
 
-from patreonarr.config import EnvConfig
-from patreonarr.core.events import EventBus
-from patreonarr.core.settings_service import SettingsService
-from patreonarr.db.engine import make_engine, make_session_factory
-from patreonarr.db.migrate import run_migrations
-from patreonarr.patreon.client import PatreonClient
-from patreonarr.patreon.cookies import CookieSet
-from patreonarr.patreon.transport import HttpxTransport, RateLimiter
+from patrearr.config import EnvConfig
+from patrearr.core.events import EventBus
+from patrearr.core.settings_service import SettingsService
+from patrearr.db.engine import make_engine, make_session_factory
+from patrearr.db.migrate import run_migrations
+from patrearr.patreon.client import PatreonClient
+from patrearr.patreon.cookies import CookieSet
+from patrearr.patreon.transport import HttpxTransport, RateLimiter
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def _fast_sleep(monkeypatch: pytest.MonkeyPatch):
     async def fast(seconds: float, *a, **k):
         await real_sleep(0 if seconds > 0.05 else seconds)
 
-    monkeypatch.setattr("patreonarr.patreon.client.asyncio.sleep", fast)
+    monkeypatch.setattr("patrearr.patreon.client.asyncio.sleep", fast)
 
 
 def json_response(payload: dict, status: int = 200) -> httpx.Response:

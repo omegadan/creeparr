@@ -18,7 +18,7 @@ Run against a real Patreon account with at least one paid pledge. Tick each item
 - [ ] Post a test post (or wait for a creator's next post): the scheduled scan picks it up and
       queues it within the interval.
 - [ ] Kill the container mid-download → on restart the job is re-queued, the `.part` resumes
-      or restarts, and no stray `.part`/`.patreonarr-tmp-*` remain after completion.
+      or restarts, and no stray `.part`/`.patrearr-tmp-*` remain after completion.
 - [ ] Replace the session cookie with garbage → red banner appears, scans refuse to run,
       Patreon-hosted downloads wait; fixing the cookie recovers everything.
 - [ ] Set `downloads.min_free_mb` above the free space → queue pauses with "disk_full";

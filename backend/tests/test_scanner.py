@@ -6,14 +6,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from patreonarr.core.patreon_service import PatreonService
-from patreonarr.db.engine import session_scope
-from patreonarr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus, ScanMode, ScanStatus
-from patreonarr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
-from patreonarr.patreon.errors import AuthError
-from patreonarr.patreon.models import PostPage
-from patreonarr.patreon.parsing import IncludedIndex, post_from_resource
-from patreonarr.scanner.scanner import Scanner
+from patrearr.core.patreon_service import PatreonService
+from patrearr.db.engine import session_scope
+from patrearr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus, ScanMode, ScanStatus
+from patrearr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
+from patrearr.patreon.errors import AuthError
+from patrearr.patreon.models import PostPage
+from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+from patrearr.scanner.scanner import Scanner
 from tests import patreon_fixtures as fx
 
 
@@ -171,7 +171,7 @@ def test_patreon_service_is_real_type():
 
 @pytest.mark.asyncio
 async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory, settings, bus):
-    from patreonarr.scanner.scanner import reresolve_all
+    from patrearr.scanner.scanner import reresolve_all
 
     cid = make_creator(session_factory)
     bad_embed = fx.post_resource(

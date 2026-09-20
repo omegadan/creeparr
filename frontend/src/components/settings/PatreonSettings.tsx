@@ -26,7 +26,7 @@ export function PatreonSettings({ settings }: { settings: Settings }) {
 
   return (
     <div className="grid gap-5">
-      <Section title="Patreon session" description="Patreonarr uses your own logged-in browser session to read the posts you already have access to. Nothing is bypassed; locked posts stay locked.">
+      <Section title="Patreon session" description="Patrearr uses your own logged-in browser session to read the posts you already have access to. Nothing is bypassed; locked posts stay locked.">
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <span className="text-fg-muted">Current status:</span>
           {auth ? <Badge tone={auth.state === "valid" ? "ok" : auth.state === "unknown" ? "warn" : "danger"}>{auth.state}</Badge> : "…"}
@@ -56,7 +56,7 @@ export function PatreonSettings({ settings }: { settings: Settings }) {
         </div>
       </Section>
 
-      <Section title="HTTP behaviour" description="How Patreonarr talks to patreon.com. Change these only if requests are being blocked.">
+      <Section title="HTTP behaviour" description="How Patrearr talks to patreon.com. Change these only if requests are being blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="HTTP backend" hint={status.data?.curl_cffi_available ? "curl_cffi impersonates Chrome's TLS fingerprint (helps with Cloudflare)." : "curl_cffi is not installed in this image; httpx will be used."}>
             <select className="input" value={f.form.http_backend} onChange={(e) => f.set("http_backend", e.target.value as "httpx" | "curl_cffi")}>

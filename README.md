@@ -1,7 +1,7 @@
-# Patreonarr
+# Patrearr
 
 A self-hosted, *arr-style archiver for the Patreon creators you support. Add a creator, and
-Patreonarr backs up every post you have access to, then keeps checking for new ones.
+Patrearr backs up every post you have access to, then keeps checking for new ones.
 
 - Archives **native Patreon video** (direct files and Mux streams), **YouTube / Vimeo embeds**,
   and optionally images, audio and attachments per creator.
@@ -12,7 +12,7 @@ Patreonarr backs up every post you have access to, then keeps checking for new o
   disk-space guard, resumable downloads, `post.json` / `post.md` / `post.html` sidecars.
 - One container, SQLite, no external services. `PUID`/`PGID`/`TZ` like linuxserver images.
 
-> Patreonarr only reads content **your own account** can already see. It never bypasses
+> Patrearr only reads content **your own account** can already see. It never bypasses
 > access controls, skips DRM-protected media, and is intended for personal archival of the
 > content you pay for. Do not use it to redistribute creators' work.
 
@@ -21,9 +21,9 @@ Patreonarr backs up every post you have access to, then keeps checking for new o
 ```yaml
 # docker-compose.yml
 services:
-  patreonarr:
+  patrearr:
     image: ghcr.io/omegadan/patrearr:latest   # or build: . to build from source
-    container_name: patreonarr
+    container_name: patrearr
     environment:
       - PUID=1000
       - PGID=1000
@@ -51,7 +51,7 @@ Then, in **Settings → Patreon**:
 1. Log in to patreon.com in your browser.
 2. Open DevTools → Application → Cookies → `https://www.patreon.com` and copy the value of
    the `session_id` cookie.
-3. Paste it into Patreonarr and click **Save & connect**. You should see your account name.
+3. Paste it into Patrearr and click **Save & connect**. You should see your account name.
 4. Go to **Creators → Import pledges** (or **Add creator**) and pick who to archive.
 
 A full back-fill starts immediately; after that, monitored creators are re-scanned every
@@ -79,10 +79,10 @@ Environment variables (container-level):
 | ------------------------- | ------------ | ------------------------------------ |
 | `PUID` / `PGID`           | `1000`       | User/group that owns files           |
 | `TZ`                      | `Etc/UTC`    | Time zone                            |
-| `PATREONARR_CONFIG_DIR`   | `/config`    | Database, logs, cookie file          |
-| `PATREONARR_DOWNLOAD_DIR` | `/downloads` | Archive root                         |
-| `PATREONARR_PORT`         | `7979`       | HTTP port                            |
-| `PATREONARR_LOG_LEVEL`    | `INFO`       | `DEBUG`, `INFO`, `WARNING`, `ERROR`  |
+| `PATREARR_CONFIG_DIR`   | `/config`    | Database, logs, cookie file          |
+| `PATREARR_DOWNLOAD_DIR` | `/downloads` | Archive root                         |
+| `PATREARR_PORT`         | `7979`       | HTTP port                            |
+| `PATREARR_LOG_LEVEL`    | `INFO`       | `DEBUG`, `INFO`, `WARNING`, `ERROR`  |
 
 Everything else (scan interval, concurrency, retries, naming, per-kind toggles, HTTP backend)
 lives in the database and is edited in the UI. See [docs/configuration.md](docs/configuration.md).
@@ -101,19 +101,19 @@ Patreon sits behind Cloudflare. If **Test connection** reports a *Cloudflare cha
 ```bash
 # backend (Python 3.12, uv)
 cd backend && uv sync --all-extras
-PATREONARR_CONFIG_DIR=../config PATREONARR_DOWNLOAD_DIR=../downloads \
-  uv run uvicorn patreonarr.app:create_app --factory --reload --port 7979
+PATREARR_CONFIG_DIR=../config PATREARR_DOWNLOAD_DIR=../downloads \
+  uv run uvicorn patrearr.app:create_app --factory --reload --port 7979
 uv run pytest -q && uv run ruff check .
 
 # frontend (Node 22)
 cd frontend && npm ci && npm run dev     # proxies /api to :7979
 npm run build                            # output in frontend/dist
 
-make build   # builds the UI and copies it into backend/patreonarr/static
+make build   # builds the UI and copies it into backend/patrearr/static
 make docker  # builds the image
 ```
 
-Layout: `backend/patreonarr/{patreon,scanner,downloader,api,core,db}` and
+Layout: `backend/patrearr/{patreon,scanner,downloader,api,core,db}` and
 `frontend/src/{pages,components,api}`. Architecture notes in [docs/architecture.md](docs/architecture.md);
 what was verified about Patreon's private API in [docs/patreon-api.md](docs/patreon-api.md);
 manual test plan in [docs/e2e-checklist.md](docs/e2e-checklist.md).

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from patreonarr.core.naming import render_template, sanitize_component, split_name, unique_path
+from patrearr.core.naming import render_template, sanitize_component, split_name, unique_path
 
 
 def test_sanitize_illegal_and_whitespace():
@@ -50,3 +50,17 @@ def test_split_name_and_unique_path(tmp_path: Path):
     assert unique_path(p) == tmp_path / "a (2).mp4"
     (tmp_path / "a (2).mp4").write_text("x")
     assert unique_path(p) == tmp_path / "a (3).mp4"
+
+
+def test_legacy_database_is_adopted(tmp_path: Path):
+    from patrearr.config import EnvConfig
+
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "patreonarr.db").write_bytes(b"old")
+    (cfg / "patreonarr.db-wal").write_bytes(b"wal")
+    env = EnvConfig(config_dir=cfg, download_dir=tmp_path / "dl")
+    env.ensure_dirs()
+    assert (cfg / "patrearr.db").read_bytes() == b"old"
+    assert (cfg / "patrearr.db-wal").exists()
+    assert not (cfg / "patreonarr.db").exists()

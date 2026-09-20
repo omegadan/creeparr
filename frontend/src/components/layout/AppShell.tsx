@@ -28,7 +28,7 @@ export function AppShell() {
       <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-bg-1">
         <Link to="/creators" className="flex items-center gap-2 px-4 py-4">
           <img src="/logo.svg" alt="" className="h-7 w-7" />
-          <span className="text-base font-bold tracking-tight">Patreonarr</span>
+          <span className="text-base font-bold tracking-tight">Patrearr</span>
         </Link>
         <nav className="flex-1 px-2">
           {NAV.map((item, i) =>

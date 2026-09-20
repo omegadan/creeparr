@@ -513,7 +513,7 @@ wheels = [
 ]
 
 [[package]]
-name = "patreonarr"
+name = "patrearr"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
