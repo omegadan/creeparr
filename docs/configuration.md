@@ -34,7 +34,7 @@ See the table in the README. They cover paths, port and log level only. `PATREAR
 | naming.file_template | `{filename}` | |
 | naming.max_component_length | 150 | bytes |
 | naming.write_nfo | false | Kodi/Jellyfin/Plex .nfo per video |
-| naming.embed_metadata | false | Embed title/description/date + cover thumbnail into videos via ffmpeg |
+| naming.embed_metadata | true | Embed title/description/date + cover thumbnail into videos via ffmpeg |
 | naming.write_sidecars | true | |
 | history.retention_days | 90 | |
 | history.job_retention_days | 30 | |
