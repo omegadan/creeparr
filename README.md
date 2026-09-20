@@ -132,7 +132,7 @@ make build   # builds the UI and copies it into backend/patrearr/static
 make docker  # builds the image
 ```
 
-Layout: `backend/patrearr/{patreon,scanner,downloader,api,core,db}` and
+The Docker image is ~275 MB (static ffmpeg). Layout: `backend/patrearr/{patreon,scanner,downloader,api,core,db}` and
 `frontend/src/{pages,components,api}`. Architecture notes in [docs/architecture.md](docs/architecture.md);
 what was verified about Patreon's private API in [docs/patreon-api.md](docs/patreon-api.md);
 manual test plan in [docs/e2e-checklist.md](docs/e2e-checklist.md).

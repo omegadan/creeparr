@@ -24,8 +24,21 @@ ENV PYTHONUNBUFFERED=1 \
     TZ=Etc/UTC
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg gosu tzdata curl ca-certificates \
+    && apt-get install -y --no-install-recommends gosu tzdata curl xz-utils ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Static ffmpeg/ffprobe (glibc build) instead of the large apt ffmpeg + its deps.
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) url="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" ;; \
+      arm64) url="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz" ;; \
+      *) echo "unsupported arch $arch" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "$url" -o /tmp/ffmpeg.tar.xz; \
+    mkdir -p /tmp/ff && tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ff --strip-components=1; \
+    mv /tmp/ff/ffmpeg /tmp/ff/ffprobe /usr/local/bin/; \
+    rm -rf /tmp/ff /tmp/ffmpeg.tar.xz
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # yt-dlp needs a JavaScript runtime for YouTube; deno is its default.
