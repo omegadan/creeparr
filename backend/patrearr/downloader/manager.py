@@ -48,7 +48,7 @@ from patrearr.downloader.handlers.base import (
 )
 from patrearr.downloader.handlers.direct import download_direct
 from patrearr.downloader.handlers.ytdlp import YtDlpOptions, normalise_vimeo_url, run_ytdlp
-from patrearr.downloader.metadata import embed_metadata, html_to_text
+from patrearr.downloader.metadata import embed_metadata, html_to_text, remux_container
 from patrearr.downloader.queue import enqueue_media, publish_post_changed, recompute_post_status
 from patrearr.downloader.sidecars import write_nfo, write_text_sidecars
 from patrearr.patreon.drm import probe_hls_drm
@@ -436,16 +436,30 @@ class DownloadManager:
         tmp_dir = post_dir / f"{TMP_PREFIX}{ctx.media_id}"
         try:
             if ctx.source in (MediaSource.NATIVE_DIRECT, MediaSource.MEDIA_DOWNLOAD):
-                ext = self._guess_ext(ctx)
-                dest = unique_path(post_dir / self._file_name(ctx, ext))
+                native_ext = self._guess_ext(ctx)
+                target_ext = self._container_ext(ctx) if ctx.kind == MediaKind.VIDEO else native_ext
+                dest = unique_path(post_dir / self._file_name(ctx, target_ext))
                 reporter.set_stage("downloading")
-                result = await download_direct(
-                    provider,
-                    ctx.url,
-                    dest,
-                    reporter,
-                    compute_sha256=settings.downloads.compute_sha256,
-                )
+                if native_ext == target_ext:
+                    result = await download_direct(
+                        provider,
+                        ctx.url,
+                        dest,
+                        reporter,
+                        compute_sha256=settings.downloads.compute_sha256,
+                    )
+                else:
+                    tmp_file = dest.with_name(dest.stem + f".src.{native_ext}")
+                    dl = await download_direct(
+                        provider,
+                        ctx.url,
+                        tmp_file,
+                        reporter,
+                        compute_sha256=False,
+                    )
+                    result = await asyncio.to_thread(
+                        self._remux_to, ctx, dl.path, dest, settings.downloads.compute_sha256
+                    )
             else:
                 url = ctx.url
                 if ctx.source == MediaSource.EMBED_VIMEO:
@@ -454,6 +468,7 @@ class DownloadManager:
                     headers=provider.media_headers(),
                     cookiefile=str(provider.cookie_file) if provider.cookie_file.exists() else None,
                     video_format=settings.downloads.video_format,
+                    container=self._container_ext(ctx),
                     ffmpeg_location=self.env.resolve_ffmpeg(),
                     fragment_concurrency=settings.downloads.hls_fragment_concurrency,
                     impersonate=provider.ytdlp_impersonate,
@@ -738,6 +753,13 @@ class DownloadManager:
             naming.post_folder_template, self._values(ctx), naming.max_component_length
         )
 
+    def _container_ext(self, ctx: JobContext) -> str:
+        """Target container extension for a video, per the container setting."""
+        choice = self.settings.get().downloads.container
+        if choice in ("mp4", "mkv"):
+            return choice
+        return "mkv" if ctx.provider == "youtube" else "mp4"
+
     def _guess_ext(self, ctx: JobContext) -> str:
         _, ext = split_name(ctx.remote_file_name)
         if ext and ext != "m3u8":
@@ -763,6 +785,24 @@ class DownloadManager:
         values = {**self._values(ctx), "filename": filename, "ext": ext}
         rendered = render_template(naming.file_template, values, naming.max_component_length)
         return str(rendered) if len(rendered.parts) == 1 else sanitize_component(filename)
+
+    def _remux_to(
+        self, ctx: JobContext, src: Path, dest: Path, compute_sha256: bool
+    ) -> DownloadResult:
+        from patrearr.downloader.fs import sha256_file
+
+        ffmpeg = self.env.resolve_ffmpeg()
+        if ffmpeg and remux_container(ffmpeg, src, dest):
+            src.unlink(missing_ok=True)
+        else:
+            # No ffmpeg or remux failed: keep the original file under its own extension.
+            fallback = dest.with_suffix(src.suffix)
+            src.replace(fallback)
+            dest = fallback
+            log.warning("[job %s] container remux unavailable; kept %s", ctx.job_id, dest.name)
+        size = dest.stat().st_size
+        sha = sha256_file(dest) if compute_sha256 else None
+        return DownloadResult(dest, size, sha)
 
     def _finalise_ytdlp(
         self, ctx: JobContext, post_dir: Path, produced: Path, compute_sha256: bool

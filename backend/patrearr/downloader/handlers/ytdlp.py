@@ -51,6 +51,7 @@ class YtDlpOptions:
     headers: dict[str, str]
     cookiefile: str | None
     video_format: str
+    container: str
     ffmpeg_location: str | None
     fragment_concurrency: int
     impersonate: bool = False
@@ -151,7 +152,7 @@ def run_ytdlp(
         # Fixed name: generic HLS ids/titles can be hundreds of bytes and overflow NAME_MAX.
         "outtmpl": str(tmp_dir / "media.%(ext)s"),
         "format": opts.video_format,
-        "merge_output_format": "mp4",
+        "merge_output_format": opts.container,
         "http_headers": opts.headers,
         "continuedl": True,
         "retries": 3,

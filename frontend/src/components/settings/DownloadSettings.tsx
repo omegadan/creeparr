@@ -33,8 +33,15 @@ export function DownloadSettings({ settings }: { settings: Settings }) {
       </Section>
       <Section title="Video (yt-dlp)" description="Used for Patreon streams and YouTube/Vimeo embeds.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Format selector" hint="yt-dlp -f syntax. Default picks best video + best audio, merged to mp4.">
+          <Field label="Format selector" hint="yt-dlp -f syntax. Default picks best video + best audio.">
             <input className="input font-mono" value={f.form.video_format} onChange={(e) => f.set("video_format", e.target.value)} />
+          </Field>
+          <Field label="Container" hint="Auto = MKV for YouTube (keeps VP9/AV1/Opus), MP4 for Patreon/OnlyFans (portable). MKV plays in Jellyfin/Plex/VLC but not browsers.">
+            <select className="input" value={f.form.container} onChange={(e) => f.set("container", e.target.value as "auto" | "mp4" | "mkv")}>
+              <option value="auto">Auto (recommended)</option>
+              <option value="mp4">Always MP4</option>
+              <option value="mkv">Always MKV</option>
+            </select>
           </Field>
           <Field label="HLS fragment concurrency"><input type="number" min="1" max="16" className="input" value={f.form.hls_fragment_concurrency} onChange={(e) => f.set("hls_fragment_concurrency", num(e.target.value, 4))} /></Field>
         </div>

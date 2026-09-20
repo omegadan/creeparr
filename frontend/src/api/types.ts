@@ -291,6 +291,7 @@ export interface Settings {
     compute_sha256: boolean;
     deduplicate: boolean;
     video_format: string;
+    container: "auto" | "mp4" | "mkv";
     ytdlp_remote_components: boolean;
   };
   naming: {

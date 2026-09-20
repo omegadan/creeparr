@@ -86,6 +86,7 @@ class DownloadSettings(BaseModel):
     compute_sha256: bool = True
     deduplicate: bool = True
     video_format: str = "bv*+ba/b"
+    container: Literal["auto", "mp4", "mkv"] = "auto"
     ytdlp_remote_components: bool = True
 
 
