@@ -78,7 +78,7 @@ The folder and file templates are editable in **Settings → Naming & general**.
 An Unraid template is provided. Docker tab → Add Container → paste this Template URL:
 
 ```
-https://raw.githubusercontent.com/omegadan/patrearr/onlyfans/unraid/patrearr.xml
+https://raw.githubusercontent.com/omegadan/patrearr/main/unraid/patrearr.xml
 ```
 
 See [unraid/README.md](unraid/README.md) for details.

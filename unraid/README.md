@@ -6,7 +6,7 @@ Patrearr is not (yet) in Community Applications, so add it as a template manuall
 
 1. Unraid → **Docker** tab → **Add Container**.
 2. In **Template**, paste:
-   `https://raw.githubusercontent.com/omegadan/patrearr/onlyfans/unraid/patrearr.xml`
+   `https://raw.githubusercontent.com/omegadan/patrearr/main/unraid/patrearr.xml`
 3. Adjust the paths (defaults use `/mnt/user/appdata/patrearr`, `/mnt/user/media/patreon`
    and `/mnt/user/media/onlyfans`) and click **Apply**.
 

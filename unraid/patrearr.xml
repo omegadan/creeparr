@@ -13,7 +13,7 @@
   <Category>MediaApp:Video Downloaders: Tools:</Category>
   <WebUI>http://[IP]:[PORT:7979]/</WebUI>
   <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/omegadan/patrearr/onlyfans/frontend/public/logo.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/omegadan/patrearr/main/frontend/public/logo.svg</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
