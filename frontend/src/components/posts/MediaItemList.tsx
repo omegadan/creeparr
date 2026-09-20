@@ -1,4 +1,4 @@
-import { FileText, Image, Music, RotateCcw, SkipForward, Undo2, Video } from "lucide-react";
+import { ExternalLink, FileText, Image, Music, RotateCcw, SkipForward, Undo2, Video } from "lucide-react";
 import { usePost, useRetryMedia, useSkipMedia, useUnskipMedia } from "../../api/hooks/usePosts";
 import type { MediaItem } from "../../api/types";
 import { MEDIA_STATUS, sourceLabel } from "../../lib/status";
@@ -45,7 +45,19 @@ export function MediaItemList({ postId }: { postId: number }) {
               return (
                 <tr key={m.id}>
                   <td className="text-fg-dim"><Icon className="h-4 w-4" /></td>
-                  <td className="font-mono">{m.file_path ? m.file_path.split("/").pop() : m.remote_file_name ?? `${m.kind} ${m.order_index}`}</td>
+                  <td className="font-mono">
+                    <div className="flex items-center gap-2">
+                      {m.status === "completed" && m.kind === "image" && (
+                        <a href={`/api/v1/media/${m.id}/file`} target="_blank" rel="noreferrer">
+                          <img src={`/api/v1/media/${m.id}/file`} alt="" className="h-9 w-9 rounded object-cover" />
+                        </a>
+                      )}
+                      <span>{m.file_path ? m.file_path.split("/").pop() : m.remote_file_name ?? `${m.kind} ${m.order_index}`}</span>
+                      {m.status === "completed" && m.kind !== "image" && (
+                        <a href={`/api/v1/media/${m.id}/file`} target="_blank" rel="noreferrer" title="Open file" className="text-fg-dim hover:text-fg"><ExternalLink className="h-3.5 w-3.5" /></a>
+                      )}
+                    </div>
+                  </td>
                   <td className="text-fg-muted">{sourceLabel(m.source)}</td>
                   <td><StatusBadge meta={MEDIA_STATUS[m.status]} title={m.status_reason ?? undefined} /></td>
                   <td className="text-fg-muted">{formatBytes(m.file_size_bytes ?? m.remote_size_bytes)}</td>

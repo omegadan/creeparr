@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { App } from "./App";
 import { AppShell } from "./components/layout/AppShell";
 import { CreatorsPage } from "./pages/CreatorsPage";
+import { SearchPage } from "./pages/SearchPage";
 import { CreatorDetailPage } from "./pages/CreatorDetailPage";
 import { QueuePage } from "./pages/QueuePage";
 import { HistoryPage } from "./pages/HistoryPage";
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate to="/creators" replace /> },
           { path: "creators", element: <CreatorsPage /> },
           { path: "creators/:id", element: <CreatorDetailPage /> },
+          { path: "search", element: <SearchPage /> },
           { path: "activity", element: <Navigate to="/activity/queue" replace /> },
           { path: "activity/queue", element: <QueuePage /> },
           { path: "activity/history", element: <HistoryPage /> },

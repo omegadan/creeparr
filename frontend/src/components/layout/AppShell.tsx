@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router";
-import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, Settings, Users } from "lucide-react";
+import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, Search, Settings, Users } from "lucide-react";
 import { useServerEvents } from "../../api/events";
 import { useSystemStatus } from "../../api/hooks/useSystem";
 import { cx } from "../../lib/format";
@@ -7,6 +7,7 @@ import { ThemeToggle } from "../ui/ThemeToggle";
 
 const NAV = [
   { to: "/creators", label: "Creators", icon: Users },
+  { to: "/search", label: "Search", icon: Search },
   { group: "Activity" },
   { to: "/activity/queue", label: "Queue", icon: Download },
   { to: "/activity/history", label: "History", icon: Activity },

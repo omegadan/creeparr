@@ -6,6 +6,7 @@ import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -18,7 +19,7 @@ from patrearr.api.schemas import (
     PostDetailOut,
     PostOut,
 )
-from patrearr.core.errors import NotFound, UpstreamError
+from patrearr.core.errors import AppError, NotFound, UpstreamError
 from patrearr.db.engine import session_scope
 from patrearr.db.enums import JobStatus, MediaStatus, PostStatus
 from patrearr.db.models import Creator, MediaItem, Post
@@ -325,3 +326,20 @@ def unskip_media(
     db.flush()
     publish_post_changed(services.bus, item.post)
     return MediaItemOut.model_validate(item)
+
+
+@router.get("/media/{media_id}/file")
+def media_file(
+    media_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
+):
+    item = load_media(db, media_id)
+    if item.status != MediaStatus.COMPLETED or not item.file_path:
+        raise NotFound("no downloaded file for this media item")
+    provider = item.post.creator.provider if item.post and item.post.creator else "patreon"
+    root = services.env.download_root(provider).resolve()
+    path = (root / item.file_path).resolve()
+    if root not in path.parents:
+        raise AppError("invalid path", code="forbidden")
+    if not path.exists():
+        raise NotFound("file is missing on disk")
+    return FileResponse(path, filename=path.name)
