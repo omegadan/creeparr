@@ -4,13 +4,13 @@ services:
     # build: .   # uncomment to build from source instead
     container_name: patrearr
     environment:
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
-      - TZ=${TZ:-Etc/UTC}
+      - PUID=${PUID:-99}
+      - PGID=${PGID:-100}
+      - TZ=${TZ:-America/Los_Angeles}
       - PATREARR_LOG_LEVEL=${PATREARR_LOG_LEVEL:-INFO}
     volumes:
-      - ${CONFIG_DIR:-./config}:/config
-      - ${DOWNLOADS_DIR:-./downloads}:/downloads
+      - ${CONFIG_DIR}:/config
+      - ${DOWNLOAD_DIR}:/downloads
     ports:
       - "${PORT:-7979}:7979"
     restart: unless-stopped

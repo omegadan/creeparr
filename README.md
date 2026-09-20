@@ -25,9 +25,9 @@ services:
     image: ghcr.io/omegadan/patrearr:latest   # or build: . to build from source
     container_name: patrearr
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/London
+      - PUID=99                 # Unraid defaults; use your own uid/gid elsewhere
+      - PGID=100
+      - TZ=America/Los_Angeles
     volumes:
       - ./config:/config
       - /mnt/media/patreon:/downloads
@@ -74,14 +74,15 @@ The folder and file templates are editable in **Settings → Naming & general**.
 ## Configuration
 
 Copy `.env.example` to `.env` next to `docker-compose.yml` and edit it; Compose picks it up
-automatically. Every variable is documented in that file. Summary:
+automatically. `CONFIG_DIR` and `DOWNLOAD_DIR` are required; the rest have defaults.
+Every variable is documented in that file. Summary:
 
 | Variable               | Default       | Purpose                                                |
 | ---------------------- | ------------- | ------------------------------------------------------ |
-| `PUID` / `PGID`        | `1000`        | User/group that owns files                             |
-| `TZ`                   | `Etc/UTC`     | Time zone                                              |
-| `CONFIG_DIR`           | `./config`    | Host path mounted at `/config` (database, logs)        |
-| `DOWNLOADS_DIR`        | `./downloads` | Host path mounted at `/downloads` (archive root)       |
+| `PUID` / `PGID`        | `99` / `100`  | User/group that owns files (Unraid defaults)           |
+| `TZ`                   | `America/Los_Angeles` | Time zone                                      |
+| `CONFIG_DIR`           | required      | Host path mounted at `/config` (database, logs)        |
+| `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads` (archive root)       |
 | `PORT`                 | `7979`        | Host port for the web UI                               |
 | `PATREARR_LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`                    |
 | `PATREARR_CONFIG_DIR`  | `/config`     | In-container config path (only when not using Docker) |
