@@ -48,6 +48,7 @@ class OnlyFansSettings(BaseModel):
     dynamic_rules_url: str = (
         "https://raw.githubusercontent.com/DATAHOARDERS/dynamic-rules/main/onlyfans.json"
     )
+    downloads_per_hour: int = Field(default=0, ge=0)
     include_archived: bool = True
     include_messages: bool = True
     http_backend: Literal["httpx", "curl_cffi"] = "httpx"
