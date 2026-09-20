@@ -1,7 +1,7 @@
 services:
   patreonarr:
-    build: .
-    # image: ghcr.io/<you>/patreonarr:latest
+    image: ghcr.io/omegadan/patrearr:latest
+    # build: .   # uncomment to build from source instead
     container_name: patreonarr
     environment:
       - PUID=1000

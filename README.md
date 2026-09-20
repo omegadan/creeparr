@@ -22,7 +22,7 @@ Patreonarr backs up every post you have access to, then keeps checking for new o
 # docker-compose.yml
 services:
   patreonarr:
-    build: .          # or image: ghcr.io/<you>/patreonarr:latest once published
+    image: ghcr.io/omegadan/patrearr:latest   # or build: . to build from source
     container_name: patreonarr
     environment:
       - PUID=1000
@@ -40,6 +40,11 @@ services:
 docker compose up -d
 open http://localhost:7979
 ```
+
+Images are published to `ghcr.io/omegadan/patrearr` by GitHub Actions on every push to
+`main` (`latest`) and on `v*` tags, for `linux/amd64` and `linux/arm64`. While the repository
+is private the package is private too, so `docker login ghcr.io` with a token that has
+`read:packages` before pulling.
 
 Then, in **Settings → Patreon**:
 
