@@ -567,6 +567,36 @@ class DownloadManager:
             self.bus.publish("queue.changed", {})
         return {"embedded": embedded, "candidates": len(ids)}
 
+    def restamp_files(self) -> dict[str, int]:
+        """Set every archived file and post folder to its post's publish date."""
+        with session_scope(self._factory) as s:
+            rows = s.execute(
+                select(Post.folder_path, Post.published_at, Creator.provider)
+                .join(Creator, Creator.id == Post.creator_id)
+                .where(
+                    Post.folder_path.is_not(None),
+                    Post.published_at.is_not(None),
+                    Post.sidecars_written.is_(True),
+                )
+            ).all()
+        files = 0
+        dirs = 0
+        for folder_rel, published_at, provider in rows:
+            post_dir = self.env.download_root(provider) / folder_rel
+            if not post_dir.is_dir():
+                continue
+            try:
+                for child in post_dir.iterdir():
+                    if child.is_file():
+                        set_times(child, published_at)
+                        files += 1
+                set_times(post_dir, published_at)
+                dirs += 1
+            except OSError as exc:
+                log.debug("restamp failed for %s: %s", post_dir, exc)
+        log.info("restamped %d files across %d post folders", files, dirs)
+        return {"files": files, "folders": dirs}
+
     async def _embed_existing(self, media_id: int, ffmpeg: str) -> bool:
         with session_scope(self._factory) as s:
             media = s.execute(

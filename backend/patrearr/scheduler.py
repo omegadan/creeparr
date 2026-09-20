@@ -156,6 +156,12 @@ class SchedulerService:
             None,
             self._embed_backlog,
         )
+        self._register(
+            "restamp_files",
+            "Set every archived file and folder to its post's publish date",
+            None,
+            self._restamp_files,
+        )
         self.scheduler.start()
 
     def shutdown(self) -> None:
@@ -221,6 +227,9 @@ class SchedulerService:
 
     async def _embed_backlog(self) -> dict:
         return await self.services.downloads.embed_backlog()
+
+    async def _restamp_files(self) -> dict:
+        return await asyncio.to_thread(self.services.downloads.restamp_files)
 
     async def _reresolve_media(self) -> dict[str, int]:
         from patrearr.scanner.scanner import reresolve_all

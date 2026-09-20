@@ -64,3 +64,4 @@ Interactive docs at `/api/docs`. Main endpoints:
 System → Status lists runnable tasks. `embed_metadata_backlog` embeds metadata and cover
 art into videos already on disk that lack it (enable `naming.embed_metadata` first).
 `reresolve_media` re-applies the media resolver to stored post data after an update.
+`restamp_files` sets every archived file and folder to its post's publish date.
