@@ -158,3 +158,18 @@ def test_embed_metadata_roundtrip(tmp_path):
         text=True,
     ).stdout
     assert "title=My Title" in out
+
+
+def test_set_times(tmp_path):
+    from datetime import UTC, datetime
+
+    from patrearr.downloader.fs import set_times
+
+    f = tmp_path / "v.mp4"
+    f.write_bytes(b"x")
+    when = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
+    set_times(f, when)
+    set_times(tmp_path, when)
+    assert abs(f.stat().st_mtime - when.timestamp()) < 2
+    assert abs(tmp_path.stat().st_mtime - when.timestamp()) < 2
+    set_times(f, None)  # no-op, must not raise

@@ -32,7 +32,13 @@ from patrearr.db.enums import (
     MediaStatus,
 )
 from patrearr.db.models import Creator, DownloadJob, MediaItem, Post
-from patrearr.downloader.fs import free_space_bytes, remove_tree, sha256_file, try_hardlink
+from patrearr.downloader.fs import (
+    free_space_bytes,
+    remove_tree,
+    set_times,
+    sha256_file,
+    try_hardlink,
+)
 from patrearr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadResult,
@@ -577,6 +583,7 @@ class DownloadManager:
             creator_name = creator.name if creator else ""
             description = html_to_text(post.content_html or post.teaser_text)
             date = post.published_at.strftime("%Y-%m-%d") if post.published_at else ""
+            published_at = post.published_at
             thumb_url = post.thumbnail_url
         abs_path = (self.env.download_root(provider_name) / file_rel).resolve()
         if not abs_path.exists():
@@ -605,6 +612,9 @@ class DownloadManager:
             return size, sha
 
         size, sha = await asyncio.to_thread(_do)
+        if published_at:
+            set_times(abs_path, published_at)
+            set_times(abs_path.parent, published_at)
         with session_scope(self._factory) as s:
             media = s.get(MediaItem, media_id)
             if media is not None:
@@ -785,6 +795,10 @@ class DownloadManager:
     def _complete_job(self, ctx: JobContext, result: DownloadResult) -> None:
         self._dedupe(ctx, result)
         self._maybe_write_nfo(ctx, result)
+        # Stamp the file and its post folder with the post's publish date.
+        if ctx.post_published_at:
+            set_times(result.path, ctx.post_published_at)
+            set_times(result.path.parent, ctx.post_published_at)
         rel = str(result.path.relative_to(self.env.download_root(ctx.provider)))
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)

@@ -67,3 +67,14 @@ def try_hardlink(target: Path, source: Path) -> bool:
         return True
     except OSError:
         return False
+
+
+def set_times(path: Path, when) -> None:  # noqa: ANN001
+    """Set a file or directory's access & modified time to a datetime (best effort)."""
+    if when is None:
+        return
+    try:
+        ts = when.timestamp()
+        os.utime(path, (ts, ts))
+    except (OSError, ValueError, OverflowError):
+        pass
