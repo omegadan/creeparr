@@ -1,22 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-0: #0f1319;
-  --color-bg-1: #161b24;
-  --color-bg-2: #1e2531;
-  --color-bg-3: #273040;
-  --color-line: #2c3646;
-  --color-fg: #e6eaf0;
-  --color-fg-muted: #98a2b3;
-  --color-fg-dim: #6b7688;
-  --color-accent: #ff7a59;
-  --color-accent-hover: #ff9478;
-  --color-info: #4f9cf9;
-  --color-ok: #3ecf8e;
-  --color-warn: #f5b942;
-  --color-danger: #f0566a;
+  /* Heroku-inspired light lavender palette */
+  --color-bg-0: #f6f5fc;   /* app background */
+  --color-bg-1: #ffffff;   /* cards / surfaces */
+  --color-bg-2: #f1eefb;   /* hover */
+  --color-bg-3: #e7e1f7;   /* raised / badges */
+  --color-line: #e4def2;   /* borders */
+  --color-fg: #2a2350;     /* deep purple text */
+  --color-fg-muted: #6f6893;
+  --color-fg-dim: #9b95b8;
+  --color-accent: #6762a6;       /* Heroku iris purple */
+  --color-accent-hover: #7b74c0;
+  --color-info: #6c5ce7;
+  --color-ok: #2fb576;
+  --color-warn: #e0912f;
+  --color-danger: #e0566a;
+  /* Deep-purple sidebar, like the Heroku dashboard */
+  --color-sidebar-bg: #3d2e73;
+  --color-sidebar-bg2: #4a3a86;
+  --color-sidebar-fg: #ece9f8;
+  --color-sidebar-muted: #b7addd;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Rounder corners throughout */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.7rem;
+  --radius-lg: 0.95rem;
+  --radius-xl: 1.2rem;
+  --radius-2xl: 1.5rem;
 }
 
 html, body, #root { height: 100%; }
@@ -30,15 +42,15 @@ body {
 }
 a { color: inherit; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: #33405233; border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
-::-webkit-scrollbar-thumb:hover { background: #4a5a70; background-clip: padding-box; }
+::-webkit-scrollbar-thumb { background: #cfc6ea; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #b3a7dd; background-clip: padding-box; }
 
 @layer components {
 .input {
   @apply w-full rounded-md border border-line bg-bg-0 px-3 py-2 text-sm text-fg placeholder:text-fg-dim focus:border-accent focus:outline-none disabled:opacity-60;
 }
 .label { @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-fg-muted; }
-.card { @apply rounded-lg border border-line bg-bg-1; }
+.card { @apply rounded-lg border border-line bg-bg-1 shadow-sm; }
 .table { @apply w-full border-collapse text-sm; }
 .table th { @apply border-b border-line px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-fg-muted; }
 .table td { @apply border-b border-line/60 px-3 py-2 align-middle; }

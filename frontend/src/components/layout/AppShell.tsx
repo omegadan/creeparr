@@ -28,15 +28,15 @@ export function AppShell() {
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-bg-1">
+      <aside className="flex w-56 shrink-0 flex-col bg-[var(--color-sidebar-bg)] text-[var(--color-sidebar-fg)]">
         <Link to="/creators" className="flex items-center gap-2 px-4 py-4">
           <img src="/logo.svg" alt="" className="h-7 w-7" />
-          <span className="text-base font-bold tracking-tight">Patrearr</span>
+          <span className="text-base font-bold tracking-tight text-[var(--color-sidebar-fg)]">Patrearr</span>
         </Link>
         <nav className="flex-1 px-2">
           {NAV.map((item, i) =>
             "group" in item ? (
-              <div key={i} className="mb-1 mt-4 px-2 text-[10px] font-semibold uppercase tracking-wider text-fg-dim">{item.group}</div>
+              <div key={i} className="mb-1 mt-4 px-2 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-sidebar-muted)]">{item.group}</div>
             ) : (
               <NavLink
                 key={item.to}
@@ -44,27 +44,29 @@ export function AppShell() {
                 className={({ isActive }) =>
                   cx(
                     "mb-0.5 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",
-                    isActive || ("match" in item && location.pathname.startsWith(item.match)) ? "bg-bg-3 text-fg" : "text-fg-muted hover:bg-bg-2 hover:text-fg",
+                    isActive || ("match" in item && location.pathname.startsWith(item.match))
+                      ? "bg-[var(--color-sidebar-bg2)] text-white"
+                      : "text-[var(--color-sidebar-muted)] hover:bg-[var(--color-sidebar-bg2)] hover:text-white",
                   )
                 }
               >
                 <item.icon className="h-4 w-4" />
                 <span className="flex-1">{item.label}</span>
                 {item.to === "/activity/queue" && queued > 0 && (
-                  <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-black">{queued}</span>
+                  <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">{queued}</span>
                 )}
               </NavLink>
             ),
           )}
         </nav>
-        <div className="border-t border-line px-4 py-3 text-xs">
+        <div className="border-t border-white/10 px-4 py-3 text-xs">
           <Link to="/settings/patreon" className="flex items-center gap-2">
             <span className={cx("h-2 w-2 rounded-full", broken.length ? "bg-danger" : connected.length ? "bg-ok" : "bg-warn")} />
-            <span className="truncate text-fg-muted">
+            <span className="truncate text-[var(--color-sidebar-muted)]">
               {connected.length ? connected.map((p) => p.auth.user_name ?? p.label).join(", ") : anyConfigured ? "Session problem" : "Not connected"}
             </span>
           </Link>
-          <div className="mt-1 text-fg-dim">v{status.data?.version ?? "…"}</div>
+          <div className="mt-1 text-[var(--color-sidebar-muted)]">v{status.data?.version ?? "…"}</div>
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
