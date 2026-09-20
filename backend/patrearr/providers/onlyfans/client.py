@@ -195,8 +195,10 @@ class OnlyFansClient:
         return out
 
     async def iter_posts(self, external_id: str) -> AsyncIterator[PostPage]:
-        params = {"limit": "50", "order": "publish_date_desc", "skip_users": "all"}
+        limit = 50
+        params = {"limit": str(limit), "order": "publish_date_desc", "skip_users": "all"}
         before: str | None = None
+        seen = 0
         while True:
             page_params = dict(params)
             if before:
@@ -204,13 +206,27 @@ class OnlyFansClient:
             data = await self._get(f"/users/{external_id}/posts", page_params)
             items = data.get("list") if isinstance(data, dict) else data
             if not isinstance(items, list) or not items:
+                log.debug("OnlyFans posts: empty page after %d posts", seen)
                 yield PostPage(posts=[], next_url=None)
                 return
+            has_more_flag = data.get("hasMore") if isinstance(data, dict) else None
+            last = items[-1]
+            next_before = last.get("postedAtPrecise") or last.get("postedAt")
+            seen += len(items)
+            log.debug(
+                "OnlyFans posts page: %d items (total %d), hasMore=%s, next before=%s",
+                len(items),
+                seen,
+                has_more_flag,
+                next_before,
+            )
             posts = [self._post_from_json(p) for p in items]
-            has_more = bool(isinstance(data, dict) and data.get("hasMore"))
-            before = str(items[-1].get("postedAtPrecise") or items[-1].get("postedAt") or "")
-            yield PostPage(posts=posts, next_url="more" if has_more and before else None)
-            if not has_more or not before:
+            # Trust hasMore when present; otherwise keep going while pages are full.
+            more = has_more_flag if has_more_flag is not None else (len(items) >= limit)
+            more = bool(more and next_before)
+            before = str(next_before) if next_before is not None else None
+            yield PostPage(posts=posts, next_url="more" if more else None)
+            if not more:
                 return
 
     async def get_post(self, external_id: str, post_id: str) -> PostResource:
