@@ -79,3 +79,11 @@ def test_download_root_per_provider(tmp_path: Path):
     env2 = EnvConfig(config_dir=tmp_path / "c", download_dir=base)
     assert env2.download_root("onlyfans") == base
     assert set(env2.download_roots()) == {"downloads"}
+
+
+def test_html_to_text():
+    from patrearr.downloader.metadata import html_to_text
+
+    assert html_to_text("<p>Hello <b>world</b> &amp; more</p>") == "Hello world & more"
+    assert html_to_text(None) == ""
+    assert len(html_to_text("<p>" + "x" * 5000 + "</p>", limit=100)) == 100

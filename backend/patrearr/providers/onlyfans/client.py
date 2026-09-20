@@ -264,6 +264,18 @@ class OnlyFansClient:
         return self._post_from_json(data)
 
     @staticmethod
+    def _thumb_url(item: dict[str, Any]) -> str | None:
+        for m in item.get("media") or []:
+            if not isinstance(m, dict):
+                continue
+            files = m.get("files") or {}
+            for key in ("preview", "squarePreview", "thumb"):
+                v = files.get(key)
+                if isinstance(v, dict) and v.get("url"):
+                    return str(v["url"])
+        return None
+
+    @staticmethod
     def _media_list(item: dict[str, Any]) -> list[MediaResource]:
         media: list[MediaResource] = []
         for m in item.get("media") or []:
@@ -302,6 +314,7 @@ class OnlyFansClient:
             current_user_can_view=bool(p.get("canViewMedia", True)),
             campaign_id=str((p.get("author") or {}).get("id") or ""),
             media=cls._media_list(p),
+            thumbnail_override=cls._thumb_url(p),
             raw=p,
         )
 
@@ -324,6 +337,7 @@ class OnlyFansClient:
             current_user_can_view=bool(can_view),
             campaign_id=str(creator_id),
             media=cls._media_list(m),
+            thumbnail_override=cls._thumb_url(m),
             raw={**m, "_kind": "message", "_creator_id": creator_id},
         )
 

@@ -40,6 +40,7 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
           <div className="grid gap-3 pt-6">
             <Toggle checked={naming.form.write_sidecars} onChange={(v) => naming.set("write_sidecars", v)} label="Write post.json / post.md / post.html sidecars" />
             <Toggle checked={naming.form.write_nfo} onChange={(v) => naming.set("write_nfo", v)} label="Write .nfo for videos (Kodi / Jellyfin / Plex)" />
+            <Toggle checked={naming.form.embed_metadata} onChange={(v) => naming.set("embed_metadata", v)} label="Embed title, description & thumbnail into videos" hint="Fast ffmpeg remux after download; adds a cover image and tags players read." />
           </div>
         </div>
         <div className="flex justify-end"><Button variant="primary" disabled={!naming.dirty} loading={naming.saving} onClick={naming.save}>Save naming</Button></div>

@@ -123,3 +123,38 @@ def test_try_hardlink_dedupe(tmp_path):
     assert try_hardlink(dst, src) is True
     assert dst.stat().st_ino == src.stat().st_ino  # now linked
     assert dst.read_bytes() == b"same-content"
+
+
+def test_embed_metadata_roundtrip(tmp_path):
+    import shutil
+    import subprocess
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg or not shutil.which("ffprobe"):
+        import pytest
+
+        pytest.skip("ffmpeg not available")
+    from patrearr.downloader.metadata import embed_metadata
+
+    video = tmp_path / "v.mp4"
+    subprocess.run(
+        [
+            ffmpeg,
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=duration=1:size=64x48:rate=5",
+            "-pix_fmt",
+            "yuv420p",
+            str(video),
+        ],
+        capture_output=True,
+    )
+    assert embed_metadata(ffmpeg, video, {"title": "My Title", "artist": "Me"}, None) is True
+    out = subprocess.run(
+        [shutil.which("ffprobe"), "-v", "quiet", "-show_format", str(video)],
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "title=My Title" in out

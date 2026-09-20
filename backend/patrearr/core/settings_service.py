@@ -90,6 +90,7 @@ class NamingSettings(BaseModel):
     max_component_length: int = Field(default=150, ge=20, le=240)
     write_sidecars: bool = True
     write_nfo: bool = False
+    embed_metadata: bool = False
 
 
 class SecuritySettings(BaseModel):

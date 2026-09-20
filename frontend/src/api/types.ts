@@ -294,6 +294,7 @@ export interface Settings {
     max_component_length: number;
     write_sidecars: boolean;
     write_nfo: boolean;
+    embed_metadata: boolean;
   };
   notifications: {
     webhook_url: string;

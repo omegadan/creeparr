@@ -32,7 +32,7 @@ from patrearr.db.enums import (
     MediaStatus,
 )
 from patrearr.db.models import Creator, DownloadJob, MediaItem, Post
-from patrearr.downloader.fs import free_space_bytes, remove_tree, try_hardlink
+from patrearr.downloader.fs import free_space_bytes, remove_tree, sha256_file, try_hardlink
 from patrearr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadResult,
@@ -42,6 +42,7 @@ from patrearr.downloader.handlers.base import (
 )
 from patrearr.downloader.handlers.direct import download_direct
 from patrearr.downloader.handlers.ytdlp import YtDlpOptions, normalise_vimeo_url, run_ytdlp
+from patrearr.downloader.metadata import embed_metadata, html_to_text
 from patrearr.downloader.queue import enqueue_media, publish_post_changed, recompute_post_status
 from patrearr.downloader.sidecars import write_nfo, write_text_sidecars
 from patrearr.patreon.drm import probe_hls_drm
@@ -467,8 +468,64 @@ class DownloadManager:
         except RetryableDownloadError as exc:
             await asyncio.to_thread(self._fail_job, ctx, str(exc), exc.error_class, retryable=True)
             return
+        if ctx.kind == MediaKind.VIDEO and settings.naming.embed_metadata:
+            result = await self._embed_metadata(ctx, provider, result, reporter)
         remove_tree(tmp_dir)
         await asyncio.to_thread(self._complete_job, ctx, result)
+
+    async def _embed_metadata(
+        self, ctx: JobContext, provider, result: DownloadResult, reporter: ProgressReporter
+    ) -> DownloadResult:  # noqa: ANN001
+        ffmpeg = self.env.resolve_ffmpeg()
+        if not ffmpeg:
+            return result
+        reporter.set_stage("embedding")
+        # Pull description/date from the DB; title/creator/thumbnail come from ctx.
+        with session_scope(self._factory) as s:
+            post = s.get(Post, ctx.post_id)
+            description = html_to_text(post.content_html or post.teaser_text) if post else ""
+        year = ctx.post_published_at.strftime("%Y-%m-%d") if ctx.post_published_at else ""
+        metadata = {
+            "title": ctx.post_title or "",
+            "artist": ctx.creator_name,
+            "album_artist": ctx.creator_name,
+            "comment": description,
+            "description": description,
+            "date": year,
+        }
+        thumb_path: Path | None = None
+        if ctx.post_thumbnail_url:
+            thumb_path = result.path.with_name(".patrearr-cover.jpg")
+            thumb_path = await self._fetch_thumbnail(provider, ctx.post_thumbnail_url, thumb_path)
+
+        def _do() -> DownloadResult:
+            changed = embed_metadata(ffmpeg, result.path, metadata, thumb_path)
+            if thumb_path and thumb_path.exists():
+                thumb_path.unlink(missing_ok=True)
+            if not changed:
+                return result
+            size = result.path.stat().st_size
+            sha = sha256_file(result.path) if self.settings.get().downloads.compute_sha256 else None
+            return DownloadResult(result.path, size, sha)
+
+        return await asyncio.to_thread(_do)
+
+    async def _fetch_thumbnail(self, provider, url: str, dest: Path) -> Path | None:  # noqa: ANN001
+        try:
+            resp = await provider.stream(url)
+            data = bytearray()
+            async for chunk in resp.aiter_bytes(1 << 16):
+                data.extend(chunk)
+                if len(data) > 8 * 1024 * 1024:
+                    break
+            await resp.aclose()
+            if not data:
+                return None
+            dest.write_bytes(bytes(data))
+            return dest
+        except Exception as exc:  # noqa: BLE001
+            log.debug("thumbnail fetch failed: %s", exc)
+            return None
 
     async def _refresh_post(self, ctx: JobContext) -> None:
         provider = self.providers.get(ctx.provider)
