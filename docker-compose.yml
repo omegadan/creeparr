@@ -8,9 +8,11 @@ services:
       - PGID=${PGID:-100}
       - TZ=${TZ:-America/Los_Angeles}
       - PATREARR_LOG_LEVEL=${PATREARR_LOG_LEVEL:-INFO}
+      - PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans
     volumes:
       - ${CONFIG_DIR}:/config
       - ${DOWNLOAD_DIR}:/downloads
+      - ${ONLYFANS_DOWNLOAD_DIR}:/downloads-onlyfans
     ports:
       - "${PORT:-7979}:7979"
     restart: unless-stopped

@@ -194,7 +194,9 @@ class DownloadManager:
             "paused_reason": self.paused_reason,
             "workers": len([t for t in self._workers if not t.done()]),
             "running_jobs": list(self._running.keys()),
-            "free_bytes": free_space_bytes(self.env.download_dir),
+            "free_bytes": min(
+                (free_space_bytes(r) for r in self.env.download_roots().values()), default=0
+            ),
         }
 
     # ---- worker loop ---------------------------------------------------------------
@@ -205,7 +207,8 @@ class DownloadManager:
             return self._disk_ok
         self._last_disk_check = now
         min_free = self.settings.get().downloads.min_free_mb * 1024 * 1024
-        free = free_space_bytes(self.env.download_dir)
+        roots = self.env.download_roots().values()
+        free = min((free_space_bytes(r) for r in roots), default=0)
         ok = free >= min_free
         if not ok and self.paused_reason is None:
             log.error("free space %.1f MB below minimum; pausing downloads", free / 1e6)
@@ -397,7 +400,7 @@ class DownloadManager:
             return
 
         # 2. Post folder and sidecars.
-        post_dir = self.env.download_dir / self._post_dir(ctx)
+        post_dir = self.env.download_root(ctx.provider) / self._post_dir(ctx)
         await asyncio.to_thread(self._write_sidecars, ctx, post_dir)
 
         # 3. DRM: flagged by the provider up front, or probed from the HLS playlist.
@@ -568,7 +571,7 @@ class DownloadManager:
             creator = s.get(Creator, ctx.creator_id)
             if post is None or creator is None:
                 return
-            rel = str(post_dir.relative_to(self.env.download_dir))
+            rel = str(post_dir.relative_to(self.env.download_root(ctx.provider)))
             if post.folder_path != rel:
                 post.folder_path = rel
             if post.sidecars_written:
@@ -600,7 +603,7 @@ class DownloadManager:
             log.debug("progress write failed", exc_info=True)
 
     def _complete_job(self, ctx: JobContext, result: DownloadResult) -> None:
-        rel = str(result.path.relative_to(self.env.download_dir))
+        rel = str(result.path.relative_to(self.env.download_root(ctx.provider)))
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)
             media = s.execute(
@@ -786,15 +789,15 @@ class DownloadManager:
                 log.info("re-queued %d jobs interrupted by a restart", len(stale))
 
     def _sweep_temp_dirs(self) -> None:
-        root = self.env.download_dir
-        if not root.exists():
-            return
-        try:
-            for p in root.rglob(f"{TMP_PREFIX}*"):
-                if p.is_dir():
-                    remove_tree(p)
-        except OSError as exc:
-            log.debug("temp sweep failed: %s", exc)
+        for root in self.env.download_roots().values():
+            if not root.exists():
+                continue
+            try:
+                for p in root.rglob(f"{TMP_PREFIX}*"):
+                    if p.is_dir():
+                        remove_tree(p)
+            except OSError as exc:
+                log.debug("temp sweep failed for %s: %s", root, exc)
 
     def requeue_due_retries(self) -> int:
         now = datetime.now(UTC)

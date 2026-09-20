@@ -17,6 +17,7 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
     PATREARR_CONFIG_DIR=/config \
     PATREARR_DOWNLOAD_DIR=/downloads \
+    PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans \
     PATREARR_PORT=7979 \
     PUID=1000 \
     PGID=1000 \
@@ -40,7 +41,7 @@ COPY --from=frontend /src/dist/ ./patrearr/static/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-VOLUME ["/config", "/downloads"]
+VOLUME ["/config", "/downloads", "/downloads-onlyfans"]
 EXPOSE 7979
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fs http://localhost:7979/health || exit 1

@@ -84,11 +84,13 @@ Every variable is documented in that file. Summary:
 | `PUID` / `PGID`        | `99` / `100`  | User/group that owns files (Unraid defaults)           |
 | `TZ`                   | `America/Los_Angeles` | Time zone                                      |
 | `CONFIG_DIR`           | required      | Host path mounted at `/config` (database, logs)        |
-| `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads` (archive root)       |
+| `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads` (Patreon archive root) |
+| `ONLYFANS_DOWNLOAD_DIR`| required      | Host path mounted at `/downloads-onlyfans` (OnlyFans root) |
 | `PORT`                 | `7979`        | Host port for the web UI                               |
 | `PATREARR_LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`                    |
 | `PATREARR_CONFIG_DIR`  | `/config`     | In-container config path (only when not using Docker) |
 | `PATREARR_DOWNLOAD_DIR`| `/downloads`  | In-container archive path (only when not using Docker) |
+| `PATREARR_ONLYFANS_DOWNLOAD_DIR`| `/downloads-onlyfans` | OnlyFans archive path; falls back to the main one if unset |
 | `PATREARR_PORT`        | `7979`        | Port the server listens on                             |
 
 Everything else (scan interval, concurrency, retries, naming, per-kind toggles, HTTP backend)

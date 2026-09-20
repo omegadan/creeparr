@@ -20,6 +20,7 @@ class EnvConfig(BaseSettings):
 
     config_dir: Path = Field(default=Path("/config"))
     download_dir: Path = Field(default=Path("/downloads"))
+    onlyfans_download_dir: Path | None = None
     host: str = "0.0.0.0"
     port: int = 7979
     log_level: str = "INFO"
@@ -39,6 +40,22 @@ class EnvConfig(BaseSettings):
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.database_path}"
+
+    def download_root(self, provider: str) -> Path:
+        """Base directory for a provider's archive. OnlyFans can use its own."""
+        if provider == "onlyfans" and self.onlyfans_download_dir is not None:
+            return self.onlyfans_download_dir
+        return self.download_dir
+
+    def download_roots(self) -> dict[str, Path]:
+        """Distinct download roots, keyed by a label (for disk checks / status)."""
+        roots = {"downloads": self.download_dir}
+        if (
+            self.onlyfans_download_dir is not None
+            and self.onlyfans_download_dir != self.download_dir
+        ):
+            roots["onlyfans"] = self.onlyfans_download_dir
+        return roots
 
     @property
     def log_dir(self) -> Path:
@@ -64,7 +81,8 @@ class EnvConfig(BaseSettings):
     def ensure_dirs(self) -> None:
         for d in (self.config_dir, self.log_dir, self.cookies_dir):
             d.mkdir(parents=True, exist_ok=True)
-        self.download_dir.mkdir(parents=True, exist_ok=True)
+        for root in self.download_roots().values():
+            root.mkdir(parents=True, exist_ok=True)
         self._adopt_legacy_database()
 
     def _adopt_legacy_database(self) -> None:

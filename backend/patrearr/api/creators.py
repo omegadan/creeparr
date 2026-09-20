@@ -407,7 +407,7 @@ def delete_creator(
     db.flush()
     record_event(db, services.bus, EventType.CREATOR_REMOVED, f"Removed creator {name}")
     if delete_files:
-        root = services.env.download_dir
+        root = services.env.download_root(creator.provider)
         parents = set()
         for rel in folders:
             path = (root / rel).resolve()

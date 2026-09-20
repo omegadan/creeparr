@@ -35,7 +35,9 @@ _writable_cache: dict[str, Any] = {"ts": 0.0, "ok": None}
 def _downloads_writable(services: Services) -> bool:
     now = time.monotonic()
     if now - _writable_cache["ts"] > 60 or _writable_cache["ok"] is None:
-        _writable_cache["ok"] = is_writable_dir(services.env.download_dir)
+        _writable_cache["ok"] = all(
+            is_writable_dir(r) for r in services.env.download_roots().values()
+        )
         _writable_cache["ts"] = now
     return bool(_writable_cache["ok"])
 
@@ -127,6 +129,11 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
         "paths": {
             "config_dir": str(services.env.config_dir),
             "download_dir": str(services.env.download_dir),
+            "onlyfans_download_dir": (
+                str(services.env.onlyfans_download_dir)
+                if services.env.onlyfans_download_dir
+                else None
+            ),
         },
         "ffmpeg": ffmpeg,
         "ytdlp_version": yt_dlp.version.__version__,

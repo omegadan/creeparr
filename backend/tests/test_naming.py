@@ -64,3 +64,18 @@ def test_legacy_database_is_adopted(tmp_path: Path):
     assert (cfg / "patrearr.db").read_bytes() == b"old"
     assert (cfg / "patrearr.db-wal").exists()
     assert not (cfg / "patreonarr.db").exists()
+
+
+def test_download_root_per_provider(tmp_path: Path):
+    from patrearr.config import EnvConfig
+
+    base = tmp_path / "dl"
+    of = tmp_path / "dl-of"
+    env = EnvConfig(config_dir=tmp_path / "c", download_dir=base, onlyfans_download_dir=of)
+    assert env.download_root("patreon") == base
+    assert env.download_root("onlyfans") == of
+    assert set(env.download_roots()) == {"downloads", "onlyfans"}
+    # falls back to the main root when unset
+    env2 = EnvConfig(config_dir=tmp_path / "c", download_dir=base)
+    assert env2.download_root("onlyfans") == base
+    assert set(env2.download_roots()) == {"downloads"}
