@@ -10,10 +10,10 @@
   <Support>https://github.com/omegadan/patrearr/issues</Support>
   <Project>https://github.com/omegadan/patrearr</Project>
   <Overview>Self-hosted, arr-style archiver for the creators you support on Patreon and OnlyFans. Adds a creator, back-fills every post you have access to, and keeps checking for new ones. Videos always; images, audio and attachments optional per creator. Web UI with a live download queue, history and per-provider settings.</Overview>
-  <Category>MediaApp:Video Downloaders: Tools:</Category>
+  <Category>Downloaders: MediaApp:Video: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:7979]/</WebUI>
-  <TemplateURL/>
-  <Icon>https://raw.githubusercontent.com/omegadan/patrearr/main/frontend/public/logo.svg</Icon>
+  <TemplateURL>https://raw.githubusercontent.com/omegadan/patrearr/main/unraid/patrearr.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/omegadan/patrearr/main/unraid/patrearr-icon.png</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
