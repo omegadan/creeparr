@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from patrearr.api import creators, history, posts, queue, settings, system
+from patrearr.api import auth, creators, history, posts, queue, settings, system
 
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(auth.router)
 api_router.include_router(system.router)
 api_router.include_router(creators.router)
 api_router.include_router(posts.router)

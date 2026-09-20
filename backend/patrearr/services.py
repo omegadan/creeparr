@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 from patrearr.config import EnvConfig
 from patrearr.core.events import EventBus
 from patrearr.core.notifications import NotificationService
+from patrearr.core.security import get_secret_key
 from patrearr.core.settings_service import SettingsService
 from patrearr.db.engine import SessionFactory, make_engine, make_session_factory
 from patrearr.downloader.manager import DownloadManager
@@ -33,6 +34,7 @@ class Services:
     scan_manager: ScanManager
     downloads: DownloadManager
     notifications: NotificationService
+    auth_secret: bytes = b""
     scheduler: SchedulerService = field(init=False)
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -66,4 +68,5 @@ def build_services(env: EnvConfig) -> Services:
         scan_manager=scan_manager,
         downloads=downloads,
         notifications=notifications,
+        auth_secret=get_secret_key(env.config_dir),
     )

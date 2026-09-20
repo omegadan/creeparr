@@ -86,6 +86,24 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
             },
         )
 
+    from starlette.middleware.base import BaseHTTPMiddleware
+
+    from patrearr.api.auth import OPEN_PATHS, is_authenticated
+
+    class AuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request, call_next):
+            path = request.url.path
+            gated = path.startswith("/api/v1/") and path not in OPEN_PATHS
+            if gated and not is_authenticated(request, services):
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": {"code": "unauthorized", "message": "authentication required"}
+                    },
+                )
+            return await call_next(request)
+
+    app.add_middleware(AuthMiddleware)
     app.include_router(api_router)
 
     @app.get("/health", include_in_schema=False)

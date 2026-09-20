@@ -143,6 +143,13 @@ Early release. Verified against synthetic API fixtures and unit/integration test
 end-to-end checklist against a real Patreon account still needs to be run (see
 `docs/e2e-checklist.md`). Field names in Patreon's private API can change without notice.
 
+## Security
+
+The web UI is unauthenticated by default. If Patrearr is reachable beyond your own machine,
+set a password in **Settings → Security**; it gates the whole API. Credentials you paste
+(Patreon/OnlyFans cookies) are stored in the SQLite DB under `/config` and never shown
+back in full.
+
 ## License
 
 MIT

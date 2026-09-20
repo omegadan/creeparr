@@ -145,3 +145,19 @@ def test_history_and_logs(api):
     assert r.status_code == 200 and r.json()["total"] >= 1  # auth_valid event from fixture
     r = api.get("/api/v1/system/logs?lines=10")
     assert r.status_code == 200 and "lines" in r.json()
+
+
+def test_ui_auth_flow(env):
+    from patrearr.app import create_app
+
+    app = create_app(env, start_background=False)
+    with TestClient(app) as c:
+        assert c.get("/api/v1/auth/status").json()["auth_enabled"] is False
+        assert c.get("/api/v1/creators").status_code == 200
+        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        assert c.get("/api/v1/creators").status_code == 401
+        assert c.post("/api/v1/auth/login", json={"password": "wrong"}).status_code == 401
+        assert c.post("/api/v1/auth/login", json={"password": "hunter2"}).status_code == 200
+        assert c.get("/api/v1/creators").status_code == 200
+        assert c.delete("/api/v1/auth/password").status_code == 200
+        assert c.get("/api/v1/creators").status_code == 200  # auth disabled again

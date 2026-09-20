@@ -91,6 +91,11 @@ class NamingSettings(BaseModel):
     write_sidecars: bool = True
 
 
+class SecuritySettings(BaseModel):
+    auth_enabled: bool = False
+    password_hash: str = ""
+
+
 class NotificationSettings(BaseModel):
     webhook_url: str = ""
     discord_webhook: str = ""
@@ -113,12 +118,14 @@ class AppSettings(BaseModel):
     downloads: DownloadSettings = Field(default_factory=DownloadSettings)
     naming: NamingSettings = Field(default_factory=NamingSettings)
     notifications: NotificationSettings = Field(default_factory=NotificationSettings)
+    security: SecuritySettings = Field(default_factory=SecuritySettings)
     history: HistorySettings = Field(default_factory=HistorySettings)
 
 
 SECRET_FIELDS: dict[str, set[str]] = {
     "patreon": {"session_id", "cookies_txt"},
     "onlyfans": {"sess", "auth_id", "x_bc", "cookies_txt"},
+    "security": {"password_hash"},
 }
 TEXT_SECRETS = {"cookies_txt"}
 
