@@ -73,6 +73,16 @@ A full back-fill starts immediately; after that, monitored creators are re-scann
 
 The folder and file templates are editable in **Settings → Naming & general**.
 
+## Unraid
+
+An Unraid template is provided. Docker tab → Add Container → paste this Template URL:
+
+```
+https://raw.githubusercontent.com/omegadan/patrearr/onlyfans/unraid/patrearr.xml
+```
+
+See [unraid/README.md](unraid/README.md) for details.
+
 ## Configuration
 
 Copy `.env.example` to `.env` next to `docker-compose.yml` and edit it; Compose picks it up

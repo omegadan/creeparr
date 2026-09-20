@@ -289,6 +289,15 @@ export interface Settings {
     max_component_length: number;
     write_sidecars: boolean;
   };
+  notifications: {
+    webhook_url: string;
+    discord_webhook: string;
+    ntfy_url: string;
+    notify_auth_invalid: boolean;
+    notify_scan_failed: boolean;
+    notify_download_failed: boolean;
+    notify_scan_completed: boolean;
+  };
   history: { retention_days: number; job_retention_days: number };
   env: { config_dir: string; download_dir: string; onlyfans_download_dir: string | null; port: number; log_level: string; ffmpeg: string | null };
 }

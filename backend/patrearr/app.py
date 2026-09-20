@@ -41,6 +41,7 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
         if start_background:
             await services.scan_manager.start()
             await services.downloads.start()
+            await services.notifications.start()
             services.scheduler.start()
             asyncio.create_task(_initial_session_check(services))
         log.info("Patrearr %s ready on port %s", __version__, env.port)
@@ -49,6 +50,7 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
         finally:
             if start_background:
                 services.scheduler.shutdown()
+                await services.notifications.stop()
                 await services.scan_manager.stop()
                 await services.downloads.stop()
             await services.providers.aclose_all()

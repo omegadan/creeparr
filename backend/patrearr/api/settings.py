@@ -101,6 +101,11 @@ async def clear_auth(provider_name: str, services: Services = Depends(get_servic
     return {"ok": True}
 
 
+@router.post("/settings/notifications/test")
+async def test_notifications(services: Services = Depends(get_services)):
+    return await services.notifications.test()
+
+
 @router.post("/settings/naming-preview")
 def naming_preview(body: NamingPreviewBody, services: Services = Depends(get_services)):
     max_len = services.settings.get().naming.max_component_length

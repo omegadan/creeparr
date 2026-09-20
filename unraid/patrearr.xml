@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Patrearr</Name>
+  <Repository>ghcr.io/omegadan/patrearr:latest</Repository>
+  <Registry>https://github.com/omegadan/patrearr/pkgs/container/patrearr</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/omegadan/patrearr/issues</Support>
+  <Project>https://github.com/omegadan/patrearr</Project>
+  <Overview>Self-hosted, arr-style archiver for the creators you support on Patreon and OnlyFans. Adds a creator, back-fills every post you have access to, and keeps checking for new ones. Videos always; images, audio and attachments optional per creator. Web UI with a live download queue, history and per-provider settings.</Overview>
+  <Category>MediaApp:Video Downloaders: Tools:</Category>
+  <WebUI>http://[IP]:[PORT:7979]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/omegadan/patrearr/onlyfans/frontend/public/logo.svg</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Description>Self-hosted archiver for Patreon and OnlyFans creators you support. Paste your session cookies in Settings, import your subscriptions, and it archives and monitors them. OnlyFans content is stored in a separate folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>7979</HostPort>
+        <ContainerPort>7979</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/patrearr</HostDir>
+      <ContainerDir>/config</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/media/patreon</HostDir>
+      <ContainerDir>/downloads</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/media/onlyfans</HostDir>
+      <ContainerDir>/downloads-onlyfans</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Value>99</Value>
+      <Name>PUID</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>100</Value>
+      <Name>PGID</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>America/Los_Angeles</Value>
+      <Name>TZ</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>INFO</Value>
+      <Name>PATREARR_LOG_LEVEL</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Config Name="WebUI Port" Target="7979" Default="7979" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">7979</Config>
+  <Config Name="Config" Target="/config" Default="/mnt/user/appdata/patrearr" Mode="rw" Description="Database, logs and session cookies" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/patrearr</Config>
+  <Config Name="Patreon downloads" Target="/downloads" Default="/mnt/user/media/patreon" Mode="rw" Description="Where Patreon (and default) media is archived" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/patreon</Config>
+  <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="/mnt/user/media/onlyfans" Mode="rw" Description="Where OnlyFans media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/onlyfans</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="TZ" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Time zone (IANA name)" Type="Variable" Display="advanced" Required="false" Mask="false">America/Los_Angeles</Config>
+  <Config Name="Log level" Target="PATREARR_LOG_LEVEL" Default="INFO" Mode="" Description="DEBUG, INFO, WARNING or ERROR" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+</Container>

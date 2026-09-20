@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 
 from patrearr.config import EnvConfig
 from patrearr.core.events import EventBus
+from patrearr.core.notifications import NotificationService
 from patrearr.core.settings_service import SettingsService
 from patrearr.db.engine import SessionFactory, make_engine, make_session_factory
 from patrearr.downloader.manager import DownloadManager
@@ -31,6 +32,7 @@ class Services:
     scanner: Scanner
     scan_manager: ScanManager
     downloads: DownloadManager
+    notifications: NotificationService
     scheduler: SchedulerService = field(init=False)
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -52,6 +54,7 @@ def build_services(env: EnvConfig) -> Services:
     scanner = Scanner(factory, settings, bus, providers)
     scan_manager = ScanManager(scanner, factory, providers, bus)
     downloads = DownloadManager(env, factory, settings, bus, providers)
+    notifications = NotificationService(settings, bus)
     return Services(
         env=env,
         engine=engine,
@@ -62,4 +65,5 @@ def build_services(env: EnvConfig) -> Services:
         scanner=scanner,
         scan_manager=scan_manager,
         downloads=downloads,
+        notifications=notifications,
     )

@@ -46,6 +46,9 @@ export function useClearAuth(provider: string) {
   });
 }
 
+export const useTestNotifications = () =>
+  useMutation({ mutationFn: () => post<{ ok: boolean; detail?: string; targets?: string[] }>("/settings/notifications/test") });
+
 export const useNamingPreview = () =>
   useMutation({
     mutationFn: (body: { post_folder_template: string; file_template: string }) =>

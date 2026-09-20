@@ -89,6 +89,16 @@ class NamingSettings(BaseModel):
     write_sidecars: bool = True
 
 
+class NotificationSettings(BaseModel):
+    webhook_url: str = ""
+    discord_webhook: str = ""
+    ntfy_url: str = ""
+    notify_auth_invalid: bool = True
+    notify_scan_failed: bool = True
+    notify_download_failed: bool = False
+    notify_scan_completed: bool = False
+
+
 class HistorySettings(BaseModel):
     retention_days: int = Field(default=90, ge=1)
     job_retention_days: int = Field(default=30, ge=1)
@@ -100,6 +110,7 @@ class AppSettings(BaseModel):
     scan: ScanSettings = Field(default_factory=ScanSettings)
     downloads: DownloadSettings = Field(default_factory=DownloadSettings)
     naming: NamingSettings = Field(default_factory=NamingSettings)
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     history: HistorySettings = Field(default_factory=HistorySettings)
 
 
