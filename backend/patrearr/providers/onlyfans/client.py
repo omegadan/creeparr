@@ -50,7 +50,8 @@ class OnlyFansCredentials:
         return bool(self.sess and self.auth_id and self.x_bc)
 
     def cookie_header(self) -> str:
-        return f"sess={self.sess}; auth_id={self.auth_id}"
+        # OnlyFans expects auth_id, sess and auth_uid_ (defaults to auth_id).
+        return f"auth_id={self.auth_id}; sess={self.sess}; auth_uid_={self.auth_id}"
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -83,7 +84,7 @@ class OnlyFansClient:
             "user-agent": self.creds.user_agent,
             "x-bc": self.creds.x_bc,
             "user-id": self.creds.auth_id,
-            "referer": "https://onlyfans.com/",
+            "referer": "https://onlyfans.com",
             "cookie": self.creds.cookie_header(),
             **signed,
         }
@@ -97,6 +98,7 @@ class OnlyFansClient:
             url = f"{url}?{query}"
         await self._limiter.wait()
         resp = await self._transport.request("GET", url, headers=self._headers(url))
+        log.debug("GET %s -> %s (%s)", path, resp.status, resp.content_type)
         return self._parse(resp)
 
     def _parse(self, resp: TransportResponse) -> Any:
@@ -119,7 +121,17 @@ class OnlyFansClient:
     async def get_me(self) -> UserInfo:
         data = await self._get("/users/me")
         if not isinstance(data, dict) or not data.get("id"):
-            raise AuthError("OnlyFans did not return an account for this session")
+            err = data.get("error") if isinstance(data, dict) else None
+            msg = (err or {}).get("message") if isinstance(err, dict) else None
+            log.warning("OnlyFans /users/me returned no account: %s", err)
+            if msg and "wrong user" in msg.lower():
+                raise AuthError("OnlyFans: 'Wrong user' — auth_id does not match the sess cookie")
+            if msg and "refresh" in msg.lower():
+                raise AuthError(
+                    "OnlyFans: 'Please refresh the page' — the sess cookie or x-bc is stale; "
+                    "re-copy them from a fresh onlyfans.com session"
+                )
+            raise AuthError(f"OnlyFans did not return an account ({msg or 'unknown'})")
         return UserInfo(
             id=str(data["id"]),
             full_name=data.get("name") or data.get("username"),
