@@ -133,6 +133,9 @@ async def _initial_session_check(services: Services) -> None:
             log.exception("initial %s session check failed", provider.name)
 
 
+_NO_CACHE = {"Cache-Control": "no-cache, must-revalidate"}
+
+
 def _mount_spa(app: FastAPI, static_dir: Path) -> None:
     index = static_dir / "index.html"
     assets = static_dir / "assets"
@@ -150,7 +153,7 @@ def _mount_spa(app: FastAPI, static_dir: Path) -> None:
         if path and candidate.is_file() and static_dir.resolve() in candidate.resolve().parents:
             return FileResponse(candidate)
         if index.is_file():
-            return FileResponse(index)
+            return FileResponse(index, headers=_NO_CACHE)
         return JSONResponse(
             status_code=200,
             content={
