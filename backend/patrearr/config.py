@@ -22,6 +22,7 @@ class EnvConfig(BaseSettings):
     download_dir: Path = Field(default=Path("/downloads"))
     onlyfans_download_dir: Path | None = None
     youtube_download_dir: Path | None = None
+    instagram_download_dir: Path | None = None
     host: str = "0.0.0.0"
     port: int = 7979
     log_level: str = "INFO"
@@ -48,6 +49,8 @@ class EnvConfig(BaseSettings):
             return self.onlyfans_download_dir
         if provider == "youtube" and self.youtube_download_dir is not None:
             return self.youtube_download_dir
+        if provider == "instagram" and self.instagram_download_dir is not None:
+            return self.instagram_download_dir
         return self.download_dir
 
     def download_roots(self) -> dict[str, Path]:

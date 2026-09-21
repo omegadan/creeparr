@@ -51,6 +51,11 @@ export const POST_TYPES: Record<string, string> = {
   onlyfans_post: "Post",
   onlyfans_message: "Message",
   youtube_video: "Video",
+  instagram_post: "Post",
+  instagram_reel: "Reel",
+  instagram_story: "Story",
+  instagram_highlight: "Highlight",
+  instagram_tagged: "Tagged",
 };
 
 export function postTypeLabel(t: string | null): string {

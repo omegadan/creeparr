@@ -52,6 +52,11 @@
       <ContainerDir>/downloads-youtube</ContainerDir>
       <Mode>rw</Mode>
     </Volume>
+    <Volume>
+      <HostDir>/mnt/user/media/instagram</HostDir>
+      <ContainerDir>/downloads-instagram</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
   </Data>
   <Environment>
     <Variable>
@@ -80,6 +85,7 @@
   <Config Name="Patreon downloads" Target="/downloads" Default="/mnt/user/media/patreon" Mode="rw" Description="Where Patreon (and default) media is archived" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/patreon</Config>
   <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="/mnt/user/media/onlyfans" Mode="rw" Description="Where OnlyFans media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/onlyfans</Config>
   <Config Name="YouTube downloads" Target="/downloads-youtube" Default="/mnt/user/media/youtube" Mode="rw" Description="Where YouTube media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/youtube</Config>
+  <Config Name="Instagram downloads" Target="/downloads-instagram" Default="/mnt/user/media/instagram" Mode="rw" Description="Where Instagram media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/instagram</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Time zone (IANA name)" Type="Variable" Display="advanced" Required="false" Mask="false">America/Los_Angeles</Config>

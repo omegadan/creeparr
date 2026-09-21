@@ -39,6 +39,11 @@ def get_settings(services: Services = Depends(get_services)) -> dict[str, Any]:
         "youtube_download_dir": (
             str(services.env.youtube_download_dir) if services.env.youtube_download_dir else None
         ),
+        "instagram_download_dir": (
+            str(services.env.instagram_download_dir)
+            if services.env.instagram_download_dir
+            else None
+        ),
         "port": services.env.port,
         "log_level": services.env.log_level,
         "ffmpeg": services.env.resolve_ffmpeg(),

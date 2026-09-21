@@ -58,6 +58,7 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
           <dt className="text-fg-dim">download_dir</dt><dd>{settings.env.download_dir}</dd>
           <dt className="text-fg-dim">onlyfans_dir</dt><dd>{settings.env.onlyfans_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
           <dt className="text-fg-dim">youtube_dir</dt><dd>{settings.env.youtube_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
+          <dt className="text-fg-dim">instagram_dir</dt><dd>{settings.env.instagram_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
           <dt className="text-fg-dim">port</dt><dd>{settings.env.port}</dd>
           <dt className="text-fg-dim">log_level</dt><dd>{settings.env.log_level}</dd>
           <dt className="text-fg-dim">ffmpeg</dt><dd>{settings.env.ffmpeg ?? <span className="text-danger">not found</span>}</dd>

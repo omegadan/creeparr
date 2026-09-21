@@ -18,6 +18,10 @@ See the table in the README. They cover paths, port and log level only. `PATREAR
 | onlyfans.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) before each OnlyFans request |
 | youtube.max_videos | 0 | Cap videos per channel (0 = all) |
 | youtube.cookies_txt | "" | Optional cookies for members-only/age-restricted videos |
+| instagram.sessionid | "" | Instagram login cookie (required) |
+| instagram.include_reels/stories/highlights/tagged | reels on | Which Instagram content to archive |
+| instagram.max_posts | 0 | Cap posts per profile (0 = all) |
+| instagram.sleep_request | 1.0 | Seconds between Instagram requests |
 | patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |
 | scan.interval_minutes | 60 | 0 disables scheduled scans |
 | scan.overlap_posts | 10 | Incremental stop condition |

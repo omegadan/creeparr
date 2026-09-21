@@ -61,6 +61,19 @@ class OnlyFansSettings(BaseModel):
         return self
 
 
+class InstagramSettings(BaseModel):
+    sessionid: str = ""
+    cookies_txt: str = ""
+    user_agent: str = ""
+    include_reels: bool = True
+    include_stories: bool = False
+    include_highlights: bool = False
+    include_tagged: bool = False
+    max_posts: int = Field(default=0, ge=0)
+    sleep_request: float = Field(default=1.0, ge=0.0, le=30)
+    downloads_per_hour: int = Field(default=0, ge=0)
+
+
 class YouTubeSettings(BaseModel):
     cookies_txt: str = ""
     max_videos: int = Field(default=0, ge=0)
@@ -126,6 +139,7 @@ class AppSettings(BaseModel):
     patreon: PatreonSettings = Field(default_factory=PatreonSettings)
     onlyfans: OnlyFansSettings = Field(default_factory=OnlyFansSettings)
     youtube: YouTubeSettings = Field(default_factory=YouTubeSettings)
+    instagram: InstagramSettings = Field(default_factory=InstagramSettings)
     scan: ScanSettings = Field(default_factory=ScanSettings)
     downloads: DownloadSettings = Field(default_factory=DownloadSettings)
     naming: NamingSettings = Field(default_factory=NamingSettings)
@@ -139,6 +153,7 @@ SECRET_FIELDS: dict[str, set[str]] = {
     "onlyfans": {"sess", "auth_id", "x_bc", "cookies_txt"},
     "security": {"password_hash"},
     "youtube": {"cookies_txt"},
+    "instagram": {"sessionid", "cookies_txt"},
 }
 TEXT_SECRETS = {"cookies_txt"}
 

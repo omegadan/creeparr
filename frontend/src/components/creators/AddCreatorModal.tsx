@@ -14,6 +14,7 @@ const PLACEHOLDER: Record<string, string> = {
   patreon: "https://www.patreon.com/c/somecreator",
   onlyfans: "https://onlyfans.com/somecreator",
   youtube: "https://www.youtube.com/@channel  or  @handle",
+  instagram: "https://www.instagram.com/username  or  @username",
 };
 
 export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () => void }) {

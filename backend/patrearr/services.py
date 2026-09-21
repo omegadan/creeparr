@@ -14,6 +14,7 @@ from patrearr.core.security import get_secret_key
 from patrearr.core.settings_service import SettingsService
 from patrearr.db.engine import SessionFactory, make_engine, make_session_factory
 from patrearr.downloader.manager import DownloadManager
+from patrearr.providers.instagram.provider import InstagramProvider
 from patrearr.providers.onlyfans.provider import OnlyFansProvider
 from patrearr.providers.patreon import PatreonProvider
 from patrearr.providers.registry import ProviderRegistry
@@ -53,6 +54,7 @@ def build_services(env: EnvConfig) -> Services:
             PatreonProvider(env, settings, factory, bus),
             OnlyFansProvider(env, settings, factory, bus),
             YouTubeProvider(env, settings, factory, bus),
+            InstagramProvider(env, settings, factory, bus),
         ]
     )
     scanner = Scanner(factory, settings, bus, providers)

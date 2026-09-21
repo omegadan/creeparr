@@ -18,6 +18,7 @@ interface FieldSpec {
 
 const FIELDS: Record<string, FieldSpec> = {
   session_id: { label: "session_id cookie", hint: "patreon.com → DevTools → Application → Cookies → session_id" },
+  sessionid: { label: "sessionid cookie", hint: "instagram.com → DevTools → Application → Cookies → sessionid" },
   sess: { label: "sess cookie", hint: "onlyfans.com → DevTools → Application → Cookies → sess" },
   auth_id: { label: "auth_id cookie", hint: "onlyfans.com cookie auth_id (your numeric user id)" },
   x_bc: { label: "x-bc token", hint: "Request header x-bc from any onlyfans.com/api2 request in the Network tab" },
@@ -28,6 +29,7 @@ const INTRO: Record<string, string> = {
   patreon: "Reads posts your Patreon account already has access to. Locked posts stay locked.",
   onlyfans: "Reads content your OnlyFans account is subscribed to. Signing rules are fetched automatically. OnlyFans is strict about automation; use a low request rate and expect DRM videos to be skipped.",
   youtube: "Public YouTube channels need no login. Add a cookies.txt only for members-only or age-restricted videos.",
+  instagram: "Reads Instagram from your logged-in session. Copy the sessionid cookie from instagram.com in your browser. Instagram is strict about automation; use a dedicated account.",
 };
 
 function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings: Settings }) {

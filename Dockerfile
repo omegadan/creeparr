@@ -19,6 +19,7 @@ ENV PYTHONUNBUFFERED=1 \
     PATREARR_DOWNLOAD_DIR=/downloads \
     PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans \
     PATREARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube \
+    PATREARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram \
     PATREARR_PORT=7979 \
     PUID=1000 \
     PGID=1000 \
@@ -55,7 +56,7 @@ COPY --from=frontend /src/dist/ ./patrearr/static/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-VOLUME ["/config", "/downloads", "/downloads-onlyfans", "/downloads-youtube"]
+VOLUME ["/config", "/downloads", "/downloads-onlyfans", "/downloads-youtube", "/downloads-instagram"]
 EXPOSE 7979
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fs http://localhost:7979/health || exit 1
