@@ -4,6 +4,7 @@ import { PageHeader } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Misc";
 import { FailedTable, JobTable } from "../components/queue/QueueTable";
+import { ProviderQueueStatusPanel } from "../components/queue/ProviderQueueStatus";
 import { useToast } from "../components/ui/Toast";
 
 export function QueuePage() {
@@ -35,6 +36,7 @@ export function QueuePage() {
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : (
         <div className="grid gap-6">
+          <ProviderQueueStatusPanel providers={q.providers} />
           <JobTable jobs={q.jobs} />
           {q.failed.length > 0 && (
             <div>

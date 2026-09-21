@@ -209,11 +209,24 @@ export interface FailedMedia {
   last_error: string | null;
 }
 
+export interface ProviderQueueStatus {
+  provider: string;
+  label: string;
+  state: "idle" | "waiting" | "downloading" | "throttled" | "blocked" | "disabled" | "paused";
+  queued: number;
+  running: number;
+  hourly_limit: number;
+  recent_starts: number;
+  next_slot_seconds: number | null;
+  next_slot_at: string | null;
+}
+
 export interface Queue {
   paused: boolean;
   paused_reason: string | null;
   jobs: Job[];
   failed: FailedMedia[];
+  providers: ProviderQueueStatus[];
 }
 
 export interface HistoryEvent {

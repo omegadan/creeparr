@@ -112,6 +112,7 @@ def get_queue(
         paused_reason=st["paused_reason"],
         jobs=[job_out(j) for j in jobs],
         failed=[failed_out(m) for m in failed],
+        providers=services.downloads.provider_status(),
     )
 
 

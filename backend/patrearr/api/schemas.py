@@ -263,11 +263,24 @@ class FailedMediaOut(BaseModel):
     last_error: str | None
 
 
+class ProviderQueueStatus(BaseModel):
+    provider: str
+    label: str
+    state: str  # idle | waiting | downloading | throttled | blocked | disabled | paused
+    queued: int
+    running: int
+    hourly_limit: int
+    recent_starts: int
+    next_slot_seconds: int | None = None
+    next_slot_at: datetime | None = None
+
+
 class QueueOut(BaseModel):
     paused: bool
     paused_reason: str | None
     jobs: list[JobOut]
     failed: list[FailedMediaOut]
+    providers: list[ProviderQueueStatus] = []
 
 
 # ---- history --------------------------------------------------------------------------

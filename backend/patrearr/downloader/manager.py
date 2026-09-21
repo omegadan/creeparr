@@ -209,6 +209,70 @@ class DownloadManager:
             ),
         }
 
+    def provider_status(self) -> list[dict[str, Any]]:
+        """A queue-oriented status for each provider, for the Activity page."""
+        disabled = self.providers.disabled_names()
+        blocked = self.providers.blocked_names()
+        now_mono = time.monotonic()
+        cutoff = now_mono - 3600
+        with session_scope(self._factory) as s:
+            rows = s.execute(
+                select(Creator.provider, DownloadJob.status, func.count())
+                .join(Creator, Creator.id == DownloadJob.creator_id)
+                .where(DownloadJob.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]))
+                .group_by(Creator.provider, DownloadJob.status)
+            ).all()
+        queued: dict[str, int] = {}
+        running: dict[str, int] = {}
+        for provider, status, count in rows:
+            (running if status == JobStatus.RUNNING else queued)[provider] = count
+
+        out: list[dict[str, Any]] = []
+        for provider in self.providers:
+            name = provider.name
+            q = int(queued.get(name, 0))
+            r = int(running.get(name, 0))
+            limit = self._provider_hourly_limit(name)
+            window = self._recent_starts.get(name)
+            recent = sum(1 for t in window if t >= cutoff) if window else 0
+
+            next_slot_seconds: int | None = None
+            if name in disabled:
+                state = "disabled"
+            elif self.paused:
+                state = "paused"
+            elif r > 0:
+                state = "downloading"
+            elif q == 0:
+                state = "idle"
+            elif limit > 0 and recent >= limit:
+                state = "throttled"
+                active = sorted(t for t in (window or ()) if t >= cutoff)
+                if active:
+                    next_slot_seconds = max(0, int(active[0] + 3600 - now_mono))
+            elif name in blocked:
+                state = "blocked"
+            else:
+                state = "waiting"
+
+            entry: dict[str, Any] = {
+                "provider": name,
+                "label": provider.label,
+                "state": state,
+                "queued": q,
+                "running": r,
+                "hourly_limit": limit,
+                "recent_starts": recent,
+                "next_slot_seconds": next_slot_seconds,
+                "next_slot_at": (
+                    (datetime.now(UTC) + timedelta(seconds=next_slot_seconds)).isoformat()
+                    if next_slot_seconds is not None
+                    else None
+                ),
+            }
+            out.append(entry)
+        return out
+
     # ---- worker loop ---------------------------------------------------------------
 
     def _check_disk(self) -> bool:
