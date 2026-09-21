@@ -34,7 +34,7 @@ export function LogsPage() {
           <div key={i} className="flex gap-3 whitespace-pre-wrap">
             <span className="shrink-0 text-fg-dim">{l.time.slice(11, 19)}</span>
             <span className={cx("w-16 shrink-0", LEVEL_CLASS[l.level] ?? "")}>{l.level}</span>
-            <span className="shrink-0 text-fg-dim">{l.logger.replace("patrearr.", "")}</span>
+            <span className="shrink-0 text-fg-dim">{l.logger.replace("creeparr.", "")}</span>
             <span className={LEVEL_CLASS[l.level]}>{l.message}</span>
           </div>
         ))}

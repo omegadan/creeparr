@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from patrearr.db.enums import MediaKind, MediaSource
-from patrearr.providers.reddit.client import _post_from_json
-from patrearr.providers.reddit.provider import RedditProvider
+from creeparr.db.enums import MediaKind, MediaSource
+from creeparr.providers.reddit.client import _post_from_json
+from creeparr.providers.reddit.provider import RedditProvider
 
 
 def test_image_post():

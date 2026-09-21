@@ -14,8 +14,8 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-bg-0 px-4">
       <div className="card w-full max-w-sm p-6">
         <div className="mb-5 flex items-center gap-2">
-          <img src="/logo.svg" alt="" className="h-8 w-8" />
-          <span className="text-lg font-bold">Patrearr</span>
+          <img src="/logo.png" alt="" className="h-8 w-8" />
+          <span className="text-lg font-bold">Creeparr</span>
         </div>
         <label className="label">Password</label>
         <input

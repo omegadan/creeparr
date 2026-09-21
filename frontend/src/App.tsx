@@ -10,8 +10,8 @@ export function App() {
   const qc = useQueryClient();
   useEffect(() => {
     const onUnauth = () => qc.invalidateQueries({ queryKey: ["authState"] });
-    window.addEventListener("patrearr-unauthorized", onUnauth);
-    return () => window.removeEventListener("patrearr-unauthorized", onUnauth);
+    window.addEventListener("creeparr-unauthorized", onUnauth);
+    return () => window.removeEventListener("creeparr-unauthorized", onUnauth);
   }, [qc]);
   if (auth.isLoading) return <div className="flex min-h-screen items-center justify-center"><Spinner /></div>;
   if (auth.data?.auth_enabled && !auth.data.authenticated) return <LoginPage />;

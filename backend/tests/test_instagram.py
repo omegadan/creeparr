@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from patrearr.db.enums import MediaKind
-from patrearr.providers.instagram.client import (
+from creeparr.db.enums import MediaKind
+from creeparr.providers.instagram.client import (
     creator_from_items,
     group_into_posts,
 )
-from patrearr.providers.instagram.provider import InstagramProvider
+from creeparr.providers.instagram.provider import InstagramProvider
 
 
 def _items():
@@ -88,7 +88,7 @@ def test_username_parsing():
 
 
 def test_enabled_sources_respects_toggles(env, settings, session_factory, bus):
-    from patrearr.core.events import EventBus  # noqa: F401
+    from creeparr.core.events import EventBus  # noqa: F401
 
     prov = InstagramProvider(env, settings, session_factory, bus)
     settings.update(

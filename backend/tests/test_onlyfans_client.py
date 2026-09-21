@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from patrearr.db.enums import MediaKind
-from patrearr.patreon.transport import RateLimiter, TransportResponse
-from patrearr.providers.onlyfans.client import OnlyFansClient, OnlyFansCredentials
-from patrearr.providers.onlyfans.provider import OnlyFansProvider
-from patrearr.providers.onlyfans.signing import DynamicRules
+from creeparr.db.enums import MediaKind
+from creeparr.patreon.transport import RateLimiter, TransportResponse
+from creeparr.providers.onlyfans.client import OnlyFansClient, OnlyFansCredentials
+from creeparr.providers.onlyfans.provider import OnlyFansProvider
+from creeparr.providers.onlyfans.signing import DynamicRules
 from tests import onlyfans_fixtures as of
 
 RULES = DynamicRules("sp", "{}:{:x}", [0, 1], 0, "app-token", [])

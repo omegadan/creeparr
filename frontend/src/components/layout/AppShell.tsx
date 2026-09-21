@@ -32,8 +32,8 @@ export function AppShell() {
     <div className="flex h-full">
       <aside className="flex w-56 shrink-0 flex-col bg-[var(--color-sidebar-bg)] text-[var(--color-sidebar-fg)]">
         <Link to="/creators" className="flex items-center gap-2 px-4 py-4">
-          <img src="/logo.svg" alt="" className="h-7 w-7" />
-          <span className="text-base font-bold tracking-tight text-[var(--color-sidebar-fg)]">Patrearr</span>
+          <img src="/logo.png" alt="" className="h-7 w-7" />
+          <span className="text-base font-bold tracking-tight text-[var(--color-sidebar-fg)]">Creeparr</span>
         </Link>
         <nav className="flex-1 px-2">
           {NAV.map((item, i) =>

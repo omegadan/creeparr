@@ -17,7 +17,7 @@ export function SecuritySettings() {
 
   return (
     <div className="grid gap-5">
-      <Section title="Web UI password" description="Require a password to open Patrearr. Recommended if the app is reachable beyond your own machine.">
+      <Section title="Web UI password" description="Require a password to open Creeparr. Recommended if the app is reachable beyond your own machine.">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-fg-muted">Status:</span>
           <Badge tone={enabled ? "ok" : "muted"}>{enabled ? "protected" : "open (no password)"}</Badge>

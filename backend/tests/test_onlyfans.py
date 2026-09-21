@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from patrearr.db.enums import MediaKind
-from patrearr.providers.onlyfans.client import OnlyFansClient
-from patrearr.providers.onlyfans.signing import DynamicRules, sign_request
+from creeparr.db.enums import MediaKind
+from creeparr.providers.onlyfans.client import OnlyFansClient
+from creeparr.providers.onlyfans.signing import DynamicRules, sign_request
 
 RULES = DynamicRules(
     static_param="abc123",
@@ -61,7 +61,7 @@ def test_post_parsing_and_media_resolution():
     assert len(post.title) <= 200
     assert len(post.media) == 4
 
-    from patrearr.providers.onlyfans.provider import OnlyFansProvider
+    from creeparr.providers.onlyfans.provider import OnlyFansProvider
 
     prov = OnlyFansProvider.__new__(OnlyFansProvider)  # resolve_media needs no I/O
     specs = OnlyFansProvider.resolve_media(prov, post)
@@ -76,7 +76,7 @@ def test_no_access_post_yields_no_media():
     post = OnlyFansClient._post_from_json({"id": 1, "canViewMedia": False, "media": []})
     prov = object.__new__(
         __import__(
-            "patrearr.providers.onlyfans.provider", fromlist=["OnlyFansProvider"]
+            "creeparr.providers.onlyfans.provider", fromlist=["OnlyFansProvider"]
         ).OnlyFansProvider
     )
     assert prov.resolve_media(post) == []
@@ -101,7 +101,7 @@ def test_message_parsing_and_kind():
     assert pr.id == "msg-900" and pr.post_type == "onlyfans_message"
     assert pr.campaign_id == "123" and pr.current_user_can_view is True
     assert pr.raw["_kind"] == "message"
-    from patrearr.providers.onlyfans.client import rebuild_post
+    from creeparr.providers.onlyfans.client import rebuild_post
 
     rebuilt = rebuild_post({"data": pr.raw})
     assert rebuilt is not None and rebuilt.id == "msg-900"
@@ -120,7 +120,7 @@ def test_locked_ppv_message_not_viewable():
 
 
 def test_youtube_channel_url_and_entry_parsing():
-    from patrearr.providers.youtube import YouTubeProvider, _parse_rss
+    from creeparr.providers.youtube import YouTubeProvider, _parse_rss
 
     u = YouTubeProvider._channel_videos_url
     assert u("https://www.youtube.com/@TED").endswith("/@TED/videos")

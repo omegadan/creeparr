@@ -1,6 +1,16 @@
 export type Theme = "light" | "dark" | "auto";
 
-const KEY = "patrearr-theme";
+const KEY = "creeparr-theme";
+// The app used to store this under its old name; carry the preference over once.
+const LEGACY_KEY = "patrearr-theme";
+try {
+  if (localStorage.getItem(KEY) === null) {
+    const old = localStorage.getItem(LEGACY_KEY);
+    if (old !== null) localStorage.setItem(KEY, old);
+  }
+} catch {
+  /* storage unavailable */
+}
 
 export function getTheme(): Theme {
   try {
@@ -23,5 +33,5 @@ export function setTheme(theme: Theme): void {
     /* ignore */
   }
   applyTheme(theme);
-  window.dispatchEvent(new CustomEvent("patrearr-themechange"));
+  window.dispatchEvent(new CustomEvent("creeparr-themechange"));
 }

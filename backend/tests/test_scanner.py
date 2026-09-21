@@ -6,14 +6,14 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from patrearr.db.engine import session_scope
-from patrearr.db.enums import JobStatus, MediaStatus, PostStatus, ScanMode, ScanStatus
-from patrearr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
-from patrearr.patreon.media_resolver import resolve_media
-from patrearr.patreon.parsing import IncludedIndex, post_from_resource
-from patrearr.providers.errors import AuthError
-from patrearr.providers.models import PostPage
-from patrearr.scanner.scanner import Scanner
+from creeparr.db.engine import session_scope
+from creeparr.db.enums import JobStatus, MediaStatus, PostStatus, ScanMode, ScanStatus
+from creeparr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
+from creeparr.patreon.media_resolver import resolve_media
+from creeparr.patreon.parsing import IncludedIndex, post_from_resource
+from creeparr.providers.errors import AuthError
+from creeparr.providers.models import PostPage
+from creeparr.scanner.scanner import Scanner
 from tests import patreon_fixtures as fx
 
 
@@ -56,7 +56,7 @@ class FakeProvider:
         return resolve_media(pr)
 
     def post_from_raw(self, raw):
-        from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+        from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 
         data = raw.get("data")
         if not isinstance(data, dict):
@@ -211,7 +211,7 @@ async def test_auth_error_marks_invalid_and_raises(session_factory, settings, bu
 
 @pytest.mark.asyncio
 async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory, settings, bus):
-    from patrearr.scanner.scanner import reresolve_all
+    from creeparr.scanner.scanner import reresolve_all
 
     cid = make_creator(session_factory)
     bad_embed = fx.post_resource(

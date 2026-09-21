@@ -13,8 +13,8 @@ export function ThemeToggle() {
   const [theme, setLocal] = useState<Theme>(getTheme());
   useEffect(() => {
     const onChange = () => setLocal(getTheme());
-    window.addEventListener("patrearr-themechange", onChange);
-    return () => window.removeEventListener("patrearr-themechange", onChange);
+    window.addEventListener("creeparr-themechange", onChange);
+    return () => window.removeEventListener("creeparr-themechange", onChange);
   }, []);
   return (
     <div className="inline-flex rounded-lg border border-white/15 bg-white/5 p-0.5" role="group" aria-label="Theme">

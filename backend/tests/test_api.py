@@ -4,9 +4,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from patrearr.app import create_app
-from patrearr.db.enums import AuthState
-from patrearr.patreon.client import API_URL
+from creeparr.app import create_app
+from creeparr.db.enums import AuthState
+from creeparr.patreon.client import API_URL
 from tests import patreon_fixtures as fx
 from tests.conftest import json_response
 
@@ -161,7 +161,7 @@ def test_history_and_logs(api):
 
 
 def test_ui_auth_flow(env):
-    from patrearr.app import create_app
+    from creeparr.app import create_app
 
     app = create_app(env, start_background=False)
     with TestClient(app) as c:

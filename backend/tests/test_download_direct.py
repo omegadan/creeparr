@@ -6,12 +6,12 @@ from pathlib import Path
 import httpx
 import pytest
 
-from patrearr.downloader.handlers.base import (
+from creeparr.downloader.handlers.base import (
     PermanentDownloadError,
     ProgressReporter,
     RetryableDownloadError,
 )
-from patrearr.downloader.handlers.direct import download_direct
+from creeparr.downloader.handlers.direct import download_direct
 
 URL = "https://c10.patreonusercontent.com/video.mp4?token=x"
 
@@ -99,7 +99,7 @@ async def test_status_classification(client, respx_mock, tmp_path: Path, status,
 
 @pytest.mark.asyncio
 async def test_cancel_mid_stream(client, respx_mock, tmp_path: Path):
-    from patrearr.downloader.handlers.base import DownloadCancelled
+    from creeparr.downloader.handlers.base import DownloadCancelled
 
     async def stream():
         for _ in range(50):
@@ -113,7 +113,7 @@ async def test_cancel_mid_stream(client, respx_mock, tmp_path: Path):
 
 
 def test_try_hardlink_dedupe(tmp_path):
-    from patrearr.downloader.fs import try_hardlink
+    from creeparr.downloader.fs import try_hardlink
 
     src = tmp_path / "a.bin"
     src.write_bytes(b"same-content")
@@ -134,7 +134,7 @@ def test_embed_metadata_roundtrip(tmp_path):
         import pytest
 
         pytest.skip("ffmpeg not available")
-    from patrearr.downloader.metadata import embed_metadata
+    from creeparr.downloader.metadata import embed_metadata
 
     video = tmp_path / "v.mp4"
     subprocess.run(
@@ -163,7 +163,7 @@ def test_embed_metadata_roundtrip(tmp_path):
 def test_set_times(tmp_path):
     from datetime import UTC, datetime
 
-    from patrearr.downloader.fs import set_times
+    from creeparr.downloader.fs import set_times
 
     f = tmp_path / "v.mp4"
     f.write_bytes(b"x")

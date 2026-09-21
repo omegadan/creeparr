@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from patrearr.db.enums import MediaKind, MediaSource
-from patrearr.patreon.media_resolver import CreatorPrefs, is_hls_url, resolve_media
-from patrearr.patreon.parsing import IncludedIndex, post_from_resource
+from creeparr.db.enums import MediaKind, MediaSource
+from creeparr.patreon.media_resolver import CreatorPrefs, is_hls_url, resolve_media
+from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from tests import patreon_fixtures as fx
 
 

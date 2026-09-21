@@ -1,17 +1,17 @@
 services:
-  patrearr:
-    image: ghcr.io/omegadan/patrearr:latest
+  creeparr:
+    image: ghcr.io/omegadan/creeparr:latest
     # build: .   # uncomment to build from source instead
-    container_name: patrearr
+    container_name: creeparr
     environment:
       - PUID=${PUID:-99}
       - PGID=${PGID:-100}
       - TZ=${TZ:-America/Los_Angeles}
-      - PATREARR_LOG_LEVEL=${PATREARR_LOG_LEVEL:-INFO}
-      - PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans
-      - PATREARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube
-      - PATREARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram
-      - PATREARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit
+      - CREEPARR_LOG_LEVEL=${CREEPARR_LOG_LEVEL:-INFO}
+      - CREEPARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans
+      - CREEPARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube
+      - CREEPARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram
+      - CREEPARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit
     volumes:
       - ${CONFIG_DIR}:/config
       - ${DOWNLOAD_DIR}:/downloads

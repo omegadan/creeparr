@@ -25,7 +25,7 @@ mkdir -p /config/logs /config/cookies /downloads /downloads-onlyfans /downloads-
 # Best effort: on some shares (Unraid /mnt/user, NFS) chown can fail for individual
 # files; the app reports clearly if it cannot write, so do not abort startup here.
 if ! chown -R abc:abc /config 2>/dev/null; then
-    echo "patrearr: warning: could not change ownership of everything under /config"
+    echo "creeparr: warning: could not change ownership of everything under /config"
 fi
 # Never chown the media trees recursively: they may be huge and belong to other apps.
 chown abc:abc /downloads 2>/dev/null || true
@@ -34,14 +34,14 @@ chown abc:abc /downloads-youtube 2>/dev/null || true
 chown abc:abc /downloads-instagram 2>/dev/null || true
 chown abc:abc /downloads-reddit 2>/dev/null || true
 if ! gosu abc test -w /config; then
-    echo "patrearr: ERROR: /config is not writable by uid $PUID gid $PGID. Fix the host folder's permissions or PUID/PGID." >&2
+    echo "creeparr: ERROR: /config is not writable by uid $PUID gid $PGID. Fix the host folder's permissions or PUID/PGID." >&2
     exit 1
 fi
 for d in /downloads /downloads-onlyfans /downloads-youtube /downloads-instagram /downloads-reddit; do
     if ! gosu abc test -w "$d"; then
-        echo "patrearr: warning: $d is not writable by uid $PUID gid $PGID; downloads will pause until fixed" >&2
+        echo "creeparr: warning: $d is not writable by uid $PUID gid $PGID; downloads will pause until fixed" >&2
     fi
 done
 
-echo "patrearr: running as uid=$(id -u abc) gid=$(id -g abc), tz=${TZ:-UTC}"
+echo "creeparr: running as uid=$(id -u abc) gid=$(id -g abc), tz=${TZ:-UTC}"
 exec gosu abc "$@"

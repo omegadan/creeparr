@@ -2,7 +2,7 @@
 
 ## Environment variables
 
-See the table in the README. They cover paths, port and log level only. `PATREARR_ONLYFANS_DOWNLOAD_DIR` sends OnlyFans content to a separate directory; if unset it falls back to `PATREARR_DOWNLOAD_DIR`.
+See the table in the README. They cover paths, port and log level only. `CREEPARR_ONLYFANS_DOWNLOAD_DIR` sends OnlyFans content to a separate directory; if unset it falls back to `CREEPARR_DOWNLOAD_DIR`.
 
 ## Settings (stored in the database, edited in the UI or via `PUT /api/v1/settings`)
 

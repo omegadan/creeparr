@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from patrearr.patreon.cookies import CookieSet, parse_netscape
+from creeparr.patreon.cookies import CookieSet, parse_netscape
 
 COOKIES_TXT = """# Netscape HTTP Cookie File
 .patreon.com\tTRUE\t/\tTRUE\t1900000000\tsession_id\tfrom-file
@@ -49,7 +49,7 @@ YOUTUBE_COOKIES_SPACES = (
 
 
 def test_write_cookiefile_preserves_youtube_domains(tmp_path: Path):
-    from patrearr.patreon.cookies import write_cookiefile
+    from creeparr.patreon.cookies import write_cookiefile
 
     target = tmp_path / "cookies" / "youtube.txt"
     n = write_cookiefile(YOUTUBE_COOKIES, target)
@@ -66,7 +66,7 @@ def test_write_cookiefile_preserves_youtube_domains(tmp_path: Path):
 
 
 def test_write_cookiefile_normalises_spaces_to_tabs(tmp_path: Path):
-    from patrearr.patreon.cookies import write_cookiefile
+    from creeparr.patreon.cookies import write_cookiefile
 
     target = tmp_path / "youtube.txt"
     assert write_cookiefile(YOUTUBE_COOKIES_SPACES, target) == 1
@@ -76,7 +76,7 @@ def test_write_cookiefile_normalises_spaces_to_tabs(tmp_path: Path):
 
 
 def test_write_cookiefile_empty_returns_zero(tmp_path: Path):
-    from patrearr.patreon.cookies import write_cookiefile
+    from creeparr.patreon.cookies import write_cookiefile
 
     target = tmp_path / "youtube.txt"
     assert write_cookiefile("# Netscape HTTP Cookie File\n\n", target) == 0

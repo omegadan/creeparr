@@ -1,6 +1,6 @@
 # Patreon private API notes
 
-What Patrearr relies on, verified against gallery-dl, yt-dlp and patreon-dl source in
+What Creeparr relies on, verified against gallery-dl, yt-dlp and patreon-dl source in
 September 2026. Field names may change without notice; `post.raw_json` keeps everything so
 media can be re-resolved after a resolver fix.
 
@@ -33,5 +33,5 @@ DRM: not flagged by the API. The Mux master/variant playlist is fetched and chec
 `KEYFORMAT`. Plain `AES-128` is not DRM.
 
 Known issue: yt-dlp's own Patreon extractor returned 403 with exported cookie files in mid-2026
-(yt-dlp #17010) while live browser cookies worked; suspected TLS fingerprinting. Patrearr
+(yt-dlp #17010) while live browser cookies worked; suspected TLS fingerprinting. Creeparr
 avoids the extractor entirely and offers a `curl_cffi` backend.

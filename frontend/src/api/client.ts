@@ -26,7 +26,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/auth/")) {
-      window.dispatchEvent(new CustomEvent("patrearr-unauthorized"));
+      window.dispatchEvent(new CustomEvent("creeparr-unauthorized"));
     }
     const err = (data as { error?: { code?: string; message?: string; detail?: string } } | null)?.error;
     throw new ApiError(res.status, err?.code ?? "http_error", err?.message ?? `HTTP ${res.status}`, err?.detail);

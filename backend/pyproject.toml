@@ -1,5 +1,5 @@
 [project]
-name = "patrearr"
+name = "creeparr"
 version = "0.1.0"
 description = "Self-hosted, arr-style archiver for Patreon creators you support"
 requires-python = ">=3.12"
@@ -32,14 +32,14 @@ dev = [
 ]
 
 [project.scripts]
-patrearr = "patrearr.__main__:main"
+creeparr = "creeparr.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["patrearr"]
+packages = ["creeparr"]
 
 [tool.ruff]
 line-length = 100
@@ -54,7 +54,7 @@ ignore = ["B008"]
 # alembic is only present when dependencies are installed (CI), so without this
 # it is treated as third-party in CI but first-party locally, and the two
 # disagree on the blank line in migration files.
-known-first-party = ["patrearr"]
+known-first-party = ["creeparr"]
 known-third-party = ["alembic", "sqlalchemy"]
 
 [tool.pytest.ini_options]

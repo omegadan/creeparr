@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from patrearr.patreon.client import API_URL, BASE_URL, PatreonClient
-from patrearr.patreon.errors import (
+from creeparr.patreon.client import API_URL, BASE_URL, PatreonClient
+from creeparr.patreon.errors import (
     AuthError,
     CloudflareChallengeError,
     ForbiddenError,
@@ -220,7 +220,7 @@ async def test_stream_does_not_send_cookies_to_cdn(client, respx_mock):
 
 @pytest.mark.asyncio
 async def test_rate_limiter_adds_random_delay(monkeypatch):
-    import patrearr.patreon.transport as tp
+    import creeparr.patreon.transport as tp
 
     monkeypatch.setattr(tp.random, "uniform", lambda a, b: b)  # deterministic max
     slept: list[float] = []

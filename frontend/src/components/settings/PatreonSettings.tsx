@@ -9,7 +9,7 @@ export function PatreonSettings({ settings }: { settings: Settings }) {
   return (
     <div className="grid gap-5">
       <ProviderAccount name="patreon" settings={settings} />
-      <Section title="Patreon requests" description="How Patrearr talks to patreon.com. Lower the rate or add a random delay if requests get blocked.">
+      <Section title="Patreon requests" description="How Creeparr talks to patreon.com. Lower the rate or add a random delay if requests get blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="HTTP backend" hint="curl_cffi impersonates Chrome's TLS fingerprint (helps with Cloudflare).">
             <select className="input" value={f.form.http_backend} onChange={(e) => f.set("http_backend", e.target.value as "httpx" | "curl_cffi")}>

@@ -15,13 +15,13 @@ ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
-    PATREARR_CONFIG_DIR=/config \
-    PATREARR_DOWNLOAD_DIR=/downloads \
-    PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans \
-    PATREARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube \
-    PATREARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram \
-    PATREARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit \
-    PATREARR_PORT=7979 \
+    CREEPARR_CONFIG_DIR=/config \
+    CREEPARR_DOWNLOAD_DIR=/downloads \
+    CREEPARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans \
+    CREEPARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube \
+    CREEPARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram \
+    CREEPARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit \
+    CREEPARR_PORT=7979 \
     PUID=1000 \
     PGID=1000 \
     TZ=Etc/UTC
@@ -53,7 +53,7 @@ RUN uv sync --frozen --no-dev --no-install-project --extra impersonate
 
 COPY backend/ ./
 RUN uv sync --frozen --no-dev --extra impersonate
-COPY --from=frontend /src/dist/ ./patrearr/static/
+COPY --from=frontend /src/dist/ ./creeparr/static/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
@@ -63,4 +63,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fs http://localhost:7979/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "-m", "patrearr"]
+CMD ["python", "-m", "creeparr"]

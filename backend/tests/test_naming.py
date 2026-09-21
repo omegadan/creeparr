@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from patrearr.core.naming import render_template, sanitize_component, split_name, unique_path
+from creeparr.core.naming import render_template, sanitize_component, split_name, unique_path
 
 
 def test_sanitize_illegal_and_whitespace():
@@ -53,7 +53,7 @@ def test_split_name_and_unique_path(tmp_path: Path):
 
 
 def test_legacy_database_is_adopted(tmp_path: Path):
-    from patrearr.config import EnvConfig
+    from creeparr.config import EnvConfig
 
     cfg = tmp_path / "config"
     cfg.mkdir()
@@ -61,13 +61,13 @@ def test_legacy_database_is_adopted(tmp_path: Path):
     (cfg / "patreonarr.db-wal").write_bytes(b"wal")
     env = EnvConfig(config_dir=cfg, download_dir=tmp_path / "dl")
     env.ensure_dirs()
-    assert (cfg / "patrearr.db").read_bytes() == b"old"
-    assert (cfg / "patrearr.db-wal").exists()
+    assert (cfg / "creeparr.db").read_bytes() == b"old"
+    assert (cfg / "creeparr.db-wal").exists()
     assert not (cfg / "patreonarr.db").exists()
 
 
 def test_download_root_per_provider(tmp_path: Path):
-    from patrearr.config import EnvConfig
+    from creeparr.config import EnvConfig
 
     base = tmp_path / "dl"
     of = tmp_path / "dl-of"
@@ -82,7 +82,7 @@ def test_download_root_per_provider(tmp_path: Path):
 
 
 def test_html_to_text():
-    from patrearr.downloader.metadata import html_to_text
+    from creeparr.downloader.metadata import html_to_text
 
     assert html_to_text("<p>Hello <b>world</b> &amp; more</p>") == "Hello world & more"
     assert html_to_text(None) == ""

@@ -3,7 +3,7 @@
 **/__pycache__
 **/node_modules
 frontend/dist
-backend/patrearr/static
+backend/creeparr/static
 backend/tests
 config
 downloads
