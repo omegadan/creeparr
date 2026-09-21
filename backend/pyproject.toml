@@ -49,6 +49,14 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["B008"]
 
+[tool.ruff.lint.isort]
+# Pin import classification so grouping is deterministic across environments.
+# alembic is only present when dependencies are installed (CI), so without this
+# it is treated as third-party in CI but first-party locally, and the two
+# disagree on the blank line in migration files.
+known-first-party = ["patrearr"]
+known-third-party = ["alembic", "sqlalchemy"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

@@ -5,9 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from alembic.config import Config
-
 from alembic import command
+from alembic.config import Config
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 log = logging.getLogger(__name__)
