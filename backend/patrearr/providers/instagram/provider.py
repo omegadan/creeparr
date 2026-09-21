@@ -10,7 +10,7 @@ from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from patrearr.db.enums import MediaKind, MediaSource
-from patrearr.patreon.cookies import CookieSet
+from patrearr.patreon.cookies import CookieSet, write_cookiefile
 from patrearr.patreon.transport import HttpxTransport, TransportResponse
 from patrearr.providers.base import ProviderService
 from patrearr.providers.errors import NotConfigured, NotFoundError, TransportFailure
@@ -56,7 +56,9 @@ class InstagramProvider(ProviderService):
         cookies_txt = c.get("cookies_txt", s.cookies_txt)
         sid = c.get("sessionid", s.sessionid)
         if cookies_txt:
-            cs = CookieSet.from_settings(None, cookies_txt)
+            cs = CookieSet.from_settings(
+                None, cookies_txt, domain="instagram.com", session_name="sessionid"
+            )
             extra = {k: v for k, v in cs.extra.items()}
             if not sid and cs.session_id:
                 sid = cs.session_id
@@ -80,10 +82,13 @@ class InstagramProvider(ProviderService):
         await self._transport.aclose()
 
     def write_cookie_file(self) -> None:
-        creds = self._creds()
+        s = self.settings.get().instagram
         try:
+            if s.cookies_txt.strip() and write_cookiefile(s.cookies_txt, self.cookie_file):
+                return
+            creds = self._creds()
             if creds.is_configured:
-                cs = CookieSet(session_id=None, extra=creds.cookies())
+                cs = CookieSet(session_id=None, extra=creds.cookies(), domain="instagram.com")
                 cs.write_netscape(self.cookie_file)
             elif self.cookie_file.exists():
                 self.cookie_file.unlink()

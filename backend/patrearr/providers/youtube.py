@@ -20,7 +20,7 @@ import httpx
 import yt_dlp
 
 from patrearr.db.enums import AuthState, MediaKind, MediaSource
-from patrearr.patreon.cookies import CookieSet
+from patrearr.patreon.cookies import write_cookiefile
 from patrearr.patreon.transport import TransportResponse
 from patrearr.providers.base import ProviderService
 from patrearr.providers.errors import NotFoundError, ProviderError
@@ -89,7 +89,16 @@ class YouTubeProvider(ProviderService):
         cookies_txt = self.group_settings().cookies_txt
         try:
             if cookies_txt.strip():
-                CookieSet.from_settings(None, cookies_txt).write_netscape(self.cookie_file)
+                n = write_cookiefile(cookies_txt, self.cookie_file)
+                if n:
+                    log.info("wrote %d YouTube cookies to %s", n, self.cookie_file)
+                else:
+                    log.warning(
+                        "YouTube cookies.txt had no usable cookie lines; expected Netscape "
+                        "format (first line '# Netscape HTTP Cookie File')"
+                    )
+                    if self.cookie_file.exists():
+                        self.cookie_file.unlink()
             elif self.cookie_file.exists():
                 self.cookie_file.unlink()
         except OSError as exc:

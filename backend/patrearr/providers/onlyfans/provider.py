@@ -149,8 +149,9 @@ class OnlyFansProvider(ProviderService):
         creds = self._creds()
         try:
             if creds.is_configured:
-                cs = CookieSet.from_settings(None, creds.cookies_txt)
+                cs = CookieSet.from_settings(None, creds.cookies_txt, domain="onlyfans.com")
                 cs.extra.update({"sess": creds.sess, "auth_id": creds.auth_id})
+                cs.domain = "onlyfans.com"
                 cs.write_netscape(self.cookie_file)
             elif self.cookie_file.exists():
                 self.cookie_file.unlink()
