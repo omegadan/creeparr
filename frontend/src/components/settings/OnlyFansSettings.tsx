@@ -4,6 +4,7 @@ import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
 import { num, useSettingsForm } from "./useSettingsForm";
+import { ProviderAccount } from "./ProviderAccount";
 
 export function OnlyFansSettings({ settings }: { settings: Settings }) {
   const f = useSettingsForm(settings, "onlyfans");
@@ -18,6 +19,7 @@ export function OnlyFansSettings({ settings }: { settings: Settings }) {
           request rate low and do not redistribute anything you download.
         </div>
       </div>
+      <ProviderAccount name="onlyfans" settings={settings} />
       <Section title="OnlyFans behaviour" description="Signing rules are fetched from the URL below and cached for an hour. Change these only if requests are being blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="HTTP backend" hint="curl_cffi impersonates Chrome's TLS fingerprint.">

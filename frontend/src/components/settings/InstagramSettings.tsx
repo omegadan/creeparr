@@ -4,6 +4,7 @@ import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
 import { num, useSettingsForm } from "./useSettingsForm";
+import { ProviderAccount } from "./ProviderAccount";
 
 export function InstagramSettings({ settings }: { settings: Settings }) {
   const f = useSettingsForm(settings, "instagram");
@@ -19,6 +20,7 @@ export function InstagramSettings({ settings }: { settings: Settings }) {
           to lose.
         </div>
       </div>
+      <ProviderAccount name="instagram" settings={settings} />
       <Section title="Instagram" description="Add a profile in Add creator by URL or @handle. Instagram blocks automation aggressively; keep the request delay reasonable and use a dedicated account.">
         <div className="grid gap-3 sm:grid-cols-2">
           <Toggle checked={f.form.include_reels} onChange={(v) => f.set("include_reels", v)} label="Reels" />

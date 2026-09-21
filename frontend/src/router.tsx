@@ -26,7 +26,7 @@ export const router = createBrowserRouter([
           { path: "activity", element: <Navigate to="/activity/queue" replace /> },
           { path: "activity/queue", element: <QueuePage /> },
           { path: "activity/history", element: <HistoryPage /> },
-          { path: "settings", element: <Navigate to="/settings/accounts" replace /> },
+          { path: "settings", element: <Navigate to="/settings/patreon" replace /> },
           { path: "settings/:tab", element: <SettingsPage /> },
           { path: "system", element: <Navigate to="/system/status" replace /> },
           { path: "system/status", element: <SystemStatusPage /> },

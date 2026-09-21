@@ -2,11 +2,13 @@ import type { Settings } from "../../api/types";
 import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
 import { num, useSettingsForm } from "./useSettingsForm";
+import { ProviderAccount } from "./ProviderAccount";
 
 export function PatreonSettings({ settings }: { settings: Settings }) {
   const f = useSettingsForm(settings, "patreon");
   return (
     <div className="grid gap-5">
+      <ProviderAccount name="patreon" settings={settings} />
       <Section title="Patreon requests" description="How Patrearr talks to patreon.com. Lower the rate or add a random delay if requests get blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="HTTP backend" hint="curl_cffi impersonates Chrome's TLS fingerprint (helps with Cloudflare).">

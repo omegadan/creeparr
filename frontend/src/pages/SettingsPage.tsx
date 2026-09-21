@@ -2,7 +2,6 @@ import { NavLink, useParams } from "react-router";
 import { useSettings } from "../api/hooks/useSettings";
 import { PageHeader } from "../components/layout/AppShell";
 import { Spinner } from "../components/ui/Misc";
-import { AccountSettings } from "../components/settings/AccountSettings";
 import { OnlyFansSettings } from "../components/settings/OnlyFansSettings";
 import { InstagramSettings } from "../components/settings/InstagramSettings";
 import { RedditSettings } from "../components/settings/RedditSettings";
@@ -16,7 +15,6 @@ import { ScanSettings } from "../components/settings/ScanSettings";
 import { cx } from "../lib/format";
 
 const TABS = [
-  { id: "accounts", label: "Accounts" },
   { id: "patreon", label: "Patreon" },
   { id: "onlyfans", label: "OnlyFans" },
   { id: "youtube", label: "YouTube" },
@@ -30,7 +28,7 @@ const TABS = [
 ];
 
 export function SettingsPage() {
-  const tab = useParams().tab ?? "accounts";
+  const tab = useParams().tab ?? "patreon";
   const settings = useSettings();
   return (
     <>
@@ -46,7 +44,6 @@ export function SettingsPage() {
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : (
         <div className="max-w-3xl">
-          {tab === "accounts" && <AccountSettings settings={settings.data} />}
           {tab === "patreon" && <PatreonSettings settings={settings.data} />}
           {tab === "onlyfans" && <OnlyFansSettings settings={settings.data} />}
           {tab === "youtube" && <YouTubeSettings settings={settings.data} />}

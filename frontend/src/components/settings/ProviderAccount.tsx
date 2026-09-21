@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
-import type { ProviderInfo, Settings } from "../../api/types";
+import type { Settings } from "../../api/types";
 import { useProviders } from "../../api/hooks/useCreators";
 import { useClearAuth, useSetAuth, useTestAuth, useUpdateSettings } from "../../api/hooks/useSettings";
 import { Section, Field } from "../ui/Misc";
@@ -36,27 +36,32 @@ const INTRO: Record<string, string> = {
   reddit: "Public subreddits and users work without login. Only add a Reddit app (client id + secret from reddit.com/prefs/apps, type: script) if Reddit blocks anonymous requests on your network.",
 };
 
-function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings: Settings }) {
+export function ProviderAccount({ name, settings }: { name: string; settings: Settings }) {
+  const providers = useProviders();
+  const provider = (providers.data ?? []).find((p) => p.name === name);
   const [form, setForm] = useState<Record<string, string>>({});
-  const test = useTestAuth(provider.name);
-  const setAuth = useSetAuth(provider.name);
-  const clear = useClearAuth(provider.name);
+  const test = useTestAuth(name);
+  const setAuth = useSetAuth(name);
+  const clear = useClearAuth(name);
   const { toast, error } = useToast();
   const update = useUpdateSettings();
+
+  if (!provider) return null;
+
   const auth = provider.auth;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const providerEnabled = ((settings as any)[provider.name]?.enabled ?? true) as boolean;
+  const providerEnabled = ((settings as any)[name]?.enabled ?? true) as boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const stored = (settings as any)[provider.name] ?? {};
+  const stored = (settings as any)[name] ?? {};
 
   const filled = Object.fromEntries(Object.entries(form).filter(([, v]) => v.trim() !== ""));
   const hasInput = Object.keys(filled).length > 0;
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
-    <Section title={`${provider.label} account`} description={INTRO[provider.name]}>
+    <Section title="Account" description={INTRO[name]}>
       <div className="mb-1">
-        <Toggle checked={providerEnabled} onChange={(v) => update.mutate({ [provider.name]: { enabled: v } }, { onSuccess: () => toast(v ? `${provider.label} enabled` : `${provider.label} disabled`), onError: (e) => error(e) })} label={`${provider.label} enabled`} hint="When off, this provider is skipped entirely (no scans or downloads)." />
+        <Toggle checked={providerEnabled} onChange={(v) => update.mutate({ [name]: { enabled: v } }, { onSuccess: () => toast(v ? `${provider.label} enabled` : `${provider.label} disabled`), onError: (e) => error(e) })} label={`${provider.label} enabled`} hint="When off, this provider is skipped entirely (no scans or downloads)." />
       </div>
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="text-fg-muted">Status:</span>
@@ -89,14 +94,5 @@ function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings
         {test.data && (test.data.ok ? <CheckCircle2 className="h-4 w-4 text-ok" /> : <XCircle className="h-4 w-4 text-danger" />)}
       </div>
     </Section>
-  );
-}
-
-export function AccountSettings({ settings }: { settings: Settings }) {
-  const providers = useProviders();
-  return (
-    <div className="grid gap-5">
-      {(providers.data ?? []).map((p) => <ProviderCard key={p.name} provider={p} settings={settings} />)}
-    </div>
   );
 }
