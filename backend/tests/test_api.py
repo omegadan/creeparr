@@ -140,6 +140,19 @@ def test_queue_pause_resume_and_scan_conflict_when_auth_invalid(api):
     assert r.status_code == 202 and r.json()["queued"] == 0
 
 
+def test_queue_failed_routes_not_shadowed_by_job_id(api):
+    # DELETE /queue/failed and POST /queue/retry-failed must not be captured by
+    # the /queue/{job_id} routes (which only accept integers).
+    r = api.delete("/api/v1/queue/failed")
+    assert r.status_code == 200, r.text
+    assert "cleared" in r.json()
+    r = api.post("/api/v1/queue/retry-failed")
+    assert r.status_code == 200, r.text
+    assert "requeued" in r.json()
+    # A real integer job id still 404s cleanly rather than 422.
+    assert api.delete("/api/v1/queue/999999").status_code == 404
+
+
 def test_history_and_logs(api):
     r = api.get("/api/v1/history")
     assert r.status_code == 200 and r.json()["total"] >= 1  # auth_valid event from fixture

@@ -116,7 +116,7 @@ def get_queue(
     )
 
 
-@router.delete("/queue/{job_id}", status_code=204)
+@router.delete("/queue/{job_id:int}", status_code=204)
 def remove_job(
     job_id: int,
     skip_media: bool = Query(default=False),
@@ -144,7 +144,7 @@ def remove_job(
     services.bus.publish("queue.changed", {})
 
 
-@router.post("/queue/{job_id}/retry", status_code=202)
+@router.post("/queue/{job_id:int}/retry", status_code=202)
 def retry_job(
     job_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
