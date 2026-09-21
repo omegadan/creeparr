@@ -15,6 +15,7 @@ const PLACEHOLDER: Record<string, string> = {
   onlyfans: "https://onlyfans.com/somecreator",
   youtube: "https://www.youtube.com/@channel  or  @handle",
   instagram: "https://www.instagram.com/username  or  @username",
+  reddit: "r/subreddit   or   u/username",
 };
 
 export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () => void }) {

@@ -22,6 +22,8 @@ See the table in the README. They cover paths, port and log level only. `PATREAR
 | instagram.include_reels/stories/highlights/tagged | reels on | Which Instagram content to archive |
 | instagram.max_posts | 0 | Cap posts per profile (0 = all) |
 | instagram.sleep_request | 1.0 | Seconds between Instagram requests |
+| reddit.client_id / client_secret | "" | Optional Reddit "script" app for authenticated API access |
+| reddit.max_posts | 0 | Cap posts per subreddit/user (0 = Reddit's ~1000 listing cap) |
 | patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |
 | scan.interval_minutes | 60 | 0 disables scheduled scans |
 | scan.overlap_posts | 10 | Incremental stop condition |

@@ -36,7 +36,7 @@ export function SystemStatusPage() {
         <Stat label="Next scan" value={s.next_scan_at ? timeAgo(s.next_scan_at).replace("in ", "in ") : "disabled"} sub={s.scan.running ? `scanning creator #${s.scan.running.creator_id}` : `${s.scan.pending.length} pending`} />
         <Stat label="yt-dlp" value={s.ytdlp_version} sub={s.ffmpeg ? `ffmpeg: ${s.ffmpeg}` : "ffmpeg NOT FOUND"} />
         <Stat label="HTTP backend" value={s.http_backend} sub={s.curl_cffi_available ? "curl_cffi available" : "curl_cffi not installed"} />
-        <Stat label="Paths" value={<span className="font-mono text-sm">{s.paths.download_dir}</span>} sub={`config: ${s.paths.config_dir}${s.paths.onlyfans_download_dir ? ` · onlyfans: ${s.paths.onlyfans_download_dir}` : ""}${s.paths.youtube_download_dir ? ` · youtube: ${s.paths.youtube_download_dir}` : ""}${s.paths.instagram_download_dir ? ` · instagram: ${s.paths.instagram_download_dir}` : ""}`} />
+        <Stat label="Paths" value={<span className="font-mono text-sm">{s.paths.download_dir}</span>} sub={`config: ${s.paths.config_dir}${s.paths.onlyfans_download_dir ? ` · onlyfans: ${s.paths.onlyfans_download_dir}` : ""}${s.paths.youtube_download_dir ? ` · youtube: ${s.paths.youtube_download_dir}` : ""}${s.paths.instagram_download_dir ? ` · instagram: ${s.paths.instagram_download_dir}` : ""}${s.paths.reddit_download_dir ? ` · reddit: ${s.paths.reddit_download_dir}` : ""}`} />
       </div>
       <h2 className="mb-2 text-sm font-semibold text-fg-muted">Scheduled tasks</h2>
       <div className="card overflow-x-auto">

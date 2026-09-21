@@ -56,6 +56,7 @@ export const POST_TYPES: Record<string, string> = {
   instagram_story: "Story",
   instagram_highlight: "Highlight",
   instagram_tagged: "Tagged",
+  reddit_post: "Post",
 };
 
 export function postTypeLabel(t: string | null): string {

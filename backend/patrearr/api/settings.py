@@ -44,6 +44,9 @@ def get_settings(services: Services = Depends(get_services)) -> dict[str, Any]:
             if services.env.instagram_download_dir
             else None
         ),
+        "reddit_download_dir": (
+            str(services.env.reddit_download_dir) if services.env.reddit_download_dir else None
+        ),
         "port": services.env.port,
         "log_level": services.env.log_level,
         "ffmpeg": services.env.resolve_ffmpeg(),

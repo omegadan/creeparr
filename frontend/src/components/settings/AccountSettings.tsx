@@ -23,6 +23,8 @@ const FIELDS: Record<string, FieldSpec> = {
   auth_id: { label: "auth_id cookie", hint: "onlyfans.com cookie auth_id (your numeric user id)" },
   x_bc: { label: "x-bc token", hint: "Request header x-bc from any onlyfans.com/api2 request in the Network tab" },
   cookies_txt: { label: "cookies.txt (optional)", hint: "Full Netscape cookie export; extra cookies (cf_clearance) are forwarded", multiline: true, optional: true },
+  client_id: { label: "Reddit app client id", hint: "reddit.com/prefs/apps → create a \"script\" app → the id under the app name", optional: true },
+  client_secret: { label: "Reddit app secret", hint: "The \"secret\" field of your Reddit script app", optional: true },
 };
 
 const INTRO: Record<string, string> = {
@@ -30,6 +32,7 @@ const INTRO: Record<string, string> = {
   onlyfans: "Reads content your OnlyFans account is subscribed to. Signing rules are fetched automatically. OnlyFans is strict about automation; use a low request rate and expect DRM videos to be skipped.",
   youtube: "Public YouTube channels need no login. Add a cookies.txt only for members-only or age-restricted videos.",
   instagram: "Reads Instagram from your logged-in session. Copy the sessionid cookie from instagram.com in your browser. Instagram is strict about automation; use a dedicated account.",
+  reddit: "Public subreddits and users work without login. Only add a Reddit app (client id + secret from reddit.com/prefs/apps, type: script) if Reddit blocks anonymous requests on your network.",
 };
 
 function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings: Settings }) {

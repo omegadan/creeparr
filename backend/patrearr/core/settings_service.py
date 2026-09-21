@@ -61,6 +61,15 @@ class OnlyFansSettings(BaseModel):
         return self
 
 
+class RedditSettings(BaseModel):
+    client_id: str = ""
+    client_secret: str = ""
+    user_agent: str = ""
+    max_posts: int = Field(default=0, ge=0)
+    sleep_request: float = Field(default=0.6, ge=0.0, le=30)
+    downloads_per_hour: int = Field(default=0, ge=0)
+
+
 class InstagramSettings(BaseModel):
     sessionid: str = ""
     cookies_txt: str = ""
@@ -140,6 +149,7 @@ class AppSettings(BaseModel):
     onlyfans: OnlyFansSettings = Field(default_factory=OnlyFansSettings)
     youtube: YouTubeSettings = Field(default_factory=YouTubeSettings)
     instagram: InstagramSettings = Field(default_factory=InstagramSettings)
+    reddit: RedditSettings = Field(default_factory=RedditSettings)
     scan: ScanSettings = Field(default_factory=ScanSettings)
     downloads: DownloadSettings = Field(default_factory=DownloadSettings)
     naming: NamingSettings = Field(default_factory=NamingSettings)
@@ -154,6 +164,7 @@ SECRET_FIELDS: dict[str, set[str]] = {
     "security": {"password_hash"},
     "youtube": {"cookies_txt"},
     "instagram": {"sessionid", "cookies_txt"},
+    "reddit": {"client_secret"},
 }
 TEXT_SECRETS = {"cookies_txt"}
 

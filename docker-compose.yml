@@ -11,12 +11,14 @@ services:
       - PATREARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans
       - PATREARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube
       - PATREARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram
+      - PATREARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit
     volumes:
       - ${CONFIG_DIR}:/config
       - ${DOWNLOAD_DIR}:/downloads
       - ${ONLYFANS_DOWNLOAD_DIR}:/downloads-onlyfans
       - ${YOUTUBE_DOWNLOAD_DIR}:/downloads-youtube
       - ${INSTAGRAM_DOWNLOAD_DIR}:/downloads-instagram
+      - ${REDDIT_DOWNLOAD_DIR}:/downloads-reddit
     ports:
       - "${PORT:-7979}:7979"
     restart: unless-stopped

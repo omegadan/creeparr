@@ -153,6 +153,11 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
                 if services.env.instagram_download_dir
                 else None
             ),
+            "reddit_download_dir": (
+                str(services.env.reddit_download_dir)
+                if services.env.reddit_download_dir
+                else None
+            ),
         },
         "ffmpeg": ffmpeg,
         "ytdlp_version": yt_dlp.version.__version__,

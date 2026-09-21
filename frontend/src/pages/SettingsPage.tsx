@@ -5,6 +5,7 @@ import { Spinner } from "../components/ui/Misc";
 import { AccountSettings } from "../components/settings/AccountSettings";
 import { OnlyFansSettings } from "../components/settings/OnlyFansSettings";
 import { InstagramSettings } from "../components/settings/InstagramSettings";
+import { RedditSettings } from "../components/settings/RedditSettings";
 import { YouTubeSettings } from "../components/settings/YouTubeSettings";
 import { NotificationSettings } from "../components/settings/NotificationSettings";
 import { SecuritySettings } from "../components/settings/SecuritySettings";
@@ -20,6 +21,7 @@ const TABS = [
   { id: "onlyfans", label: "OnlyFans" },
   { id: "youtube", label: "YouTube" },
   { id: "instagram", label: "Instagram" },
+  { id: "reddit", label: "Reddit" },
   { id: "scanning", label: "Scanning" },
   { id: "downloads", label: "Downloads" },
   { id: "notifications", label: "Notifications" },
@@ -49,6 +51,7 @@ export function SettingsPage() {
           {tab === "onlyfans" && <OnlyFansSettings settings={settings.data} />}
           {tab === "youtube" && <YouTubeSettings settings={settings.data} />}
           {tab === "instagram" && <InstagramSettings settings={settings.data} />}
+          {tab === "reddit" && <RedditSettings settings={settings.data} />}
           {tab === "scanning" && <ScanSettings settings={settings.data} />}
           {tab === "downloads" && <DownloadSettings settings={settings.data} />}
           {tab === "notifications" && <NotificationSettings settings={settings.data} />}

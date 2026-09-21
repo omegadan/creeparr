@@ -7,7 +7,7 @@ import { ProgressBar } from "../ui/ProgressBar";
 import { Avatar } from "../ui/Misc";
 import { Badge } from "../ui/Badge";
 
-const PROVIDER_LABEL: Record<string, string> = { patreon: "Patreon", onlyfans: "OnlyFans", youtube: "YouTube", instagram: "Instagram" };
+const PROVIDER_LABEL: Record<string, string> = { patreon: "Patreon", onlyfans: "OnlyFans", youtube: "YouTube", instagram: "Instagram", reddit: "Reddit" };
 
 export function CreatorCard({ creator }: { creator: Creator }) {
   const patch = usePatchCreator(creator.id);
