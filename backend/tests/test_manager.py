@@ -199,3 +199,35 @@ async def test_recover_stale_jobs(env, session_factory, settings, bus, providers
         assert s.get(DownloadJob, job_id).status == JobStatus.QUEUED
         assert s.execute(select(MediaItem)).scalar_one().status == MediaStatus.QUEUED
     await providers.aclose_all()
+
+
+@pytest.mark.asyncio
+async def test_hourly_limit_persists_across_restart(env, session_factory, settings, bus, providers):
+    # One download already started within the last hour, recorded as a job row.
+    _, done_job = seed(session_factory, fx.native_video_post("p1", title="Ep 1"))
+    with session_scope(session_factory) as s:
+        j = s.get(DownloadJob, done_job)
+        j.status = JobStatus.COMPLETED
+        j.started_at = datetime.now(UTC)
+    # A second item is queued and waiting to download.
+    res2 = fx.native_video_post("p2", title="Ep 2")
+    page2 = fx.posts_page([res2])
+    pr2 = post_from_resource(res2, IncludedIndex(page2))
+    with session_scope(session_factory) as s:
+        creator = s.execute(select(Creator)).scalar_one()
+        post, _, _ = upsert_post(s, creator, pr2)
+        items = sync_media_items(s, creator, post, resolve_media(pr2))
+        enqueue_media(s, items[0])
+
+    settings.update({"patreon": {"downloads_per_hour": 1}})
+    # A brand-new manager (as after a restart, with empty in-memory state) must
+    # still count the persisted earlier start and refuse to exceed the limit.
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    assert mgr._claim_next("w0") is None
+    status = {p["provider"]: p for p in mgr.provider_status()}["patreon"]
+    assert status["state"] == "throttled" and status["recent_starts"] == 1
+    assert status["next_slot_at"] is not None
+
+    # Raising the limit frees it, proving the block was the persisted count.
+    settings.update({"patreon": {"downloads_per_hour": 5}})
+    assert mgr._claim_next("w0") is not None

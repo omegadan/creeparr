@@ -9,7 +9,6 @@ import mimetypes
 import random
 import threading
 import time
-from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -68,6 +67,13 @@ log = logging.getLogger(__name__)
 PAUSED_KEY = "downloads_paused"
 TMP_PREFIX = ".patrearr-tmp-"
 EMBED_SOURCES = {MediaSource.EMBED_YOUTUBE, MediaSource.EMBED_VIMEO, MediaSource.EMBED_OTHER}
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Aggregates like func.min may return a naive datetime; treat it as UTC."""
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 @dataclass
@@ -131,7 +137,6 @@ class DownloadManager:
         self._last_disk_check = 0.0
         self._disk_ok = True
         self._claim_lock = threading.Lock()
-        self._recent_starts: dict[str, deque[float]] = defaultdict(deque)
 
     # ---- lifecycle -----------------------------------------------------------------
 
@@ -213,8 +218,7 @@ class DownloadManager:
         """A queue-oriented status for each provider, for the Activity page."""
         disabled = self.providers.disabled_names()
         blocked = self.providers.blocked_names()
-        now_mono = time.monotonic()
-        cutoff = now_mono - 3600
+        now = datetime.now(UTC)
         with session_scope(self._factory) as s:
             rows = s.execute(
                 select(Creator.provider, DownloadJob.status, func.count())
@@ -222,6 +226,7 @@ class DownloadManager:
                 .where(DownloadJob.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]))
                 .group_by(Creator.provider, DownloadJob.status)
             ).all()
+            started = self._hourly_starts(s)
         queued: dict[str, int] = {}
         running: dict[str, int] = {}
         for provider, status, count in rows:
@@ -233,10 +238,10 @@ class DownloadManager:
             q = int(queued.get(name, 0))
             r = int(running.get(name, 0))
             limit = self._provider_hourly_limit(name)
-            window = self._recent_starts.get(name)
-            recent = sum(1 for t in window if t >= cutoff) if window else 0
+            recent, oldest = started.get(name, (0, None))
 
             next_slot_seconds: int | None = None
+            next_slot_at: datetime | None = None
             if name in disabled:
                 state = "disabled"
             elif self.paused:
@@ -247,9 +252,9 @@ class DownloadManager:
                 state = "idle"
             elif limit > 0 and recent >= limit:
                 state = "throttled"
-                active = sorted(t for t in (window or ()) if t >= cutoff)
-                if active:
-                    next_slot_seconds = max(0, int(active[0] + 3600 - now_mono))
+                if oldest is not None:
+                    next_slot_at = oldest + timedelta(hours=1)
+                    next_slot_seconds = max(0, int((next_slot_at - now).total_seconds()))
             elif name in blocked:
                 state = "blocked"
             else:
@@ -264,11 +269,7 @@ class DownloadManager:
                 "hourly_limit": limit,
                 "recent_starts": recent,
                 "next_slot_seconds": next_slot_seconds,
-                "next_slot_at": (
-                    (datetime.now(UTC) + timedelta(seconds=next_slot_seconds)).isoformat()
-                    if next_slot_seconds is not None
-                    else None
-                ),
+                "next_slot_at": next_slot_at.isoformat() if next_slot_at is not None else None,
             }
             out.append(entry)
         return out
@@ -335,18 +336,28 @@ class DownloadManager:
         group = getattr(self.settings.get(), provider, None)
         return int(getattr(group, "downloads_per_hour", 0) or 0)
 
-    def _provider_allowed(self, provider: str) -> bool:
+    def _hourly_starts(self, s: Session) -> dict[str, tuple[int, datetime | None]]:
+        """Downloads started per provider in the last hour, from persisted job rows.
+
+        Derived from DownloadJob.started_at so the rate-limit window survives a
+        restart (an in-memory counter would reset and allow a fresh burst).
+        Returns {provider: (count, oldest_start)}.
+        """
+        cutoff = datetime.now(UTC) - timedelta(hours=1)
+        rows = s.execute(
+            select(Creator.provider, func.count(), func.min(DownloadJob.started_at))
+            .select_from(DownloadJob)
+            .join(Creator, Creator.id == DownloadJob.creator_id)
+            .where(DownloadJob.started_at.is_not(None), DownloadJob.started_at >= cutoff)
+            .group_by(Creator.provider)
+        ).all()
+        return {provider: (int(count), _as_utc(oldest)) for provider, count, oldest in rows}
+
+    def _provider_allowed(self, provider: str, started: dict[str, tuple[int, Any]]) -> bool:
         limit = self._provider_hourly_limit(provider)
         if limit <= 0:
             return True
-        window = self._recent_starts[provider]
-        cutoff = time.monotonic() - 3600
-        while window and window[0] < cutoff:
-            window.popleft()
-        return len(window) < limit
-
-    def _record_start(self, provider: str) -> None:
-        self._recent_starts[provider].append(time.monotonic())
+        return started.get(provider, (0, None))[0] < limit
 
     def _claim_next(self, worker_id: str) -> JobContext | None:
         with self._claim_lock:
@@ -364,6 +375,7 @@ class DownloadManager:
                     .group_by(DownloadJob.creator_id)
                 ).all()
             )
+            started = self._hourly_starts(s)
             candidates = (
                 s.execute(
                     select(DownloadJob)
@@ -390,7 +402,7 @@ class DownloadManager:
                     continue
                 if provider in blocked and media.source not in EMBED_SOURCES:
                     continue
-                if not self._provider_allowed(provider):
+                if not self._provider_allowed(provider, started):
                     continue
                 # Conditional update so a job can never be claimed twice.
                 claimed = s.execute(
@@ -409,7 +421,8 @@ class DownloadManager:
                 s.refresh(job)
                 media.status = MediaStatus.DOWNLOADING
                 s.flush()
-                self._record_start(provider)
+                # The claim above set started_at; the persisted row is now the
+                # source of truth for the per-hour rate-limit window.
                 ctx = self._context(job, media, media.post, media.post.creator)
                 self.bus.publish(
                     "job.started",
