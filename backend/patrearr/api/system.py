@@ -154,9 +154,7 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
                 else None
             ),
             "reddit_download_dir": (
-                str(services.env.reddit_download_dir)
-                if services.env.reddit_download_dir
-                else None
+                str(services.env.reddit_download_dir) if services.env.reddit_download_dir else None
             ),
         },
         "ffmpeg": ffmpeg,

@@ -20,6 +20,7 @@ export interface Creator {
   avatar_url: string | null;
   cover_url: string | null;
   is_nsfw: boolean | null;
+  enabled: boolean;
   monitored: boolean;
   auto_download: boolean;
   include_images: boolean;
@@ -38,6 +39,7 @@ export interface Creator {
 }
 
 export interface CreatorDefaults {
+  enabled?: boolean;
   monitored?: boolean;
   auto_download?: boolean;
   include_images?: boolean;
@@ -239,6 +241,7 @@ export interface AuthStatus {
 
 export interface Settings {
   patreon: {
+    enabled: boolean;
     session_id: string;
     cookies_txt: string;
     has_cookies_txt: boolean;
@@ -251,6 +254,7 @@ export interface Settings {
     impersonate_target: string;
   };
   onlyfans: {
+    enabled: boolean;
     sess: string;
     auth_id: string;
     x_bc: string;
@@ -268,12 +272,14 @@ export interface Settings {
     impersonate_target: string;
   };
   youtube: {
+    enabled: boolean;
     cookies_txt: string;
     has_cookies_txt: boolean;
     max_videos: number;
     downloads_per_hour: number;
   };
   instagram: {
+    enabled: boolean;
     sessionid: string;
     cookies_txt: string;
     has_cookies_txt: boolean;
@@ -287,6 +293,7 @@ export interface Settings {
     downloads_per_hour: number;
   };
   reddit: {
+    enabled: boolean;
     client_id: string;
     client_secret: string;
     user_agent: string;

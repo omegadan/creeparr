@@ -112,6 +112,12 @@ def classify_ytdlp_error(exc: Exception) -> Exception:
         return PermanentDownloadError(f"unsupported URL: {exc}", "unsupported")
     msg = str(exc)
     low = msg.lower()
+    if "sign in" in low or "use --cookies" in low or "cookies" in low or "confirm your age" in low:
+        return PermanentDownloadError(
+            "YouTube requires a signed-in session for this video. Add YouTube cookies in "
+            "Settings -> Accounts -> YouTube, then retry.",
+            "needs_cookies",
+        )
     if any(p in low for p in _PERMANENT_PATTERNS):
         return PermanentDownloadError(msg, "unavailable")
     return RetryableDownloadError(msg, "ytdlp")

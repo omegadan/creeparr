@@ -70,6 +70,11 @@ class ProviderService(ABC):
     def is_configured(self) -> bool: ...
 
     @property
+    def enabled(self) -> bool:
+        """False when the whole provider is switched off in settings."""
+        return bool(getattr(self.group_settings(), "enabled", True))
+
+    @property
     def cookie_file(self) -> Path:
         return self.env.cookies_dir / f"{self.name}.txt"
 

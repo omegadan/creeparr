@@ -73,7 +73,12 @@ class ScanManager:
         with session_scope(self._factory) as s:
             creator = s.get(Creator, creator_id)
             provider_name = creator.provider if creator else "patreon"
+            creator_enabled = creator.enabled if creator else True
         provider = self.providers.get(provider_name)
+        if not provider.enabled:
+            raise Conflict(f"{provider.label} is disabled in Settings", code="provider_disabled")
+        if not creator_enabled:
+            raise Conflict("this creator is disabled", code="creator_disabled")
         if provider.auth_blocked:
             raise Conflict(
                 f"{provider.label} session is not valid; fix it in Settings before scanning",
@@ -93,15 +98,22 @@ class ScanManager:
         return True
 
     def request_scan_all(self, mode: ScanMode = ScanMode.AUTO, trigger: str = "manual") -> int:
+        disabled = self.providers.disabled_names()
         with session_scope(self._factory) as s:
-            ids = s.execute(select(Creator.id).where(Creator.monitored.is_(True))).scalars().all()
+            rows = s.execute(
+                select(Creator.id, Creator.provider).where(
+                    Creator.monitored.is_(True), Creator.enabled.is_(True)
+                )
+            ).all()
         n = 0
-        for cid in ids:
+        for cid, provider in rows:
+            if provider in disabled:
+                continue
             try:
                 if self.request_scan(cid, mode, trigger):
                     n += 1
             except Conflict:
-                break
+                continue
         return n
 
     def cancel_current(self) -> bool:

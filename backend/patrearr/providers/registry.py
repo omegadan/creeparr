@@ -38,6 +38,10 @@ class ProviderRegistry:
         """Providers whose session is invalid/unconfigured (native downloads must wait)."""
         return {p.name for p in self if p.auth_blocked}
 
+    def disabled_names(self) -> set[str]:
+        """Providers switched off entirely in settings."""
+        return {p.name for p in self if not p.enabled}
+
     async def rebuild_all(self) -> None:
         for p in self:
             await p.rebuild()

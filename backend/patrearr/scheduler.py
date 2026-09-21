@@ -177,13 +177,19 @@ class SchedulerService:
     async def _scan_monitored(self) -> dict[str, int]:
         global_interval = self.services.settings.get().scan.interval_minutes
         now = datetime.now(UTC)
+        disabled = self.services.providers.disabled_names()
         due: list[int] = []
         with session_scope(self.services.session_factory) as s:
-            for cid, last_scan, override in s.execute(
-                select(Creator.id, Creator.last_scan_at, Creator.scan_interval_minutes).where(
-                    Creator.monitored.is_(True)
-                )
+            for cid, provider, last_scan, override in s.execute(
+                select(
+                    Creator.id,
+                    Creator.provider,
+                    Creator.last_scan_at,
+                    Creator.scan_interval_minutes,
+                ).where(Creator.monitored.is_(True), Creator.enabled.is_(True))
             ).all():
+                if provider in disabled:
+                    continue
                 interval = override if override is not None else global_interval
                 if not interval or interval <= 0:
                     continue

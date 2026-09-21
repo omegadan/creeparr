@@ -19,6 +19,7 @@ DEFAULT_USER_AGENT = "Patreon/126.9.0.15 (Android; Android 14; Scale/2.10)"
 
 
 class PatreonSettings(BaseModel):
+    enabled: bool = True
     session_id: str = ""
     cookies_txt: str = ""
     user_agent: str = DEFAULT_USER_AGENT
@@ -37,6 +38,7 @@ class PatreonSettings(BaseModel):
 
 
 class OnlyFansSettings(BaseModel):
+    enabled: bool = True
     sess: str = ""
     auth_id: str = ""
     x_bc: str = ""
@@ -62,6 +64,7 @@ class OnlyFansSettings(BaseModel):
 
 
 class RedditSettings(BaseModel):
+    enabled: bool = True
     client_id: str = ""
     client_secret: str = ""
     user_agent: str = ""
@@ -71,6 +74,7 @@ class RedditSettings(BaseModel):
 
 
 class InstagramSettings(BaseModel):
+    enabled: bool = True
     sessionid: str = ""
     cookies_txt: str = ""
     user_agent: str = ""
@@ -84,6 +88,7 @@ class InstagramSettings(BaseModel):
 
 
 class YouTubeSettings(BaseModel):
+    enabled: bool = True
     cookies_txt: str = ""
     max_videos: int = Field(default=0, ge=0)
     downloads_per_hour: int = Field(default=0, ge=0)

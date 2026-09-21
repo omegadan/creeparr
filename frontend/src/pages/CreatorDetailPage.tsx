@@ -51,6 +51,7 @@ export function CreatorDetailPage() {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-bold">{c.name}</h1>
+              {!c.enabled && <Badge tone="danger">disabled</Badge>}
               {!c.monitored && <Badge tone="muted">not monitored</Badge>}
               {!c.auto_download && <Badge tone="warn">manual download</Badge>}
               {c.is_nsfw && <Badge tone="danger">18+</Badge>}
@@ -77,7 +78,7 @@ export function CreatorDetailPage() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" icon={<RefreshCw className="h-3.5 w-3.5" />} onClick={() => doScan("auto")} loading={scan.isPending}>Scan now</Button>
             <Button size="sm" onClick={() => doScan("full")}>Full rescan</Button>
-            <Button size="sm" icon={<Settings2 className="h-3.5 w-3.5" />} onClick={() => setEditing({ monitored: c.monitored, auto_download: c.auto_download, include_images: c.include_images, include_audio: c.include_audio, include_attachments: c.include_attachments, download_since: c.download_since, folder_name: c.folder_name })}>
+            <Button size="sm" icon={<Settings2 className="h-3.5 w-3.5" />} onClick={() => setEditing({ enabled: c.enabled, monitored: c.monitored, auto_download: c.auto_download, include_images: c.include_images, include_audio: c.include_audio, include_attachments: c.include_attachments, download_since: c.download_since, folder_name: c.folder_name })}>
               Options
             </Button>
             <Button size="sm" variant="danger" icon={<Trash2 className="h-3.5 w-3.5" />} onClick={() => setConfirmDelete(true)}>Remove</Button>

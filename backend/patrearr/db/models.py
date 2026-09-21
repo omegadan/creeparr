@@ -83,6 +83,7 @@ class Creator(TimestampMixin, Base):
     cover_url: Mapped[str | None] = mapped_column(String(2048))
     is_nsfw: Mapped[bool | None] = mapped_column(Boolean)
 
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     monitored: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     auto_download: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     include_images: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

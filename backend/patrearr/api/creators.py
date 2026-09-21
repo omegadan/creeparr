@@ -116,6 +116,7 @@ def load_creator(session: Session, creator_id: int) -> Creator:
 def _defaults(services: Services, body: CreatorDefaults) -> dict[str, Any]:
     scan = services.settings.get().scan
     return {
+        "enabled": True if body.enabled is None else body.enabled,
         "monitored": True if body.monitored is None else body.monitored,
         "auto_download": scan.default_auto_download
         if body.auto_download is None

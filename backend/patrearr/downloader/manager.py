@@ -290,6 +290,7 @@ class DownloadManager:
 
     def _claim_next_locked(self, worker_id: str) -> JobContext | None:
         blocked = self.providers.blocked_names()
+        disabled = self.providers.disabled_names()
         cap = self.settings.get().downloads.max_per_creator
         with session_scope(self._factory) as s:
             running_counts = dict(
@@ -321,6 +322,8 @@ class DownloadManager:
                 if media is None or media.post is None:
                     continue
                 provider = media.post.creator.provider
+                if provider in disabled or not media.post.creator.enabled:
+                    continue
                 if provider in blocked and media.source not in EMBED_SOURCES:
                     continue
                 if not self._provider_allowed(provider):

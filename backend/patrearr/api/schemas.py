@@ -54,6 +54,7 @@ class CreatorOut(ORMModel):
     avatar_url: str | None
     cover_url: str | None
     is_nsfw: bool | None
+    enabled: bool
     monitored: bool
     auto_download: bool
     include_images: bool
@@ -72,6 +73,7 @@ class CreatorOut(ORMModel):
 
 
 class CreatorDefaults(BaseModel):
+    enabled: bool | None = None
     monitored: bool | None = None
     auto_download: bool | None = None
     include_images: bool | None = None

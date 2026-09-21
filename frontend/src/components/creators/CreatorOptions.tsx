@@ -13,6 +13,7 @@ export function CreatorOptions({ value, onChange, showFolder, compact }: Props) 
   const set = (k: keyof CreatorDefaults, v: unknown) => onChange({ ...value, [k]: v });
   return (
     <div className={compact ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
+      <Toggle checked={value.enabled ?? true} onChange={(v) => set("enabled", v)} label="Enabled" hint="Master switch: when off, no scans or downloads for this creator" />
       <Toggle checked={value.monitored ?? true} onChange={(v) => set("monitored", v)} label="Monitored" hint="Include in scheduled scans" />
       <Toggle checked={value.auto_download ?? true} onChange={(v) => set("auto_download", v)} label="Auto download" hint="Queue new media automatically" />
       <Toggle checked={value.include_images ?? false} onChange={(v) => set("include_images", v)} label="Images" hint="Archive image galleries" />

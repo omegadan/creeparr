@@ -2,10 +2,11 @@ import { useState } from "react";
 import { CheckCircle2, XCircle } from "lucide-react";
 import type { ProviderInfo, Settings } from "../../api/types";
 import { useProviders } from "../../api/hooks/useCreators";
-import { useClearAuth, useSetAuth, useTestAuth } from "../../api/hooks/useSettings";
+import { useClearAuth, useSetAuth, useTestAuth, useUpdateSettings } from "../../api/hooks/useSettings";
 import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
+import { Toggle } from "../ui/Toggle";
 import { useToast } from "../ui/Toast";
 import { formatDate } from "../../lib/format";
 
@@ -41,7 +42,10 @@ function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings
   const setAuth = useSetAuth(provider.name);
   const clear = useClearAuth(provider.name);
   const { toast, error } = useToast();
+  const update = useUpdateSettings();
   const auth = provider.auth;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const providerEnabled = ((settings as any)[provider.name]?.enabled ?? true) as boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stored = (settings as any)[provider.name] ?? {};
 
@@ -51,6 +55,9 @@ function ProviderCard({ provider, settings }: { provider: ProviderInfo; settings
 
   return (
     <Section title={`${provider.label} account`} description={INTRO[provider.name]}>
+      <div className="mb-1">
+        <Toggle checked={providerEnabled} onChange={(v) => update.mutate({ [provider.name]: { enabled: v } }, { onSuccess: () => toast(v ? `${provider.label} enabled` : `${provider.label} disabled`), onError: (e) => error(e) })} label={`${provider.label} enabled`} hint="When off, this provider is skipped entirely (no scans or downloads)." />
+      </div>
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="text-fg-muted">Status:</span>
         <Badge tone={auth.state === "valid" ? "ok" : auth.state === "unknown" ? "warn" : "danger"}>{auth.state}</Badge>

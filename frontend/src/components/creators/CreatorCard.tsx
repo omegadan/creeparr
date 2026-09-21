@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, Power } from "lucide-react";
 import type { Creator } from "../../api/types";
 import { usePatchCreator } from "../../api/hooks/useCreators";
 import { formatBytes, pct, timeAgo, cx } from "../../lib/format";
@@ -14,7 +14,7 @@ export function CreatorCard({ creator }: { creator: Creator }) {
   const s = creator.stats;
   const done = pct(s.media_completed, s.media_total);
   return (
-    <div className={cx("card group relative flex flex-col overflow-hidden transition-colors hover:border-fg-dim", !creator.monitored && "opacity-70")}>
+    <div className={cx("card group relative flex flex-col overflow-hidden transition-colors hover:border-fg-dim", !creator.enabled ? "opacity-45" : !creator.monitored && "opacity-70")}>
       <Link to={`/creators/${creator.id}`} className="flex items-center gap-3 p-4">
         <Avatar src={creator.avatar_url} name={creator.name} size={48} />
         <div className="min-w-0 flex-1">
@@ -44,13 +44,22 @@ export function CreatorCard({ creator }: { creator: Creator }) {
           {creator.scanning && <Loader2 className="h-3 w-3 animate-spin text-info" />}
           {creator.scanning ? "scanning…" : `scanned ${timeAgo(creator.last_scan_at)}`}
         </span>
-        <button
-          title={creator.monitored ? "Monitored: click to stop monitoring" : "Not monitored: click to monitor"}
-          onClick={() => patch.mutate({ monitored: !creator.monitored })}
-          className="rounded p-1 text-fg-muted hover:bg-bg-3 hover:text-fg"
-        >
-          {creator.monitored ? <Eye className="h-4 w-4 text-ok" /> : <EyeOff className="h-4 w-4" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            title={creator.enabled ? "Enabled: click to disable (stops all scans and downloads)" : "Disabled: click to enable"}
+            onClick={() => patch.mutate({ enabled: !creator.enabled })}
+            className="rounded p-1 text-fg-muted hover:bg-bg-3 hover:text-fg"
+          >
+            <Power className={cx("h-4 w-4", creator.enabled ? "text-ok" : "text-danger")} />
+          </button>
+          <button
+            title={creator.monitored ? "Monitored: click to stop monitoring" : "Not monitored: click to monitor"}
+            onClick={() => patch.mutate({ monitored: !creator.monitored })}
+            className="rounded p-1 text-fg-muted hover:bg-bg-3 hover:text-fg"
+          >
+            {creator.monitored ? <Eye className="h-4 w-4 text-ok" /> : <EyeOff className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
     </div>
   );
