@@ -44,8 +44,7 @@ YOUTUBE_COOKIES = """# Netscape HTTP Cookie File
 
 # Some browser extensions emit space-separated columns rather than tabs.
 YOUTUBE_COOKIES_SPACES = (
-    "# Netscape HTTP Cookie File\n"
-    ".youtube.com TRUE / TRUE 1900000000 LOGIN_INFO yt-login-token\n"
+    "# Netscape HTTP Cookie File\n.youtube.com TRUE / TRUE 1900000000 LOGIN_INFO yt-login-token\n"
 )
 
 
@@ -71,7 +70,9 @@ def test_write_cookiefile_normalises_spaces_to_tabs(tmp_path: Path):
 
     target = tmp_path / "youtube.txt"
     assert write_cookiefile(YOUTUBE_COOKIES_SPACES, target) == 1
-    assert ".youtube.com\tTRUE\t/\tTRUE\t1900000000\tLOGIN_INFO\tyt-login-token" in target.read_text()
+    assert (
+        ".youtube.com\tTRUE\t/\tTRUE\t1900000000\tLOGIN_INFO\tyt-login-token" in target.read_text()
+    )
 
 
 def test_write_cookiefile_empty_returns_zero(tmp_path: Path):
