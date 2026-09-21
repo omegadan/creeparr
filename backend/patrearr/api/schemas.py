@@ -266,7 +266,7 @@ class FailedMediaOut(BaseModel):
 class ProviderQueueStatus(BaseModel):
     provider: str
     label: str
-    state: str  # idle | waiting | downloading | throttled | blocked | disabled | paused
+    state: str  # idle|waiting|downloading|throttled|blocked|disabled|paused|creators_off
     queued: int
     running: int
     hourly_limit: int

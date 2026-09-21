@@ -231,3 +231,17 @@ async def test_hourly_limit_persists_across_restart(env, session_factory, settin
     # Raising the limit frees it, proving the block was the persisted count.
     settings.update({"patreon": {"downloads_per_hour": 5}})
     assert mgr._claim_next("w0") is not None
+
+
+@pytest.mark.asyncio
+async def test_provider_status_creators_off(env, session_factory, settings, bus, providers):
+    # A queued item whose creator is switched off must not read as "waiting".
+    seed(session_factory, fx.native_video_post("p1", title="Ep 1"))
+    with session_scope(session_factory) as s:
+        s.execute(select(Creator)).scalar_one().enabled = False
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    status = {p["provider"]: p for p in mgr.provider_status()}["patreon"]
+    assert status["state"] == "creators_off"
+    assert status["queued"] == 1
+    # And the worker will not claim it while the creator is disabled.
+    assert mgr._claim_next("w0") is None

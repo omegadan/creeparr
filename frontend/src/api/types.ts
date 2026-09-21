@@ -212,7 +212,7 @@ export interface FailedMedia {
 export interface ProviderQueueStatus {
   provider: string;
   label: string;
-  state: "idle" | "waiting" | "downloading" | "throttled" | "blocked" | "disabled" | "paused";
+  state: "idle" | "waiting" | "downloading" | "throttled" | "blocked" | "disabled" | "paused" | "creators_off";
   queued: number;
   running: number;
   hourly_limit: number;

@@ -221,21 +221,28 @@ class DownloadManager:
         now = datetime.now(UTC)
         with session_scope(self._factory) as s:
             rows = s.execute(
-                select(Creator.provider, DownloadJob.status, func.count())
+                select(Creator.provider, DownloadJob.status, Creator.enabled, func.count())
                 .join(Creator, Creator.id == DownloadJob.creator_id)
                 .where(DownloadJob.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]))
-                .group_by(Creator.provider, DownloadJob.status)
+                .group_by(Creator.provider, DownloadJob.status, Creator.enabled)
             ).all()
             started = self._hourly_starts(s)
         queued: dict[str, int] = {}
+        runnable: dict[str, int] = {}  # queued for a creator that is switched on
         running: dict[str, int] = {}
-        for provider, status, count in rows:
-            (running if status == JobStatus.RUNNING else queued)[provider] = count
+        for provider, status, enabled, count in rows:
+            if status == JobStatus.RUNNING:
+                running[provider] = running.get(provider, 0) + count
+            else:
+                queued[provider] = queued.get(provider, 0) + count
+                if enabled:
+                    runnable[provider] = runnable.get(provider, 0) + count
 
         out: list[dict[str, Any]] = []
         for provider in self.providers:
             name = provider.name
             q = int(queued.get(name, 0))
+            run_q = int(runnable.get(name, 0))
             r = int(running.get(name, 0))
             limit = self._provider_hourly_limit(name)
             recent, oldest = started.get(name, (0, None))
@@ -248,8 +255,10 @@ class DownloadManager:
                 state = "paused"
             elif r > 0:
                 state = "downloading"
-            elif q == 0:
-                state = "idle"
+            elif run_q == 0:
+                # Nothing runnable: either truly empty, or everything queued sits
+                # behind creators that are switched off (so it will never start).
+                state = "creators_off" if q > 0 else "idle"
             elif limit > 0 and recent >= limit:
                 state = "throttled"
                 if oldest is not None:
