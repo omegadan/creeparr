@@ -104,16 +104,24 @@ class YouTubeProvider(ProviderService):
         except OSError as exc:
             log.warning("could not write YouTube cookie file: %s", exc)
 
+    def _has_cookies(self, submitted: dict[str, str] | None = None) -> bool:
+        value = (submitted or {}).get("cookies_txt")
+        if value is None:
+            value = self.group_settings().cookies_txt
+        return bool((value or "").strip())
+
     async def fetch_user(self, credentials: dict[str, str] | None = None) -> UserInfo:
-        # No account concept; report a static "connected" identity.
-        return UserInfo(id="youtube", full_name="YouTube (public, no login required)")
+        # No account concept; report whether a signed-in cookie is loaded.
+        if self._has_cookies(credentials):
+            return UserInfo(id="youtube", full_name="cookies loaded (signed-in session)")
+        return UserInfo(id="youtube", full_name="public (no login required)")
 
     def get_auth_status(self) -> dict[str, Any]:  # always usable
         return {
             "provider": self.name,
             "state": AuthState.VALID,
             "checked_at": None,
-            "user_name": "public",
+            "user_name": "cookies loaded" if self._has_cookies() else "public (no login)",
             "error": None,
         }
 

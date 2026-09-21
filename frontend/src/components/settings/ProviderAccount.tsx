@@ -57,6 +57,9 @@ export function ProviderAccount({ name, settings }: { name: string; settings: Se
   const filled = Object.fromEntries(Object.entries(form).filter(([, v]) => v.trim() !== ""));
   const hasInput = Object.keys(filled).length > 0;
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const isStored = (key: string) =>
+    (FIELDS[key]?.multiline ? !!stored[`has_${key}`] : !!(stored[key] && stored[key] !== "none"));
+  const hasStored = provider.credential_fields.some(isStored);
 
   return (
     <Section title="Account" description={INTRO[name]}>
@@ -80,6 +83,11 @@ export function ProviderAccount({ name, settings }: { name: string; settings: Se
             ) : (
               <input className="input font-mono" autoComplete="off" spellCheck={false} placeholder={`stored: ${storedVal}`} value={form[key] ?? ""} onChange={(e) => set(key, e.target.value)} />
             )}
+            {isStored(key) && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-ok">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Stored. Paste a new value to replace it, or Clear below to remove it.
+              </p>
+            )}
           </Field>
         );
       })}
@@ -90,7 +98,7 @@ export function ProviderAccount({ name, settings }: { name: string; settings: Se
         <Button variant="primary" disabled={!hasInput} loading={setAuth.isPending} onClick={() => setAuth.mutate(filled, { onSuccess: (r) => { if (r.ok) { toast(`Saved and connected as ${r.user?.full_name ?? ""}`, "success"); setForm({}); } else toast(`Saved, but the test failed: ${r.reason}: ${r.detail ?? ""}`, "error"); }, onError: (e) => error(e) })}>
           Save &amp; connect
         </Button>
-        <Button variant="ghost" onClick={() => clear.mutate(undefined, { onSuccess: () => toast("Session cleared"), onError: (e) => error(e) })}>Clear</Button>
+        <Button variant="ghost" disabled={!hasStored} loading={clear.isPending} onClick={() => clear.mutate(undefined, { onSuccess: () => { toast("Stored credentials cleared"); setForm({}); }, onError: (e) => error(e) })}>Clear</Button>
         {test.data && (test.data.ok ? <CheckCircle2 className="h-4 w-4 text-ok" /> : <XCircle className="h-4 w-4 text-danger" />)}
       </div>
     </Section>
