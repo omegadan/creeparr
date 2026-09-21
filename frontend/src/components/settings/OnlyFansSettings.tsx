@@ -1,3 +1,4 @@
+import { AlertTriangle } from "lucide-react";
 import type { Settings } from "../../api/types";
 import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
@@ -8,6 +9,15 @@ export function OnlyFansSettings({ settings }: { settings: Settings }) {
   const f = useSettingsForm(settings, "onlyfans");
   return (
     <div className="grid gap-5">
+      <div className="flex items-start gap-3 rounded-lg border-2 border-danger/50 bg-danger/10 p-4 text-sm text-danger">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <div className="font-bold">Automated downloading violates OnlyFans' Terms of Service.</div>
+          Using this can get your account suspended or banned. It is intended only for personal
+          archival of content you pay for, on an account you accept the risk of losing. Keep the
+          request rate low and do not redistribute anything you download.
+        </div>
+      </div>
       <Section title="OnlyFans behaviour" description="Signing rules are fetched from the URL below and cached for an hour. Change these only if requests are being blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="HTTP backend" hint="curl_cffi impersonates Chrome's TLS fingerprint.">
