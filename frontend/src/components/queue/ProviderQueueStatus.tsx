@@ -8,6 +8,7 @@ const META: Record<ProviderQueueStatus["state"], { label: string; tone: StatusMe
   downloading: { label: "Downloading", tone: "ok" },
   waiting: { label: "Waiting", tone: "info" },
   throttled: { label: "Rate-limited", tone: "warn" },
+  pacing: { label: "Spacing out", tone: "info" },
   blocked: { label: "Auth error", tone: "danger" },
   disabled: { label: "Disabled", tone: "muted" },
   paused: { label: "Paused", tone: "warn" },
@@ -19,6 +20,7 @@ const DOT_CLASS: Record<ProviderQueueStatus["state"], string> = {
   downloading: "bg-ok",
   waiting: "bg-info",
   throttled: "bg-warn",
+  pacing: "bg-info",
   blocked: "bg-danger",
   disabled: "bg-fg-dim",
   paused: "bg-warn",
@@ -63,6 +65,11 @@ function detail(p: ProviderQueueStatus, nowMs: number): string {
       const next = rem != null ? ` · next in ${humanDuration(rem)}` : "";
       return `${p.queued} queued · ${p.hourly_limit}/hr limit${next}`;
     }
+    case "pacing": {
+      const rem = remainingSeconds(p, nowMs);
+      const next = rem != null ? ` · next in ${humanDuration(rem)}` : "";
+      return `${p.queued} queued · spread over ${p.hourly_limit}/hr${next}`;
+    }
     case "waiting":
       return `${queued} · starting soon`;
     case "blocked":
@@ -82,7 +89,7 @@ export function ProviderQueueStatusPanel({ providers }: { providers: ProviderQue
   const qc = useQueryClient();
   const nowMs = Date.now();
   // Tick every second while a countdown is showing so it stays live between refetches.
-  const anyCountdown = providers.some((p) => p.state === "throttled" && remainingSeconds(p, nowMs) != null);
+  const anyCountdown = providers.some((p) => (p.state === "throttled" || p.state === "pacing") && remainingSeconds(p, nowMs) != null);
   useTicker(anyCountdown);
 
   // When a rate-limit window elapses, pull a fresh queue so the state advances
@@ -90,7 +97,7 @@ export function ProviderQueueStatusPanel({ providers }: { providers: ProviderQue
   const refetchedFor = useRef<string>("");
   useEffect(() => {
     const due = providers.some(
-      (p) => p.state === "throttled" && p.next_slot_at && new Date(p.next_slot_at).getTime() <= Date.now(),
+      (p) => (p.state === "throttled" || p.state === "pacing") && p.next_slot_at && new Date(p.next_slot_at).getTime() <= Date.now(),
     );
     if (!due) return;
     const key = providers.map((p) => `${p.provider}:${p.next_slot_at ?? ""}`).join("|");

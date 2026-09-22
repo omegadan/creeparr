@@ -14,7 +14,7 @@ export function YouTubeSettings({ settings }: { settings: Settings }) {
           <Field label="Max videos per channel" hint="0 archives the entire channel; set a limit for very large channels.">
             <input type="number" min="0" className="input" value={f.form.max_videos} onChange={(e) => f.set("max_videos", num(e.target.value, 0))} />
           </Field>
-          <Field label="Downloads per hour" hint="Cap how many downloads start per hour. 0 = unlimited.">
+          <Field label="Downloads per hour" hint="Cap how many downloads start per hour; spaced out at random (Downloads → Pacing). 0 = unlimited.">
             <input type="number" min="0" className="input" value={f.form.downloads_per_hour} onChange={(e) => f.set("downloads_per_hour", num(e.target.value, 0))} />
           </Field>
         </div>

@@ -136,6 +136,9 @@ class DownloadManager:
         self.paused_reason: str | None = None
         self._last_disk_check = 0.0
         self._disk_ok = True
+        # Per provider: earliest time the next download may start when a
+        # downloads_per_hour cap is being spread out (see _pacing_gap).
+        self._next_start: dict[str, datetime] = {}
         self._claim_lock = threading.Lock()
 
     # ---- lifecycle -----------------------------------------------------------------
@@ -170,6 +173,9 @@ class DownloadManager:
 
     def apply_settings(self) -> None:
         self._resize_workers()
+        # A changed cap or pacing toggle: re-derive the next allowed start from the
+        # last persisted start with the new values instead of keeping the old gap.
+        self._next_start.clear()
         self._kick.set()
 
     def notify(self) -> None:
@@ -245,7 +251,8 @@ class DownloadManager:
             run_q = int(runnable.get(name, 0))
             r = int(running.get(name, 0))
             limit = self._provider_hourly_limit(name)
-            recent, oldest = started.get(name, (0, None))
+            recent, oldest, _newest = started.get(name, (0, None, None))
+            pacing_until = self._next_allowed_start(name, started)
 
             next_slot_seconds: int | None = None
             next_slot_at: datetime | None = None
@@ -264,6 +271,11 @@ class DownloadManager:
                 if oldest is not None:
                     next_slot_at = oldest + timedelta(hours=1)
                     next_slot_seconds = max(0, int((next_slot_at - now).total_seconds()))
+            elif pacing_until is not None and pacing_until > now:
+                # Under the cap, but spreading starts out across the hour.
+                state = "pacing"
+                next_slot_at = pacing_until
+                next_slot_seconds = max(0, int((next_slot_at - now).total_seconds()))
             elif name in blocked:
                 state = "blocked"
             else:
@@ -345,28 +357,76 @@ class DownloadManager:
         group = getattr(self.settings.get(), provider, None)
         return int(getattr(group, "downloads_per_hour", 0) or 0)
 
-    def _hourly_starts(self, s: Session) -> dict[str, tuple[int, datetime | None]]:
+    def _hourly_starts(self, s: Session) -> dict[str, tuple[int, datetime | None, datetime | None]]:
         """Downloads started per provider in the last hour, from persisted job rows.
 
         Derived from DownloadJob.started_at so the rate-limit window survives a
         restart (an in-memory counter would reset and allow a fresh burst).
-        Returns {provider: (count, oldest_start)}.
+        Returns {provider: (count, oldest_start, newest_start)}.
         """
         cutoff = datetime.now(UTC) - timedelta(hours=1)
         rows = s.execute(
-            select(Creator.provider, func.count(), func.min(DownloadJob.started_at))
+            select(
+                Creator.provider,
+                func.count(),
+                func.min(DownloadJob.started_at),
+                func.max(DownloadJob.started_at),
+            )
             .select_from(DownloadJob)
             .join(Creator, Creator.id == DownloadJob.creator_id)
             .where(DownloadJob.started_at.is_not(None), DownloadJob.started_at >= cutoff)
             .group_by(Creator.provider)
         ).all()
-        return {provider: (int(count), _as_utc(oldest)) for provider, count, oldest in rows}
+        return {
+            provider: (int(count), _as_utc(oldest), _as_utc(newest))
+            for provider, count, oldest, newest in rows
+        }
 
-    def _provider_allowed(self, provider: str, started: dict[str, tuple[int, Any]]) -> bool:
+    # Random spacing between starts, as a multiple of the even interval (3600 / limit):
+    # anywhere from half to one-and-a-half times it, so the pattern is irregular
+    # but still averages out to the configured rate.
+    PACING_JITTER = (0.5, 1.5)
+
+    @classmethod
+    def _pacing_gap(cls, limit: int) -> timedelta:
+        return timedelta(seconds=3600 / limit * random.uniform(*cls.PACING_JITTER))
+
+    def _next_allowed_start(
+        self, provider: str, started: dict[str, tuple[int, Any, Any]]
+    ) -> datetime | None:
+        """When spreading is on and a cap is set, the earliest next start for a provider.
+
+        The in-memory value is lost on restart; it is then re-derived from the most
+        recent persisted start, so a restart cannot be used to skip the gap.
+        """
+        limit = self._provider_hourly_limit(provider)
+        if limit <= 0 or not self.settings.get().downloads.spread_downloads:
+            return None
+        if provider not in self._next_start:
+            newest = started.get(provider, (0, None, None))[2]
+            if newest is None:
+                return None
+            self._next_start[provider] = newest + self._pacing_gap(limit)
+        return self._next_start[provider]
+
+    def _provider_allowed(self, provider: str, started: dict[str, tuple[int, Any, Any]]) -> bool:
         limit = self._provider_hourly_limit(provider)
         if limit <= 0:
             return True
-        return started.get(provider, (0, None))[0] < limit
+        if started.get(provider, (0, None, None))[0] >= limit:
+            return False
+        next_start = self._next_allowed_start(provider, started)
+        return next_start is None or datetime.now(UTC) >= next_start
+
+    def _schedule_next_start(self, provider: str) -> None:
+        """Called right after a start is claimed: pick the random gap to the next one."""
+        limit = self._provider_hourly_limit(provider)
+        if limit <= 0 or not self.settings.get().downloads.spread_downloads:
+            self._next_start.pop(provider, None)
+            return
+        gap = self._pacing_gap(limit)
+        self._next_start[provider] = datetime.now(UTC) + gap
+        log.debug("%s: next download no earlier than %.0fs from now", provider, gap.total_seconds())
 
     def _claim_next(self, worker_id: str) -> JobContext | None:
         with self._claim_lock:
@@ -432,6 +492,7 @@ class DownloadManager:
                 s.flush()
                 # The claim above set started_at; the persisted row is now the
                 # source of truth for the per-hour rate-limit window.
+                self._schedule_next_start(provider)
                 ctx = self._context(job, media, media.post, media.post.creator)
                 self.bus.publish(
                     "job.started",

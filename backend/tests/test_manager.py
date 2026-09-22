@@ -219,7 +219,9 @@ async def test_hourly_limit_persists_across_restart(env, session_factory, settin
         items = sync_media_items(s, creator, post, resolve_media(pr2))
         enqueue_media(s, items[0])
 
-    settings.update({"patreon": {"downloads_per_hour": 1}})
+    settings.update(
+        {"patreon": {"downloads_per_hour": 1}, "downloads": {"spread_downloads": False}}
+    )
     # A brand-new manager (as after a restart, with empty in-memory state) must
     # still count the persisted earlier start and refuse to exceed the limit.
     mgr = DownloadManager(env, session_factory, settings, bus, providers)

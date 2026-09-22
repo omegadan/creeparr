@@ -212,7 +212,7 @@ export interface FailedMedia {
 export interface ProviderQueueStatus {
   provider: string;
   label: string;
-  state: "idle" | "waiting" | "downloading" | "throttled" | "blocked" | "disabled" | "paused" | "creators_off";
+  state: "idle" | "waiting" | "downloading" | "throttled" | "pacing" | "blocked" | "disabled" | "paused" | "creators_off";
   queued: number;
   running: number;
   hourly_limit: number;
@@ -336,6 +336,7 @@ export interface Settings {
     deduplicate: boolean;
     verify_files_hours: number;
     requeue_missing: boolean;
+    spread_downloads: boolean;
     video_format: string;
     container: "auto" | "mp4" | "mkv";
     ytdlp_remote_components: boolean;

@@ -119,6 +119,9 @@ class DownloadSettings(BaseModel):
     # (0 = only when run manually), and whether missing ones are re-queued.
     verify_files_hours: int = Field(default=0, ge=0, le=720)
     requeue_missing: bool = False
+    # With a per-provider downloads_per_hour cap, space starts out at random
+    # intervals across the hour instead of bursting up to the cap.
+    spread_downloads: bool = True
     video_format: str = "bv*+ba/b"
     container: Literal["auto", "mp4", "mkv"] = "auto"
     ytdlp_remote_components: bool = True

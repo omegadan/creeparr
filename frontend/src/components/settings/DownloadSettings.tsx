@@ -49,6 +49,9 @@ export function DownloadSettings({ settings }: { settings: Settings }) {
         <Toggle checked={f.form.compute_sha256} onChange={(v) => f.set("compute_sha256", v)} label="Record SHA-256 of archived files" hint="Needed for deduplication and integrity checks." />
         <Toggle checked={f.form.deduplicate} onChange={(v) => f.set("deduplicate", v)} label="Deduplicate identical files" hint="Hardlinks files with the same content (same disk) to save space. OnlyFans reuses media a lot." />
       </Section>
+      <Section title="Pacing" description="Applies to providers with a downloads-per-hour cap (set on each provider's tab).">
+        <Toggle checked={f.form.spread_downloads} onChange={(v) => f.set("spread_downloads", v)} label="Spread downloads out across the hour" hint="Starts are spaced at random intervals (½× to 1½× the even spacing) so activity looks organic instead of a burst up to the cap at the top of every hour. Off: downloads start as soon as the cap allows." />
+      </Section>
       <Section title="Archive integrity" description="Checks that every archived file is still on disk. Files that are gone are marked Missing; files that come back are marked Done again. Run it any time from System → Status (verify_files).">
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Check every (hours)" hint="0 = only when run manually.">
