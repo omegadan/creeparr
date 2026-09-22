@@ -41,7 +41,7 @@ export function MediaItemList({ postId }: { postId: number }) {
           <tbody>
             {items.map((m: MediaItem) => {
               const Icon = KIND_ICON[m.kind] ?? FileText;
-              const canRetry = ["failed", "failed_permanent", "cancelled", "unsupported", "unsupported_drm", "skipped", "discovered", "completed"].includes(m.status);
+              const canRetry = ["failed", "failed_permanent", "cancelled", "unsupported", "unsupported_drm", "skipped", "discovered", "completed", "missing"].includes(m.status);
               return (
                 <tr key={m.id}>
                   <td className="text-fg-dim"><Icon className="h-4 w-4" /></td>
@@ -67,7 +67,7 @@ export function MediaItemList({ postId }: { postId: number }) {
                   <td className="text-right">
                     <div className="flex justify-end gap-0.5">
                       {canRetry && (
-                        <IconButton title={m.status === "completed" ? "Re-download" : "Retry now"} onClick={() => retry.mutate(m.id, { onError: (e) => error(e) })}>
+                        <IconButton title={m.status === "completed" || m.status === "missing" ? "Re-download" : "Retry now"} onClick={() => retry.mutate(m.id, { onError: (e) => error(e) })}>
                           <RotateCcw className="h-3.5 w-3.5" />
                         </IconButton>
                       )}

@@ -33,6 +33,8 @@ class MediaStatus(StrEnum):
     UNSUPPORTED = "unsupported"
     UNSUPPORTED_DRM = "unsupported_drm"
     NO_ACCESS = "no_access"
+    # Was completed, but the file is no longer on disk (see verify_files task).
+    MISSING = "missing"
 
 
 ACTIVE_MEDIA_STATUSES = {
@@ -94,6 +96,8 @@ class EventType(StrEnum):
     DOWNLOAD_FAILED = "download_failed"
     DOWNLOAD_CANCELLED = "download_cancelled"
     MEDIA_UNSUPPORTED = "media_unsupported"
+    MEDIA_MISSING = "media_missing"
+    MEDIA_RESTORED = "media_restored"
     AUTH_INVALID = "auth_invalid"
     AUTH_VALID = "auth_valid"
     QUEUE_PAUSED = "queue_paused"

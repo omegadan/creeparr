@@ -38,7 +38,12 @@ from creeparr.services import Services
 router = APIRouter(tags=["posts"])
 
 PENDING = {MediaStatus.DISCOVERED, MediaStatus.QUEUED, MediaStatus.DOWNLOADING}
-FAILED = {MediaStatus.FAILED, MediaStatus.FAILED_PERMANENT, MediaStatus.CANCELLED}
+FAILED = {
+    MediaStatus.FAILED,
+    MediaStatus.FAILED_PERMANENT,
+    MediaStatus.CANCELLED,
+    MediaStatus.MISSING,
+}
 UNSUPPORTED = {MediaStatus.UNSUPPORTED, MediaStatus.UNSUPPORTED_DRM}
 
 
@@ -278,7 +283,7 @@ def retry_media(
     media_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     item = load_media(db, media_id)
-    if item.status in (MediaStatus.FAILED_PERMANENT, *UNSUPPORTED):
+    if item.status in (MediaStatus.FAILED_PERMANENT, MediaStatus.MISSING, *UNSUPPORTED):
         item.attempts = 0
     if item.status == MediaStatus.SKIPPED:
         item.status = MediaStatus.DISCOVERED

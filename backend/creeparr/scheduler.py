@@ -162,7 +162,17 @@ class SchedulerService:
             None,
             self._restamp_files,
         )
+        self._register_verify_files()
         self.scheduler.start()
+
+    def _register_verify_files(self) -> None:
+        hours = self.services.settings.get().downloads.verify_files_hours
+        self._register(
+            "verify_files",
+            "Check that every archived file is still on disk; mark absent ones as missing",
+            hours * 3600 if hours else None,
+            self._verify_files,
+        )
 
     def shutdown(self) -> None:
         if self.scheduler.running:
@@ -170,7 +180,8 @@ class SchedulerService:
 
     def apply_settings(self) -> None:
         # scan_monitored runs on a fixed cadence; interval changes take effect via due-ness.
-        return
+        # verify_files has a user-configurable interval.
+        self._register_verify_files()
 
     # ---- tasks ---------------------------------------------------------------------
 
@@ -236,6 +247,9 @@ class SchedulerService:
 
     async def _restamp_files(self) -> dict:
         return await asyncio.to_thread(self.services.downloads.restamp_files)
+
+    async def _verify_files(self) -> dict:
+        return await asyncio.to_thread(self.services.downloads.verify_files)
 
     async def _reresolve_media(self) -> dict[str, int]:
         from creeparr.scanner.scanner import reresolve_all

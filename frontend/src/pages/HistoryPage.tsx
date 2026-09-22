@@ -4,7 +4,7 @@ import { PageHeader } from "../components/layout/AppShell";
 import { Pager, Spinner } from "../components/ui/Misc";
 import { HistoryTable } from "../components/history/HistoryTable";
 
-const TYPES = ["download_completed", "download_failed", "scan_completed", "scan_failed", "creator_added", "creator_removed", "media_unsupported", "auth_invalid", "auth_valid"];
+const TYPES = ["download_completed", "download_failed", "scan_completed", "scan_failed", "creator_added", "creator_removed", "media_unsupported", "media_missing", "media_restored", "auth_invalid", "auth_valid"];
 
 export function HistoryPage() {
   const [filters, setFilters] = useState<HistoryFilters>({});

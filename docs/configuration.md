@@ -37,6 +37,8 @@ See the table in the README. They cover paths, port and log level only. `CREEPAR
 | downloads.url_max_age_minutes | 30 | Re-fetch post before download if URLs are older |
 | downloads.hls_fragment_concurrency | 4 | yt-dlp `concurrent_fragment_downloads` |
 | downloads.compute_sha256 | true | |
+| downloads.verify_files_hours | 0 | How often the `verify_files` task runs (0 = manual only) |
+| downloads.requeue_missing | false | Re-queue files found missing by `verify_files` |
 | downloads.video_format | `bv*+ba/b` | yt-dlp format selector |
 | downloads.container | auto | Video container: auto (MKV for YouTube, MP4 otherwise), mp4, or mkv |
 | downloads.ytdlp_remote_components | true | Let yt-dlp fetch its YouTube challenge solver (ejs) from GitHub |
@@ -75,3 +77,8 @@ System → Status lists runnable tasks. `embed_metadata_backlog` embeds metadata
 art into videos already on disk that lack it (enable `naming.embed_metadata` first).
 `reresolve_media` re-applies the media resolver to stored post data after an update.
 `restamp_files` sets every archived file and folder to its post's publish date.
+`verify_files` checks that every archived file still exists on disk: completed items whose
+file is gone become `missing` (a history entry is written), and missing items whose file has
+come back become `completed` again. Missing items can be re-downloaded per item, with
+Queue → Retry failed, or automatically with `downloads.requeue_missing`. Set
+`downloads.verify_files_hours` to run it on a schedule.

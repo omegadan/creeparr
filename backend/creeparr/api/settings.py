@@ -22,7 +22,7 @@ async def _apply_side_effects(services: Services, groups: set[str]) -> None:
             await services.providers.get(group).rebuild()
     if "downloads" in groups:
         services.downloads.apply_settings()
-    if "scan" in groups:
+    if groups & {"scan", "downloads"}:
         services.scheduler.apply_settings()
     services.bus.publish("settings.changed", {"groups": sorted(groups)})
 

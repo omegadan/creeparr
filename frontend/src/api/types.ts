@@ -103,7 +103,7 @@ export interface ScanRun {
 export type MediaKind = "video" | "image" | "audio" | "attachment";
 export type MediaStatus =
   | "discovered" | "queued" | "downloading" | "completed" | "failed" | "failed_permanent"
-  | "cancelled" | "skipped" | "unsupported" | "unsupported_drm" | "no_access";
+  | "cancelled" | "skipped" | "unsupported" | "unsupported_drm" | "no_access" | "missing";
 export type PostStatus = "new" | "no_access" | "no_media" | "pending" | "completed" | "partial" | "unsupported" | "skipped";
 
 export interface MediaItem {
@@ -334,6 +334,8 @@ export interface Settings {
     hls_fragment_concurrency: number;
     compute_sha256: boolean;
     deduplicate: boolean;
+    verify_files_hours: number;
+    requeue_missing: boolean;
     video_format: string;
     container: "auto" | "mp4" | "mkv";
     ytdlp_remote_components: boolean;
@@ -379,7 +381,7 @@ export interface SystemStatus {
   scan: { running: { creator_id: number; mode: string } | null; pending: { creator_id: number; mode: string; trigger: string }[] };
   next_scan_at: string | null;
   downloads: { paused: boolean; paused_reason: string | null; workers: number; running_jobs: number[]; free_bytes: number };
-  counts: { creators: number; posts: number; media_completed: number; media_bytes: number; provider_bytes: Record<string, number>; queued: number; running: number; failed: number };
+  counts: { creators: number; posts: number; media_completed: number; media_missing: number; media_bytes: number; provider_bytes: Record<string, number>; queued: number; running: number; failed: number };
   disk: { free_bytes: number | null; total_bytes: number | null; used_bytes: number | null };
   paths: { config_dir: string; download_dir: string; patreon_download_dir: string | null; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null };
   ffmpeg: string | null;

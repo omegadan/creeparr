@@ -755,6 +755,95 @@ class DownloadManager:
         log.info("restamped %d files across %d post folders", files, dirs)
         return {"files": files, "folders": dirs}
 
+    MISSING_REASON = "file not found on disk"
+
+    def verify_files(self) -> dict[str, int]:
+        """Check that every archived file still exists on disk.
+
+        Completed items whose file is gone become ``missing``; missing items whose
+        file has come back (a re-mounted disk, a restore from backup) become
+        ``completed`` again. With ``downloads.requeue_missing`` on, missing items
+        are queued for re-download.
+        """
+        requeue = self.settings.get().downloads.requeue_missing
+        checked = missing = restored = requeued = 0
+        with session_scope(self._factory) as s:
+            rows = s.execute(
+                select(MediaItem.id, MediaItem.status, MediaItem.file_path, Creator.provider)
+                .join(Creator, Creator.id == MediaItem.creator_id)
+                .where(
+                    MediaItem.status.in_([MediaStatus.COMPLETED, MediaStatus.MISSING]),
+                    MediaItem.file_path.is_not(None),
+                )
+            ).all()
+        # stat() outside the session: a large archive on a slow share takes a while.
+        changed: list[tuple[int, bool]] = []
+        for media_id, status, file_rel, provider in rows:
+            checked += 1
+            present = (self.env.download_root(provider) / file_rel).is_file()
+            if status == MediaStatus.COMPLETED and not present:
+                changed.append((media_id, False))
+            elif status == MediaStatus.MISSING and present:
+                changed.append((media_id, True))
+        for media_id, present in changed:
+            with session_scope(self._factory) as s:
+                media = s.execute(
+                    select(MediaItem)
+                    .options(selectinload(MediaItem.post).selectinload(Post.media_items))
+                    .where(MediaItem.id == media_id)
+                ).scalar_one_or_none()
+                if media is None or media.status not in (
+                    MediaStatus.COMPLETED,
+                    MediaStatus.MISSING,
+                ):
+                    continue  # changed under us (re-queued, deleted, ...)
+                name = PurePosixPath(media.file_path or "").name
+                if present:
+                    media.status = MediaStatus.COMPLETED
+                    media.status_reason = None
+                    restored += 1
+                    record_event(
+                        s,
+                        self.bus,
+                        EventType.MEDIA_RESTORED,
+                        f"{name} is back on disk",
+                        creator_id=media.creator_id,
+                        post_id=media.post_id,
+                        media_item_id=media.id,
+                        data={"file_path": media.file_path},
+                    )
+                else:
+                    media.status = MediaStatus.MISSING
+                    media.status_reason = self.MISSING_REASON
+                    missing += 1
+                    record_event(
+                        s,
+                        self.bus,
+                        EventType.MEDIA_MISSING,
+                        f"{name} is missing from disk",
+                        level="warning",
+                        creator_id=media.creator_id,
+                        post_id=media.post_id,
+                        media_item_id=media.id,
+                        data={"file_path": media.file_path},
+                    )
+                    if requeue and enqueue_media(s, media) is not None:
+                        requeued += 1
+                recompute_post_status(media.post)
+                publish_post_changed(self.bus, media.post)
+        if requeued:
+            self.notify()
+        if missing or restored:
+            self.bus.publish("queue.changed", {})
+        log.info(
+            "verified %d archived files: %d missing, %d restored, %d re-queued",
+            checked,
+            missing,
+            restored,
+            requeued,
+        )
+        return {"checked": checked, "missing": missing, "restored": restored, "requeued": requeued}
+
     async def _embed_existing(self, media_id: int, ffmpeg: str) -> bool:
         with session_scope(self._factory) as s:
             media = s.execute(

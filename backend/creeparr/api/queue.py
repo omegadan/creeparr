@@ -16,7 +16,7 @@ from creeparr.services import Services
 
 router = APIRouter(tags=["queue"])
 
-FAILED_STATUSES = [MediaStatus.FAILED, MediaStatus.FAILED_PERMANENT]
+FAILED_STATUSES = [MediaStatus.FAILED, MediaStatus.FAILED_PERMANENT, MediaStatus.MISSING]
 
 
 def job_out(job: DownloadJob) -> JobOut:
@@ -190,7 +190,7 @@ def retry_failed(db: Session = Depends(get_db), services: Services = Depends(get
     )
     n = 0
     for m in items:
-        if m.status == MediaStatus.FAILED_PERMANENT:
+        if m.status in (MediaStatus.FAILED_PERMANENT, MediaStatus.MISSING):
             m.attempts = 0
         if enqueue_media(db, m, force=True):
             n += 1

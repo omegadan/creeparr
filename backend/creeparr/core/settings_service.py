@@ -115,6 +115,10 @@ class DownloadSettings(BaseModel):
     hls_fragment_concurrency: int = Field(default=4, ge=1, le=16)
     compute_sha256: bool = True
     deduplicate: bool = True
+    # Archive integrity: how often to check that archived files still exist
+    # (0 = only when run manually), and whether missing ones are re-queued.
+    verify_files_hours: int = Field(default=0, ge=0, le=720)
+    requeue_missing: bool = False
     video_format: str = "bv*+ba/b"
     container: Literal["auto", "mp4", "mkv"] = "auto"
     ytdlp_remote_components: bool = True

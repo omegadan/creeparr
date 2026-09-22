@@ -49,6 +49,14 @@ export function DownloadSettings({ settings }: { settings: Settings }) {
         <Toggle checked={f.form.compute_sha256} onChange={(v) => f.set("compute_sha256", v)} label="Record SHA-256 of archived files" hint="Needed for deduplication and integrity checks." />
         <Toggle checked={f.form.deduplicate} onChange={(v) => f.set("deduplicate", v)} label="Deduplicate identical files" hint="Hardlinks files with the same content (same disk) to save space. OnlyFans reuses media a lot." />
       </Section>
+      <Section title="Archive integrity" description="Checks that every archived file is still on disk. Files that are gone are marked Missing; files that come back are marked Done again. Run it any time from System → Status (verify_files).">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Check every (hours)" hint="0 = only when run manually.">
+            <input type="number" min="0" max="720" className="input" value={f.form.verify_files_hours} onChange={(e) => f.set("verify_files_hours", num(e.target.value, 0))} />
+          </Field>
+        </div>
+        <Toggle checked={f.form.requeue_missing} onChange={(v) => f.set("requeue_missing", v)} label="Re-download missing files automatically" hint="Off: missing items wait until you retry them (per item, or Queue → Retry failed)." />
+      </Section>
       <div className="flex justify-end"><Button variant="primary" disabled={!f.dirty} loading={f.saving} onClick={f.save}>Save</Button></div>
     </div>
   );

@@ -28,6 +28,7 @@ export const MEDIA_STATUS: Record<MediaStatus, StatusMeta> = {
   unsupported: { label: "Unsupported", tone: "danger" },
   unsupported_drm: { label: "DRM", tone: "danger" },
   no_access: { label: "No access", tone: "muted" },
+  missing: { label: "Missing", tone: "danger" },
 };
 
 export const TONE_CLASS: Record<StatusMeta["tone"], string> = {
