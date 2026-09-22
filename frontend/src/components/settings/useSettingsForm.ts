@@ -1,14 +1,23 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useUpdateSettings } from "../../api/hooks/useSettings";
 import type { Settings, SettingsPatch } from "../../api/types";
 import { useToast } from "../ui/Toast";
+import { rebaseForm } from "./rebaseForm";
 
 type Group = Exclude<keyof Settings, "env">;
 
 /** Local editable copy of one settings group with a save() that PUTs only that group. */
 export function useSettingsForm<G extends Group>(settings: Settings, group: G) {
-  const [form, setForm] = useState<Settings[G]>(settings[group]);
-  useEffect(() => setForm(settings[group]), [settings, group]);
+  const server = settings[group];
+  const [form, setForm] = useState<Settings[G]>(server);
+  const [base, setBase] = useState<Settings[G]>(server);
+  // New server values (another section saved, a toggle, a refetch): adopt them, but keep
+  // any field edited here and not yet saved. Adjusting state during render is React's
+  // recommended way to follow a changed prop.
+  if (server !== base) {
+    setBase(server);
+    setForm((f) => rebaseForm(f, base, server));
+  }
   const update = useUpdateSettings();
   const { toast, error } = useToast();
   const set = <K extends keyof Settings[G]>(key: K, value: Settings[G][K]) => setForm((f) => ({ ...f, [key]: value }));
