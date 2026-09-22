@@ -247,3 +247,56 @@ async def test_provider_status_creators_off(env, session_factory, settings, bus,
     assert status["queued"] == 1
     # And the worker will not claim it while the creator is disabled.
     assert mgr._claim_next("w0") is None
+
+
+def add_queued_post(session_factory, resource) -> int:
+    page = fx.posts_page([resource])
+    pr = post_from_resource(resource, IncludedIndex(page))
+    with session_scope(session_factory) as s:
+        creator = s.execute(select(Creator)).scalar_one()
+        post, _, _ = upsert_post(s, creator, pr)
+        items = sync_media_items(s, creator, post, resolve_media(pr))
+        return enqueue_media(s, items[0]).id
+
+
+@pytest.mark.asyncio
+async def test_worker_survives_media_deleted_mid_job(
+    env, session_factory, settings, bus, providers, respx_mock
+):
+    # Deleting a creator (or a post edit dropping an item) removes the media row while
+    # its job runs. Recording that job's outcome used to raise NoResultFound out of the
+    # worker, which then died for good; with concurrency 1 all downloads stopped.
+    settings.update({"downloads": {"concurrency": 1}})
+    _, first_job = seed(session_factory, fx.native_video_post("p1", title="Ep 1"))
+    bus.bind(asyncio.get_running_loop())
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    real_run_job = mgr._run_job
+    ran: list[int] = []
+
+    async def run_job(ctx, reporter):
+        ran.append(ctx.job_id)
+        if len(ran) == 1:  # only the first job (SQLite may reuse its id once it's gone)
+            with session_scope(session_factory) as s:
+                s.delete(s.get(MediaItem, ctx.media_id))
+            raise RuntimeError("simulated crash after the media row was deleted")
+        await real_run_job(ctx, reporter)
+
+    mgr._run_job = run_job
+    await mgr.start()
+    try:
+        assert await wait_for(lambda: first_job in ran)
+        await asyncio.sleep(0.2)
+        # A later item must still be picked up by the same (single) worker.
+        body = b"\x00" * 1000
+        respx_mock.get(f"{fx.CDN}/p2/episode.mp4?token=x").mock(
+            return_value=httpx.Response(200, content=body)
+        )
+        second_job = add_queued_post(session_factory, fx.native_video_post("p2", title="Ep 2"))
+        mgr._kick.set()
+        assert await wait_for(
+            lambda: job_status(session_factory, second_job) == JobStatus.COMPLETED
+        )
+        assert mgr.status()["workers"] == 1
+    finally:
+        await mgr.stop()
+        await providers.aclose_all()

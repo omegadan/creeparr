@@ -320,31 +320,38 @@ class DownloadManager:
         while not self._stop.is_set():
             if idx >= self.settings.get().downloads.concurrency:
                 return  # surplus after a concurrency decrease
-            self._check_disk()
-            if self.paused:
-                await self._sleep(5)
-                continue
+            # Nothing may escape this loop: a dead worker is never restarted, so the pool
+            # would silently shrink until downloads stop altogether.
             try:
-                ctx = await asyncio.to_thread(self._claim_next, worker_id)
+                await self._worker_step(worker_id)
             except Exception:  # noqa: BLE001
-                log.exception("claim failed")
+                log.exception("download worker %s hit an unexpected error", worker_id)
                 await self._sleep(5)
-                continue
-            if ctx is None:
-                await self._sleep(5)
-                continue
-            reporter = ProgressReporter(lambda data, jid=ctx.job_id: self._on_progress(jid, data))
-            self._running[ctx.job_id] = RunningJob(ctx, reporter)
+
+    async def _worker_step(self, worker_id: str) -> None:
+        self._check_disk()
+        if self.paused:
+            await self._sleep(5)
+            return
+        ctx = await asyncio.to_thread(self._claim_next, worker_id)
+        if ctx is None:
+            await self._sleep(5)
+            return
+        reporter = ProgressReporter(lambda data, jid=ctx.job_id: self._on_progress(jid, data))
+        self._running[ctx.job_id] = RunningJob(ctx, reporter)
+        try:
+            await self._run_job(ctx, reporter)
+        except Exception:  # noqa: BLE001
+            log.exception("job %s crashed", ctx.job_id)
             try:
-                await self._run_job(ctx, reporter)
-            except Exception:  # noqa: BLE001
-                log.exception("job %s crashed", ctx.job_id)
                 await asyncio.to_thread(
                     self._fail_job, ctx, "internal error", "internal", retryable=True
                 )
-            finally:
-                self._running.pop(ctx.job_id, None)
-                self._kick.set()
+            except Exception:  # noqa: BLE001
+                log.exception("job %s: could not record failure", ctx.job_id)
+        finally:
+            self._running.pop(ctx.job_id, None)
+            self._kick.set()
 
     async def _sleep(self, seconds: float) -> None:
         self._kick.clear()
@@ -1157,6 +1164,25 @@ class DownloadManager:
                 except OSError as exc:
                     log.debug("nfo write failed: %s", exc)
 
+    def _load_job_media(self, s: Session, ctx: JobContext) -> MediaItem | None:
+        return s.execute(
+            select(MediaItem)
+            .options(selectinload(MediaItem.post).selectinload(Post.media_items))
+            .where(MediaItem.id == ctx.media_id)
+        ).scalar_one_or_none()
+
+    def _finish_orphaned_job(self, s: Session, ctx: JobContext, job: DownloadJob | None) -> None:
+        """The media row vanished mid-job (creator deleted, or the post edited it away)."""
+        log.info("[job %s] media item %s no longer exists; dropping job", ctx.job_id, ctx.media_id)
+        if job is not None:
+            job.status = JobStatus.CANCELLED
+            job.finished_at = datetime.now(UTC)
+            job.stage = None
+        self.bus.publish(
+            "job.finished",
+            {"id": ctx.job_id, "status": JobStatus.CANCELLED, "media_item_id": ctx.media_id},
+        )
+
     def _complete_job(self, ctx: JobContext, result: DownloadResult) -> None:
         self._dedupe(ctx, result)
         self._maybe_write_nfo(ctx, result)
@@ -1167,11 +1193,10 @@ class DownloadManager:
         rel = str(result.path.relative_to(self.env.download_root(ctx.provider)))
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)
-            media = s.execute(
-                select(MediaItem)
-                .options(selectinload(MediaItem.post).selectinload(Post.media_items))
-                .where(MediaItem.id == ctx.media_id)
-            ).scalar_one()
+            media = self._load_job_media(s, ctx)
+            if media is None:
+                self._finish_orphaned_job(s, ctx, job)
+                return
             now = datetime.now(UTC)
             media.status = MediaStatus.COMPLETED
             media.status_reason = None
@@ -1219,11 +1244,10 @@ class DownloadManager:
         d = self.settings.get().downloads
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)
-            media = s.execute(
-                select(MediaItem)
-                .options(selectinload(MediaItem.post).selectinload(Post.media_items))
-                .where(MediaItem.id == ctx.media_id)
-            ).scalar_one()
+            media = self._load_job_media(s, ctx)
+            if media is None:
+                self._finish_orphaned_job(s, ctx, job)
+                return
             now = datetime.now(UTC)
             media.last_error = error
             if count:
@@ -1302,11 +1326,10 @@ class DownloadManager:
     def _cancel_job_db(self, ctx: JobContext) -> None:
         with session_scope(self._factory) as s:
             job = s.get(DownloadJob, ctx.job_id)
-            media = s.execute(
-                select(MediaItem)
-                .options(selectinload(MediaItem.post).selectinload(Post.media_items))
-                .where(MediaItem.id == ctx.media_id)
-            ).scalar_one()
+            media = self._load_job_media(s, ctx)
+            if media is None:
+                self._finish_orphaned_job(s, ctx, job)
+                return
             if job is not None:
                 job.status = JobStatus.CANCELLED
                 job.finished_at = datetime.now(UTC)
