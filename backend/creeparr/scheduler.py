@@ -206,34 +206,43 @@ class SchedulerService:
                     continue
                 if last_scan is None or (now - last_scan) >= timedelta(minutes=interval):
                     due.append(cid)
-        n = 0
-        for cid in due:
-            if self.services.scan_manager.request_scan(cid, ScanMode.AUTO, trigger="schedule"):
-                n += 1
-        return {"queued": n}
+        return {"queued": self._request_scans(due, ScanMode.AUTO)}
 
     async def _full_rescan(self) -> dict[str, int]:
         days = self.services.settings.get().scan.full_rescan_days
         if not days:
             return {"queued": 0}
         cutoff = datetime.now(UTC) - timedelta(days=days)
+        disabled = self.services.providers.disabled_names()
         with session_scope(self.services.session_factory) as s:
-            ids = (
-                s.execute(
-                    select(Creator.id).where(
+            ids = [
+                cid
+                for cid, provider in s.execute(
+                    select(Creator.id, Creator.provider).where(
                         Creator.monitored.is_(True),
+                        Creator.enabled.is_(True),
                         (Creator.last_full_scan_at.is_(None))
                         | (Creator.last_full_scan_at < cutoff),
                     )
-                )
-                .scalars()
-                .all()
-            )
+                ).all()
+                if provider not in disabled
+            ]
+        return {"queued": self._request_scans(ids, ScanMode.FULL)}
+
+    def _request_scans(self, creator_ids: list[int], mode: ScanMode) -> int:
+        """Queue scheduled scans, skipping creators that can't scan right now.
+
+        request_scan raises Conflict for e.g. a provider whose session expired; that
+        must only skip that creator, not abort the pass for every creator after it.
+        """
         n = 0
-        for cid in ids:
-            if self.services.scan_manager.request_scan(cid, ScanMode.FULL, trigger="schedule"):
-                n += 1
-        return {"queued": n}
+        for cid in creator_ids:
+            try:
+                if self.services.scan_manager.request_scan(cid, mode, trigger="schedule"):
+                    n += 1
+            except Conflict as exc:
+                log.debug("scheduled scan of creator %s skipped: %s", cid, exc)
+        return n
 
     async def _requeue_failed(self) -> dict[str, int]:
         n = await asyncio.to_thread(self.services.downloads.requeue_due_retries)
