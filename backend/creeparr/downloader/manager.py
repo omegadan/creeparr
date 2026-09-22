@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from creeparr.config import EnvConfig
@@ -452,34 +452,45 @@ class DownloadManager:
                 ).all()
             )
             started = self._hourly_starts(s)
+            throttled = {
+                name for name in self.providers.names() if not self._provider_allowed(name, started)
+            }
+            full_creators = [cid for cid, n in running_counts.items() if n >= cap]
+            # Every "can't start yet" rule is part of the query, so however many jobs
+            # are queued (a slow archive can have tens of thousands) and however many
+            # are waiting on a throttled provider or a busy creator, the first rows
+            # returned are ones that can start now; nothing gets starved behind them.
             candidates = (
                 s.execute(
                     select(DownloadJob)
+                    .join(Creator, Creator.id == DownloadJob.creator_id)
+                    .join(MediaItem, MediaItem.id == DownloadJob.media_item_id)
                     .options(
                         selectinload(DownloadJob.media_item)
                         .selectinload(MediaItem.post)
                         .selectinload(Post.creator)
                     )
-                    .where(DownloadJob.status == JobStatus.QUEUED)
+                    .where(
+                        DownloadJob.status == JobStatus.QUEUED,
+                        Creator.enabled.is_(True),
+                        Creator.provider.not_in(disabled | throttled),
+                        DownloadJob.creator_id.not_in(full_creators),
+                        or_(
+                            Creator.provider.not_in(blocked),
+                            MediaItem.source.in_(EMBED_SOURCES),
+                        ),
+                    )
                     .order_by(DownloadJob.priority.desc(), DownloadJob.created_at)
-                    .limit(200)
+                    .limit(20)  # a few spare in case one is claimed concurrently
                 )
                 .scalars()
                 .all()
             )
             for job in candidates:
-                if running_counts.get(job.creator_id, 0) >= cap:
-                    continue
                 media = job.media_item
                 if media is None or media.post is None:
                     continue
                 provider = media.post.creator.provider
-                if provider in disabled or not media.post.creator.enabled:
-                    continue
-                if provider in blocked and media.source not in EMBED_SOURCES:
-                    continue
-                if not self._provider_allowed(provider, started):
-                    continue
                 # Conditional update so a job can never be claimed twice.
                 claimed = s.execute(
                     update(DownloadJob)

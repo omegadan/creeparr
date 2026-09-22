@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from creeparr.api.deps import get_db, get_services
@@ -77,10 +77,27 @@ def _job_query():
 
 @router.get("/queue", response_model=QueueOut)
 def get_queue(
-    limit: int = Query(default=200, le=1000),
+    page: int = Query(default=1, ge=1),
+    failed_page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     services: Services = Depends(get_services),
 ):
+    """One page of the queue (running first, then in download order) and of failures.
+
+    The queue itself is unbounded; only what is sent to the browser is paged. The
+    totals always count everything.
+    """
+    job_counts = dict(
+        db.execute(
+            select(DownloadJob.status, func.count())
+            .where(DownloadJob.status.in_([JobStatus.RUNNING, JobStatus.QUEUED]))
+            .group_by(DownloadJob.status)
+        ).all()
+    )
+    failed_total = db.execute(
+        select(func.count()).select_from(MediaItem).where(MediaItem.status.in_(FAILED_STATUSES))
+    ).scalar_one()
     jobs = (
         db.execute(
             _job_query()
@@ -90,7 +107,8 @@ def get_queue(
                 DownloadJob.priority.desc(),
                 DownloadJob.created_at,
             )
-            .limit(limit)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
         .scalars()
         .all()
@@ -101,7 +119,8 @@ def get_queue(
             .options(selectinload(MediaItem.post).selectinload(Post.creator))
             .where(MediaItem.status.in_(FAILED_STATUSES))
             .order_by(MediaItem.updated_at.desc())
-            .limit(limit)
+            .offset((failed_page - 1) * page_size)
+            .limit(page_size)
         )
         .scalars()
         .all()
@@ -113,6 +132,12 @@ def get_queue(
         jobs=[job_out(j) for j in jobs],
         failed=[failed_out(m) for m in failed],
         providers=services.downloads.provider_status(),
+        running_total=job_counts.get(JobStatus.RUNNING, 0),
+        queued_total=job_counts.get(JobStatus.QUEUED, 0),
+        failed_total=failed_total,
+        page=page,
+        failed_page=failed_page,
+        page_size=page_size,
     )
 
 

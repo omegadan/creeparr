@@ -1,8 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, post, qs } from "../client";
 import type { Queue } from "../types";
 
-export const useQueue = () => useQuery({ queryKey: ["queue"], queryFn: () => get<Queue>("/queue"), refetchInterval: 10_000 });
+export const useQueue = (page = 1, failedPage = 1) =>
+  useQuery({
+    queryKey: ["queue", page, failedPage],
+    queryFn: () => get<Queue>(`/queue${qs({ page, failed_page: failedPage })}`),
+    refetchInterval: 10_000,
+    placeholderData: keepPreviousData,
+  });
 
 function useQueueMutation<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
   const qc = useQueryClient();

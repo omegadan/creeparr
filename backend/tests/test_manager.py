@@ -300,3 +300,60 @@ async def test_worker_survives_media_deleted_mid_job(
     finally:
         await mgr.stop()
         await providers.aclose_all()
+
+
+def queue_posts(session_factory, creator_id: int, post_ids: list[str]) -> list[int]:
+    job_ids = []
+    with session_scope(session_factory) as s:
+        creator = s.get(Creator, creator_id)
+        for pid in post_ids:
+            res = fx.native_video_post(pid, title=f"Ep {pid}")
+            pr = post_from_resource(res, IncludedIndex(fx.posts_page([res])))
+            post, _, _ = upsert_post(s, creator, pr)
+            items = sync_media_items(s, creator, post, resolve_media(pr))
+            job_ids.append(enqueue_media(s, items[0]).id)
+    return job_ids
+
+
+@pytest.mark.asyncio
+async def test_claim_is_not_starved_by_a_long_blocked_backlog(
+    env, session_factory, settings, bus, providers
+):
+    # A slow archive can have tens of thousands of queued jobs. Claiming used to look
+    # only at the first 200 in queue order, so a big backlog that couldn't start (a
+    # disabled creator here; equally a throttled provider or a creator at its cap)
+    # hid everything behind it forever.
+    with session_scope(session_factory) as s:
+        off = Creator(campaign_id="1", name="Paused Creator", enabled=False)
+        on = Creator(campaign_id="2", name="Active Creator")
+        s.add_all([off, on])
+        s.flush()
+        off_id, on_id = off.id, on.id
+    queue_posts(session_factory, off_id, [f"a{i}" for i in range(250)])
+    (waiting,) = queue_posts(session_factory, on_id, ["b1"])
+
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    ctx = mgr._claim_next("w0")
+    assert ctx is not None and ctx.job_id == waiting
+    await providers.aclose_all()
+
+
+@pytest.mark.asyncio
+async def test_claim_skips_creators_at_their_cap_in_the_query(
+    env, session_factory, settings, bus, providers
+):
+    settings.update({"downloads": {"max_per_creator": 1}})
+    with session_scope(session_factory) as s:
+        busy = Creator(campaign_id="1", name="Busy")
+        idle = Creator(campaign_id="2", name="Idle")
+        s.add_all([busy, idle])
+        s.flush()
+        busy_id, idle_id = busy.id, idle.id
+    first, *_ = queue_posts(session_factory, busy_id, [f"a{i}" for i in range(250)])
+    (other,) = queue_posts(session_factory, idle_id, ["b1"])
+
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    assert mgr._claim_next("w0").job_id == first  # Busy is now at its cap of 1
+    assert mgr._claim_next("w1").job_id == other
+    assert mgr._claim_next("w2") is None  # everything left belongs to Busy
+    await providers.aclose_all()

@@ -227,6 +227,13 @@ export interface Queue {
   jobs: Job[];
   failed: FailedMedia[];
   providers: ProviderQueueStatus[];
+  // Whole-queue counts; jobs/failed above are one page each.
+  running_total: number;
+  queued_total: number;
+  failed_total: number;
+  page: number;
+  failed_page: number;
+  page_size: number;
 }
 
 export interface HistoryEvent {

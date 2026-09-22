@@ -281,6 +281,13 @@ class QueueOut(BaseModel):
     jobs: list[JobOut]
     failed: list[FailedMediaOut]
     providers: list[ProviderQueueStatus] = []
+    # Counts over the whole queue; jobs/failed above are one page of each.
+    running_total: int = 0
+    queued_total: int = 0
+    failed_total: int = 0
+    page: int = 1
+    failed_page: int = 1
+    page_size: int = 100
 
 
 # ---- history --------------------------------------------------------------------------

@@ -28,7 +28,8 @@ export function useServerEvents(): void {
         debounced("creators", invalidate([["creators"], ["creator", d.creator_id], ["scans", d.creator_id], ["posts"], ["system", "status"]]));
       },
       "job.progress": (d) => {
-        qc.setQueryData<Queue>(["queue"], (old) => {
+        // Every cached queue page (keys are ["queue", page, failedPage]).
+        qc.setQueriesData<Queue>({ queryKey: ["queue"] }, (old) => {
           if (!old) return old;
           const jobs = old.jobs.map((j) => (j.id === d.id ? { ...j, ...(d as Partial<Job>), status: "running" as const } : j));
           return { ...old, jobs };

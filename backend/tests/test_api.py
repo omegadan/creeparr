@@ -224,3 +224,25 @@ def test_allowed_hosts_env_and_password_lift_host_check(env):
         assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
         c.cookies.clear()
         assert c.get("/api/v1/creators", headers={"host": "evil.example"}).status_code == 401
+
+
+def test_queue_is_paged_with_true_totals(app, api):
+    from creeparr.db.engine import session_scope
+    from creeparr.db.models import Creator
+    from tests.test_manager import queue_posts
+
+    factory = app.state.services.session_factory
+    with session_scope(factory) as s:
+        c = Creator(campaign_id="1", name="Big Archive")
+        s.add(c)
+        s.flush()
+        cid = c.id
+    queue_posts(factory, cid, [f"p{i}" for i in range(260)])
+
+    first = api.get("/api/v1/queue", params={"page_size": 100}).json()
+    assert first["queued_total"] == 260 and first["running_total"] == 0
+    assert len(first["jobs"]) == 100 and first["page"] == 1
+    last = api.get("/api/v1/queue", params={"page_size": 100, "page": 3}).json()
+    assert len(last["jobs"]) == 60 and last["queued_total"] == 260
+    ids = {j["id"] for j in first["jobs"]} | {j["id"] for j in last["jobs"]}
+    assert len(ids) == 160  # pages don't overlap

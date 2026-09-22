@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { Pause, Play, RotateCcw, Trash2 } from "lucide-react";
 import { useClearFailed, usePauseQueue, useQueue, useResumeQueue, useRetryFailed } from "../api/hooks/useQueue";
 import { PageHeader } from "../components/layout/AppShell";
 import { Button } from "../components/ui/Button";
-import { Spinner } from "../components/ui/Misc";
+import { Pager, Spinner } from "../components/ui/Misc";
 import { FailedTable, JobTable } from "../components/queue/QueueTable";
 import { ProviderQueueStatusPanel } from "../components/queue/ProviderQueueStatus";
 import { useToast } from "../components/ui/Toast";
 
 export function QueuePage() {
-  const queue = useQueue();
+  const [page, setPage] = useState(1);
+  const [failedPage, setFailedPage] = useState(1);
+  const queue = useQueue(page, failedPage);
   const pause = usePauseQueue();
   const resume = useResumeQueue();
   const retryFailed = useRetryFailed();
@@ -19,7 +22,7 @@ export function QueuePage() {
     <>
       <PageHeader
         title="Queue"
-        subtitle={q ? `${q.jobs.filter((j) => j.status === "running").length} downloading · ${q.jobs.filter((j) => j.status === "queued").length} queued · ${q.failed.length} failed` : undefined}
+        subtitle={q ? `${q.running_total.toLocaleString()} downloading · ${q.queued_total.toLocaleString()} queued · ${q.failed_total.toLocaleString()} failed` : undefined}
         actions={
           <>
             {q?.paused ? (
@@ -37,11 +40,15 @@ export function QueuePage() {
       ) : (
         <div className="grid gap-6">
           <ProviderQueueStatusPanel providers={q.providers} />
-          <JobTable jobs={q.jobs} />
-          {q.failed.length > 0 && (
+          <div>
+            <JobTable jobs={q.jobs} />
+            <Pager page={q.page} pageSize={q.page_size} total={q.running_total + q.queued_total} onChange={setPage} />
+          </div>
+          {q.failed_total > 0 && (
             <div>
               <h2 className="mb-2 text-sm font-semibold text-fg-muted">Failed</h2>
               <FailedTable items={q.failed} />
+              <Pager page={q.failed_page} pageSize={q.page_size} total={q.failed_total} onChange={setFailedPage} />
             </div>
           )}
         </div>
