@@ -85,7 +85,7 @@ See [unraid/README.md](unraid/README.md) for details.
 
 ## Configuration
 
-Copy `.env.example` to `.env` next to `docker-compose.yml` and edit it; Compose picks it up
+Copy `env.example` to `.env` next to `docker-compose.yml` and edit it; Compose picks it up
 automatically. `CONFIG_DIR` and `DOWNLOAD_DIR` are required; the rest have defaults.
 Every variable is documented in that file. Summary:
 

@@ -56,7 +56,7 @@ RUN chmod +x /entrypoint.sh
 # Per-provider roots (CREEPARR_<PROVIDER>_DOWNLOAD_DIR) are deliberately not set
 # here and not declared as volumes: unset, every provider archives under
 # /downloads. docker-compose.yml and the Unraid template set them when the
-# matching host path is configured. See .env.example.
+# matching host path is configured. See env.example.
 VOLUME ["/config", "/downloads"]
 EXPOSE 7979
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
