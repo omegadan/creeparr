@@ -13,7 +13,12 @@ export class ApiError extends Error {
 const BASE = "/api/v1";
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json", ...(init.headers as Record<string, string>) };
+  // X-Requested-With: the backend rejects state-changing calls without it (CSRF guard).
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "X-Requested-With": "creeparr",
+    ...(init.headers as Record<string, string>),
+  };
   if (init.body && !(init.body instanceof FormData)) headers["Content-Type"] = "application/json";
   const res = await fetch(`${BASE}${path}`, { ...init, headers });
   if (res.status === 204) return undefined as T;

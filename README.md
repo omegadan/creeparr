@@ -98,6 +98,7 @@ Every variable is documented in that file. Summary:
 | `PATREON_DOWNLOAD_DIR`, `ONLYFANS_DOWNLOAD_DIR`, `YOUTUBE_DOWNLOAD_DIR`, `INSTAGRAM_DOWNLOAD_DIR`, `REDDIT_DOWNLOAD_DIR` | unset | Optional per-provider archive root; unset ones use `DOWNLOAD_DIR` |
 | `PORT`                 | `7979`        | Host port for the web UI                               |
 | `CREEPARR_LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`                    |
+| `CREEPARR_ALLOWED_HOSTS` | unset       | Extra host names allowed while no password is set (see [Security](#security)) |
 | `CREEPARR_CONFIG_DIR`  | `/config`     | In-container config path (only when not using Docker) |
 | `CREEPARR_DOWNLOAD_DIR`| `/downloads`  | In-container default archive path (only when not using Docker) |
 | `CREEPARR_<PROVIDER>_DOWNLOAD_DIR` | unset | Per-provider archive path (`PATREON`, `ONLYFANS`, `YOUTUBE`, `INSTAGRAM`, `REDDIT`); falls back to `CREEPARR_DOWNLOAD_DIR` |
@@ -149,6 +150,16 @@ The web UI is unauthenticated by default. If Creeparr is reachable beyond your o
 set a password in **Settings → Security**; it gates the whole API. Credentials you paste
 (Patreon/OnlyFans cookies) are stored in the SQLite DB under `/config` and never shown
 back in full.
+
+Two checks stop other websites from using the API through your browser:
+
+- State-changing API calls (`POST`/`PUT`/`PATCH`/`DELETE`) must send an
+  `X-Requested-With` header (any value). The web UI does; add it to your own scripts,
+  e.g. `curl -X POST -H 'X-Requested-With: curl' http://tower:7979/api/v1/creators/scan-all`.
+- While no password is set, the UI only answers to IP addresses, bare host names
+  (`tower`), `localhost` and `.local` / `.lan` / `.home.arpa` / `.internal` / `.ts.net`
+  names. To open it by another name (a reverse-proxy domain, say), set a password or
+  list the name in `CREEPARR_ALLOWED_HOSTS`.
 
 ## License
 

@@ -57,7 +57,10 @@ supports strftime specs), post_type, filename, ext, media_kind, media_index, emb
 
 ## REST API
 
-Interactive docs at `/api/docs`. Main endpoints:
+Interactive docs at `/api/docs`. `POST`/`PUT`/`PATCH`/`DELETE` requests must send an
+`X-Requested-With` header (any value) or get `403 csrf_header_missing`. While no UI
+password is set, requests by an unrecognised host name get `403 host_not_allowed`; see
+`CREEPARR_ALLOWED_HOSTS` in `env.example`. Main endpoints:
 
 - `GET /api/v1/system/status`, `/system/logs`, `/system/tasks`, `POST /system/tasks/{name}/run`
 - `GET /api/v1/events` (SSE)

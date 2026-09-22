@@ -88,11 +88,38 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
 
     from starlette.middleware.base import BaseHTTPMiddleware
 
-    from creeparr.api.auth import OPEN_PATHS, is_authenticated
+    from creeparr.api.auth import OPEN_PATHS, auth_active, is_authenticated
+    from creeparr.api.guard import (
+        CSRF_HEADER,
+        is_allowed_host,
+        needs_csrf_header,
+        parse_allowed_hosts,
+    )
+
+    allowed_hosts = parse_allowed_hosts(env.allowed_hosts)
+
+    def _forbidden(code: str, message: str) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"error": {"code": code, "message": message}})
 
     class AuthMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request, call_next):
             path = request.url.path
+            if (
+                path != "/health"
+                and not auth_active(services)
+                and not is_allowed_host(request.headers.get("host"), allowed_hosts)
+            ):
+                return _forbidden(
+                    "host_not_allowed",
+                    "This host name is not allowed while Creeparr has no password. Open it "
+                    "by IP address and set a password in Settings → Security, or add the "
+                    "name to CREEPARR_ALLOWED_HOSTS.",
+                )
+            if needs_csrf_header(request.method, path) and not request.headers.get(CSRF_HEADER):
+                return _forbidden(
+                    "csrf_header_missing",
+                    f"state-changing API requests must send the {CSRF_HEADER} header",
+                )
             gated = path.startswith("/api/v1/") and path not in OPEN_PATHS
             if gated and not is_authenticated(request, services):
                 return JSONResponse(

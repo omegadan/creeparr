@@ -31,9 +31,13 @@ class PasswordBody(BaseModel):
     current_password: str | None = None
 
 
-def is_authenticated(request: Request, services: Services) -> bool:
+def auth_active(services: Services) -> bool:
     sec = services.settings.get().security
-    if not sec.auth_enabled or not sec.password_hash:
+    return bool(sec.auth_enabled and sec.password_hash)
+
+
+def is_authenticated(request: Request, services: Services) -> bool:
+    if not auth_active(services):
         return True
     token = request.cookies.get(COOKIE)
     return bool(token and verify_token(services.auth_secret, token))
@@ -41,9 +45,10 @@ def is_authenticated(request: Request, services: Services) -> bool:
 
 @router.get("/auth/status")
 def auth_status(request: Request, services: Services = Depends(get_services)):
-    sec = services.settings.get().security
-    enabled = bool(sec.auth_enabled and sec.password_hash)
-    return {"auth_enabled": enabled, "authenticated": is_authenticated(request, services)}
+    return {
+        "auth_enabled": auth_active(services),
+        "authenticated": is_authenticated(request, services),
+    }
 
 
 @router.post("/auth/login")

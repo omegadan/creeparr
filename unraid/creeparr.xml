@@ -90,6 +90,11 @@
       <Mode/>
     </Variable>
     <Variable>
+      <Value/>
+      <Name>CREEPARR_ALLOWED_HOSTS</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
       <Value>/downloads-patreon</Value>
       <Name>CREEPARR_PATREON_DOWNLOAD_DIR</Name>
       <Mode/>
@@ -127,6 +132,7 @@
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Time zone (IANA name)" Type="Variable" Display="advanced" Required="false" Mask="false">America/Los_Angeles</Config>
   <Config Name="Log level" Target="CREEPARR_LOG_LEVEL" Default="INFO" Mode="" Description="DEBUG, INFO, WARNING or ERROR" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+  <Config Name="Allowed host names" Target="CREEPARR_ALLOWED_HOSTS" Default="" Mode="" Description="Only needed to open the UI by a domain name (e.g. behind a reverse proxy) without setting a password. Comma separated; .example.com matches subdomains. IPs, tower, *.local are always allowed" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="Patreon container path" Target="CREEPARR_PATREON_DOWNLOAD_DIR" Default="/downloads-patreon" Mode="" Description="Where the Patreon downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-patreon</Config>
   <Config Name="OnlyFans container path" Target="CREEPARR_ONLYFANS_DOWNLOAD_DIR" Default="/downloads-onlyfans" Mode="" Description="Where the OnlyFans downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-onlyfans</Config>
   <Config Name="YouTube container path" Target="CREEPARR_YOUTUBE_DOWNLOAD_DIR" Default="/downloads-youtube" Mode="" Description="Where the YouTube downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-youtube</Config>

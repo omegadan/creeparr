@@ -39,6 +39,8 @@ class EnvConfig(BaseSettings):
     reddit_download_dir: Path | None = None
     host: str = "0.0.0.0"
     port: int = 7979
+    # Extra Host names accepted while no UI password is set (see creeparr.api.guard).
+    allowed_hosts: str = ""
     log_level: str = "INFO"
     db_path: Path | None = None
     static_dir: Path | None = None

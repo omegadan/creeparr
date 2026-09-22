@@ -10,6 +10,9 @@ from creeparr.patreon.client import API_URL
 from tests import patreon_fixtures as fx
 from tests.conftest import json_response
 
+# What the web UI sends on every request (see creeparr.api.guard).
+UI_HEADERS = {"X-Requested-With": "creeparr"}
+
 
 @pytest.fixture
 def app(env):
@@ -24,7 +27,7 @@ def app(env):
 
 @pytest.fixture
 def api(app):
-    with TestClient(app) as c:
+    with TestClient(app, headers=UI_HEADERS) as c:
         yield c
 
 
@@ -164,7 +167,7 @@ def test_ui_auth_flow(env):
     from creeparr.app import create_app
 
     app = create_app(env, start_background=False)
-    with TestClient(app) as c:
+    with TestClient(app, headers=UI_HEADERS) as c:
         assert c.get("/api/v1/auth/status").json()["auth_enabled"] is False
         assert c.get("/api/v1/creators").status_code == 200
         assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
@@ -174,3 +177,50 @@ def test_ui_auth_flow(env):
         assert c.get("/api/v1/creators").status_code == 200
         assert c.delete("/api/v1/auth/password").status_code == 200
         assert c.get("/api/v1/creators").status_code == 200  # auth disabled again
+
+
+def test_state_changing_calls_need_the_ui_header(app):
+    # A cross-site page can send a bodyless POST but not a custom header (that needs a
+    # CORS preflight this app never approves), so the header is the CSRF guard.
+    with TestClient(app) as c:
+        r = c.post("/api/v1/queue/pause")
+        assert r.status_code == 403 and r.json()["error"]["code"] == "csrf_header_missing"
+        assert c.get("/api/v1/queue").status_code == 200  # reads don't need it
+        assert c.post("/api/v1/queue/pause", headers=UI_HEADERS).status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("host", "allowed"),
+    [
+        ("192.168.1.20:7979", True),
+        ("[fd00::1]:7979", True),
+        ("localhost:7979", True),
+        ("tower:7979", True),  # bare LAN name (Unraid)
+        ("tower.local", True),
+        ("nas.home.arpa:7979", True),
+        ("tower.tail1234.ts.net", True),
+        ("evil.example:7979", False),  # DNS rebinding
+        ("creeparr.mydomain.com", False),
+    ],
+)
+def test_host_check_without_password(app, host, allowed):
+    with TestClient(app, headers=UI_HEADERS) as c:
+        r = c.get("/api/v1/creators", headers={"host": host})
+        assert (r.status_code == 200) is allowed, r.text
+        if not allowed:
+            assert r.json()["error"]["code"] == "host_not_allowed"
+        assert c.get("/health", headers={"host": host}).status_code == 200
+
+
+def test_allowed_hosts_env_and_password_lift_host_check(env):
+    env.allowed_hosts = ".mydomain.com, other.example"
+    app = create_app(env, start_background=False)
+    with TestClient(app, headers=UI_HEADERS) as c:
+        assert c.get("/api/v1/creators", headers={"host": "creeparr.mydomain.com"}).is_success
+        assert c.get("/api/v1/creators", headers={"host": "other.example:7979"}).is_success
+        assert c.get("/api/v1/creators", headers={"host": "evil.example"}).status_code == 403
+        # With a password set, an unknown host is no longer the attacker's way in: it
+        # has no session, so it just gets 401 like any unauthenticated client.
+        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        c.cookies.clear()
+        assert c.get("/api/v1/creators", headers={"host": "evil.example"}).status_code == 401

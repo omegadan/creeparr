@@ -8,6 +8,7 @@ services:
       - PGID=${PGID:-100}
       - TZ=${TZ:-America/Los_Angeles}
       - CREEPARR_LOG_LEVEL=${CREEPARR_LOG_LEVEL:-INFO}
+      - CREEPARR_ALLOWED_HOSTS=${CREEPARR_ALLOWED_HOSTS:-}
       # Per-provider archive roots are only enabled when the matching host path
       # is set in .env; otherwise the variable is empty and that provider
       # archives under /downloads (DOWNLOAD_DIR).
