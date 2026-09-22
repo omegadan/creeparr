@@ -56,6 +56,7 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
         <dl className="grid grid-cols-[10rem_1fr] gap-y-1 font-mono text-xs">
           <dt className="text-fg-dim">config_dir</dt><dd>{settings.env.config_dir}</dd>
           <dt className="text-fg-dim">download_dir</dt><dd>{settings.env.download_dir}</dd>
+          <dt className="text-fg-dim">patreon_dir</dt><dd>{settings.env.patreon_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
           <dt className="text-fg-dim">onlyfans_dir</dt><dd>{settings.env.onlyfans_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
           <dt className="text-fg-dim">youtube_dir</dt><dd>{settings.env.youtube_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
           <dt className="text-fg-dim">instagram_dir</dt><dd>{settings.env.instagram_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>

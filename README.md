@@ -94,13 +94,13 @@ Every variable is documented in that file. Summary:
 | `PUID` / `PGID`        | `99` / `100`  | User/group that owns files (Unraid defaults)           |
 | `TZ`                   | `America/Los_Angeles` | Time zone                                      |
 | `CONFIG_DIR`           | required      | Host path mounted at `/config` (database, logs)        |
-| `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads` (Patreon archive root) |
-| `ONLYFANS_DOWNLOAD_DIR`| required      | Host path mounted at `/downloads-onlyfans` (OnlyFans root) |
+| `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads`: the default archive root for every provider |
+| `PATREON_DOWNLOAD_DIR`, `ONLYFANS_DOWNLOAD_DIR`, `YOUTUBE_DOWNLOAD_DIR`, `INSTAGRAM_DOWNLOAD_DIR`, `REDDIT_DOWNLOAD_DIR` | unset | Optional per-provider archive root; unset ones use `DOWNLOAD_DIR` |
 | `PORT`                 | `7979`        | Host port for the web UI                               |
 | `CREEPARR_LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`                    |
 | `CREEPARR_CONFIG_DIR`  | `/config`     | In-container config path (only when not using Docker) |
-| `CREEPARR_DOWNLOAD_DIR`| `/downloads`  | In-container archive path (only when not using Docker) |
-| `CREEPARR_ONLYFANS_DOWNLOAD_DIR`| `/downloads-onlyfans` | OnlyFans archive path; falls back to the main one if unset |
+| `CREEPARR_DOWNLOAD_DIR`| `/downloads`  | In-container default archive path (only when not using Docker) |
+| `CREEPARR_<PROVIDER>_DOWNLOAD_DIR` | unset | Per-provider archive path (`PATREON`, `ONLYFANS`, `YOUTUBE`, `INSTAGRAM`, `REDDIT`); falls back to `CREEPARR_DOWNLOAD_DIR` |
 | `CREEPARR_PORT`        | `7979`        | Port the server listens on                             |
 
 Everything else (scan interval, concurrency, retries, naming, per-kind toggles, HTTP backend)

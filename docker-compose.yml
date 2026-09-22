@@ -8,17 +8,25 @@ services:
       - PGID=${PGID:-100}
       - TZ=${TZ:-America/Los_Angeles}
       - CREEPARR_LOG_LEVEL=${CREEPARR_LOG_LEVEL:-INFO}
-      - CREEPARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans
-      - CREEPARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube
-      - CREEPARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram
-      - CREEPARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit
+      # Per-provider archive roots are only enabled when the matching host path
+      # is set in .env; otherwise the variable is empty and that provider
+      # archives under /downloads (DOWNLOAD_DIR).
+      - CREEPARR_PATREON_DOWNLOAD_DIR=${PATREON_DOWNLOAD_DIR:+/downloads-patreon}
+      - CREEPARR_ONLYFANS_DOWNLOAD_DIR=${ONLYFANS_DOWNLOAD_DIR:+/downloads-onlyfans}
+      - CREEPARR_YOUTUBE_DOWNLOAD_DIR=${YOUTUBE_DOWNLOAD_DIR:+/downloads-youtube}
+      - CREEPARR_INSTAGRAM_DOWNLOAD_DIR=${INSTAGRAM_DOWNLOAD_DIR:+/downloads-instagram}
+      - CREEPARR_REDDIT_DOWNLOAD_DIR=${REDDIT_DOWNLOAD_DIR:+/downloads-reddit}
     volumes:
       - ${CONFIG_DIR}:/config
       - ${DOWNLOAD_DIR}:/downloads
-      - ${ONLYFANS_DOWNLOAD_DIR}:/downloads-onlyfans
-      - ${YOUTUBE_DOWNLOAD_DIR}:/downloads-youtube
-      - ${INSTAGRAM_DOWNLOAD_DIR}:/downloads-instagram
-      - ${REDDIT_DOWNLOAD_DIR}:/downloads-reddit
+      # Compose cannot make a mount optional, so an unset provider path mounts
+      # DOWNLOAD_DIR again at the provider's mount point. It is unused in that
+      # case (the variable above is empty) and harmless.
+      - ${PATREON_DOWNLOAD_DIR:-${DOWNLOAD_DIR}}:/downloads-patreon
+      - ${ONLYFANS_DOWNLOAD_DIR:-${DOWNLOAD_DIR}}:/downloads-onlyfans
+      - ${YOUTUBE_DOWNLOAD_DIR:-${DOWNLOAD_DIR}}:/downloads-youtube
+      - ${INSTAGRAM_DOWNLOAD_DIR:-${DOWNLOAD_DIR}}:/downloads-instagram
+      - ${REDDIT_DOWNLOAD_DIR:-${DOWNLOAD_DIR}}:/downloads-reddit
     ports:
       - "${PORT:-7979}:7979"
     restart: unless-stopped

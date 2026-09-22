@@ -356,7 +356,7 @@ export interface Settings {
     notify_scan_completed: boolean;
   };
   history: { retention_days: number; job_retention_days: number };
-  env: { config_dir: string; download_dir: string; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null; port: number; log_level: string; ffmpeg: string | null };
+  env: { config_dir: string; download_dir: string; patreon_download_dir: string | null; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null; port: number; log_level: string; ffmpeg: string | null };
 }
 
 export type SettingsPatch = {
@@ -381,7 +381,7 @@ export interface SystemStatus {
   downloads: { paused: boolean; paused_reason: string | null; workers: number; running_jobs: number[]; free_bytes: number };
   counts: { creators: number; posts: number; media_completed: number; media_bytes: number; provider_bytes: Record<string, number>; queued: number; running: number; failed: number };
   disk: { free_bytes: number | null; total_bytes: number | null; used_bytes: number | null };
-  paths: { config_dir: string; download_dir: string; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null };
+  paths: { config_dir: string; download_dir: string; patreon_download_dir: string | null; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null };
   ffmpeg: string | null;
   ytdlp_version: string;
   http_backend: string;

@@ -31,22 +31,7 @@ async def _apply_side_effects(services: Services, groups: set[str]) -> None:
 def get_settings(services: Services = Depends(get_services)) -> dict[str, Any]:
     data = services.settings.masked()
     data["env"] = {
-        "config_dir": str(services.env.config_dir),
-        "download_dir": str(services.env.download_dir),
-        "onlyfans_download_dir": (
-            str(services.env.onlyfans_download_dir) if services.env.onlyfans_download_dir else None
-        ),
-        "youtube_download_dir": (
-            str(services.env.youtube_download_dir) if services.env.youtube_download_dir else None
-        ),
-        "instagram_download_dir": (
-            str(services.env.instagram_download_dir)
-            if services.env.instagram_download_dir
-            else None
-        ),
-        "reddit_download_dir": (
-            str(services.env.reddit_download_dir) if services.env.reddit_download_dir else None
-        ),
+        **services.env.describe_paths(),
         "port": services.env.port,
         "log_level": services.env.log_level,
         "ffmpeg": services.env.resolve_ffmpeg(),

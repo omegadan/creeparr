@@ -135,28 +135,7 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
             "failed": failed,
         },
         "disk": disk,
-        "paths": {
-            "config_dir": str(services.env.config_dir),
-            "download_dir": str(services.env.download_dir),
-            "onlyfans_download_dir": (
-                str(services.env.onlyfans_download_dir)
-                if services.env.onlyfans_download_dir
-                else None
-            ),
-            "youtube_download_dir": (
-                str(services.env.youtube_download_dir)
-                if services.env.youtube_download_dir
-                else None
-            ),
-            "instagram_download_dir": (
-                str(services.env.instagram_download_dir)
-                if services.env.instagram_download_dir
-                else None
-            ),
-            "reddit_download_dir": (
-                str(services.env.reddit_download_dir) if services.env.reddit_download_dir else None
-            ),
-        },
+        "paths": services.env.describe_paths(),
         "ffmpeg": ffmpeg,
         "ytdlp_version": yt_dlp.version.__version__,
         "http_backend": settings.patreon.http_backend,

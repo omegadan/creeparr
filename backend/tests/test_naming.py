@@ -81,6 +81,58 @@ def test_download_root_per_provider(tmp_path: Path):
     assert set(env2.download_roots()) == {"downloads"}
 
 
+def test_patreon_has_its_own_download_dir(tmp_path: Path):
+    from creeparr.config import EnvConfig
+
+    base = tmp_path / "dl"
+    pat = tmp_path / "dl-patreon"
+    env = EnvConfig(config_dir=tmp_path / "c", download_dir=base, patreon_download_dir=pat)
+    assert env.download_root("patreon") == pat
+    # every other provider still uses the default root
+    for provider in ("onlyfans", "youtube", "instagram", "reddit"):
+        assert env.download_root(provider) == base
+    assert env.download_roots() == {"downloads": base, "patreon": pat}
+    paths = env.describe_paths()
+    assert paths["download_dir"] == str(base)
+    assert paths["patreon_download_dir"] == str(pat)
+    assert paths["onlyfans_download_dir"] is None
+
+
+def test_download_dirs_from_env(tmp_path: Path, monkeypatch):
+    from creeparr.config import EnvConfig
+
+    monkeypatch.setenv("CREEPARR_CONFIG_DIR", str(tmp_path / "c"))
+    monkeypatch.setenv("CREEPARR_DOWNLOAD_DIR", str(tmp_path / "dl"))
+    monkeypatch.setenv("CREEPARR_PATREON_DOWNLOAD_DIR", str(tmp_path / "pat"))
+    monkeypatch.setenv("CREEPARR_YOUTUBE_DOWNLOAD_DIR", str(tmp_path / "yt"))
+    # docker-compose emits an empty value when the host path is not configured
+    monkeypatch.setenv("CREEPARR_ONLYFANS_DOWNLOAD_DIR", "")
+    monkeypatch.setenv("CREEPARR_REDDIT_DOWNLOAD_DIR", "   ")
+    env = EnvConfig()
+    assert env.download_root("patreon") == tmp_path / "pat"
+    assert env.download_root("youtube") == tmp_path / "yt"
+    assert env.onlyfans_download_dir is None
+    assert env.reddit_download_dir is None
+    assert env.download_root("onlyfans") == tmp_path / "dl"
+    assert env.download_root("reddit") == tmp_path / "dl"
+    assert set(env.download_roots()) == {"downloads", "patreon", "youtube"}
+
+
+def test_download_roots_dedupes_shared_dirs(tmp_path: Path):
+    from creeparr.config import EnvConfig
+
+    base = tmp_path / "dl"
+    shared = tmp_path / "shared"
+    env = EnvConfig(
+        config_dir=tmp_path / "c",
+        download_dir=base,
+        patreon_download_dir=base,  # same as default: not listed twice
+        youtube_download_dir=shared,
+        reddit_download_dir=shared,  # same dir as youtube: listed once
+    )
+    assert env.download_roots() == {"downloads": base, "youtube": shared}
+
+
 def test_html_to_text():
     from creeparr.downloader.metadata import html_to_text
 

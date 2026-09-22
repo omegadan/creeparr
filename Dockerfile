@@ -17,10 +17,6 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
     CREEPARR_CONFIG_DIR=/config \
     CREEPARR_DOWNLOAD_DIR=/downloads \
-    CREEPARR_ONLYFANS_DOWNLOAD_DIR=/downloads-onlyfans \
-    CREEPARR_YOUTUBE_DOWNLOAD_DIR=/downloads-youtube \
-    CREEPARR_INSTAGRAM_DOWNLOAD_DIR=/downloads-instagram \
-    CREEPARR_REDDIT_DOWNLOAD_DIR=/downloads-reddit \
     CREEPARR_PORT=7979 \
     PUID=1000 \
     PGID=1000 \
@@ -57,7 +53,11 @@ COPY --from=frontend /src/dist/ ./creeparr/static/
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-VOLUME ["/config", "/downloads", "/downloads-onlyfans", "/downloads-youtube", "/downloads-instagram", "/downloads-reddit"]
+# Per-provider roots (CREEPARR_<PROVIDER>_DOWNLOAD_DIR) are deliberately not set
+# here and not declared as volumes: unset, every provider archives under
+# /downloads. docker-compose.yml and the Unraid template set them when the
+# matching host path is configured. See .env.example.
+VOLUME ["/config", "/downloads"]
 EXPOSE 7979
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fs http://localhost:7979/health || exit 1

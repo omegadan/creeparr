@@ -15,7 +15,7 @@ Creeparr is not (yet) in Community Applications, so add it as a template manuall
 Add a container with:
 - Repository: `ghcr.io/omegadan/creeparr:latest`
 - Port: `7979` → `7979`
-- Paths: `/config`, `/downloads`, `/downloads-onlyfans` mapped to your shares
+- Paths: `/config` and `/downloads` (the default archive root) mapped to your shares. The per-provider paths (`/downloads-patreon`, `/downloads-onlyfans`, `/downloads-youtube`, `/downloads-instagram`, `/downloads-reddit`) are optional: leave one blank and that provider archives under `/downloads`.
 - Variables: `PUID=99`, `PGID=100`, `TZ=America/Los_Angeles`
 
 Then open `http://<tower-ip>:7979`, go to **Settings → Accounts**, and connect Patreon

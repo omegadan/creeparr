@@ -20,7 +20,7 @@
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Description>Self-hosted archiver for Patreon and OnlyFans creators you support. Paste your session cookies in Settings, import your subscriptions, and it archives and monitors them. OnlyFans content is stored in a separate folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
+  <Description>Self-hosted archiver for Patreon and OnlyFans creators you support. Paste your session cookies in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
@@ -38,8 +38,13 @@
       <Mode>rw</Mode>
     </Volume>
     <Volume>
-      <HostDir>/mnt/user/media/patreon</HostDir>
+      <HostDir>/mnt/user/media/creeparr</HostDir>
       <ContainerDir>/downloads</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+    <Volume>
+      <HostDir>/mnt/user/media/patreon</HostDir>
+      <ContainerDir>/downloads-patreon</ContainerDir>
       <Mode>rw</Mode>
     </Volume>
     <Volume>
@@ -84,16 +89,47 @@
       <Name>CREEPARR_LOG_LEVEL</Name>
       <Mode/>
     </Variable>
+    <Variable>
+      <Value>/downloads-patreon</Value>
+      <Name>CREEPARR_PATREON_DOWNLOAD_DIR</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/downloads-onlyfans</Value>
+      <Name>CREEPARR_ONLYFANS_DOWNLOAD_DIR</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/downloads-youtube</Value>
+      <Name>CREEPARR_YOUTUBE_DOWNLOAD_DIR</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/downloads-instagram</Value>
+      <Name>CREEPARR_INSTAGRAM_DOWNLOAD_DIR</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value>/downloads-reddit</Value>
+      <Name>CREEPARR_REDDIT_DOWNLOAD_DIR</Name>
+      <Mode/>
+    </Variable>
   </Environment>
   <Config Name="WebUI Port" Target="7979" Default="7979" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">7979</Config>
   <Config Name="Config" Target="/config" Default="/mnt/user/appdata/creeparr" Mode="rw" Description="Database, logs and session cookies" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/creeparr</Config>
-  <Config Name="Patreon downloads" Target="/downloads" Default="/mnt/user/media/patreon" Mode="rw" Description="Where Patreon (and default) media is archived" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/patreon</Config>
-  <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="/mnt/user/media/onlyfans" Mode="rw" Description="Where OnlyFans media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/onlyfans</Config>
-  <Config Name="YouTube downloads" Target="/downloads-youtube" Default="/mnt/user/media/youtube" Mode="rw" Description="Where YouTube media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/youtube</Config>
-  <Config Name="Instagram downloads" Target="/downloads-instagram" Default="/mnt/user/media/instagram" Mode="rw" Description="Where Instagram media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/instagram</Config>
-  <Config Name="Reddit downloads" Target="/downloads-reddit" Default="/mnt/user/media/reddit" Mode="rw" Description="Where Reddit media is archived (kept separate)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/reddit</Config>
+  <Config Name="Downloads" Target="/downloads" Default="/mnt/user/media/creeparr" Mode="rw" Description="Default archive root. Every provider without its own path below is archived here" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/creeparr</Config>
+  <Config Name="Patreon downloads" Target="/downloads-patreon" Default="/mnt/user/media/patreon" Mode="rw" Description="Optional: separate archive root for Patreon. Leave blank to archive Patreon under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/patreon</Config>
+  <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="/mnt/user/media/onlyfans" Mode="rw" Description="Optional: separate archive root for OnlyFans. Leave blank to archive OnlyFans under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/onlyfans</Config>
+  <Config Name="YouTube downloads" Target="/downloads-youtube" Default="/mnt/user/media/youtube" Mode="rw" Description="Optional: separate archive root for YouTube. Leave blank to archive YouTube under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/youtube</Config>
+  <Config Name="Instagram downloads" Target="/downloads-instagram" Default="/mnt/user/media/instagram" Mode="rw" Description="Optional: separate archive root for Instagram. Leave blank to archive Instagram under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/instagram</Config>
+  <Config Name="Reddit downloads" Target="/downloads-reddit" Default="/mnt/user/media/reddit" Mode="rw" Description="Optional: separate archive root for Reddit. Leave blank to archive Reddit under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/reddit</Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Time zone (IANA name)" Type="Variable" Display="advanced" Required="false" Mask="false">America/Los_Angeles</Config>
   <Config Name="Log level" Target="CREEPARR_LOG_LEVEL" Default="INFO" Mode="" Description="DEBUG, INFO, WARNING or ERROR" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+  <Config Name="Patreon container path" Target="CREEPARR_PATREON_DOWNLOAD_DIR" Default="/downloads-patreon" Mode="" Description="Where the Patreon downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-patreon</Config>
+  <Config Name="OnlyFans container path" Target="CREEPARR_ONLYFANS_DOWNLOAD_DIR" Default="/downloads-onlyfans" Mode="" Description="Where the OnlyFans downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-onlyfans</Config>
+  <Config Name="YouTube container path" Target="CREEPARR_YOUTUBE_DOWNLOAD_DIR" Default="/downloads-youtube" Mode="" Description="Where the YouTube downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-youtube</Config>
+  <Config Name="Instagram container path" Target="CREEPARR_INSTAGRAM_DOWNLOAD_DIR" Default="/downloads-instagram" Mode="" Description="Where the Instagram downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-instagram</Config>
+  <Config Name="Reddit container path" Target="CREEPARR_REDDIT_DOWNLOAD_DIR" Default="/downloads-reddit" Mode="" Description="Where the Reddit downloads path is mounted inside the container. Leave as is" Type="Variable" Display="advanced" Required="false" Mask="false">/downloads-reddit</Config>
 </Container>

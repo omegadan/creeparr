@@ -2,7 +2,7 @@
 
 ## Environment variables
 
-See the table in the README. They cover paths, port and log level only. `CREEPARR_ONLYFANS_DOWNLOAD_DIR` sends OnlyFans content to a separate directory; if unset it falls back to `CREEPARR_DOWNLOAD_DIR`.
+See the table in the README. They cover paths, port and log level only. `CREEPARR_DOWNLOAD_DIR` is the default archive root. Each provider can be sent to its own directory with `CREEPARR_PATREON_DOWNLOAD_DIR`, `CREEPARR_ONLYFANS_DOWNLOAD_DIR`, `CREEPARR_YOUTUBE_DOWNLOAD_DIR`, `CREEPARR_INSTAGRAM_DOWNLOAD_DIR` or `CREEPARR_REDDIT_DOWNLOAD_DIR`; any that is unset or empty falls back to `CREEPARR_DOWNLOAD_DIR`. In Docker the entrypoint also falls back when a configured provider directory has nothing mounted at it, so an archive never lands in the container's own filesystem.
 
 ## Settings (stored in the database, edited in the UI or via `PUT /api/v1/settings`)
 
