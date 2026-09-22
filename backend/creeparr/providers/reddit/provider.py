@@ -25,6 +25,7 @@ from creeparr.providers.reddit.client import (
     WWW,
     RedditClient,
     RedditCredentials,
+    media_resource,
 )
 
 log = logging.getLogger("creeparr.reddit")
@@ -193,15 +194,9 @@ class RedditProvider(ProviderService):
         data = raw_json.get("data")
         if not isinstance(data, dict):
             return None
-        from creeparr.providers.models import MediaResource
-
         media = [
-            MediaResource(
-                id=str(m.get("num")),
-                relationship="media",
-                download_url=m.get("url"),
-                metadata={"is_video": m.get("is_video"), "num": m.get("num")},
-                raw=m,
+            media_resource(
+                data.get("id"), m["url"], bool(m.get("is_video")), int(m.get("num") or 1)
             )
             for m in (raw_json.get("included") or [])
             if isinstance(m, dict) and m.get("url")

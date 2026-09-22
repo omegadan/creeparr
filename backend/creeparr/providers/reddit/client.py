@@ -146,20 +146,24 @@ def _permalink(post: dict[str, Any]) -> str:
     return p if p.startswith("http") else f"{WWW}{p}"
 
 
+def media_resource(post_id: Any, url: str, is_video: bool, num: int) -> MediaResource:
+    """One media entry of a post. Scans and post_from_raw must build identical ids,
+    since the id becomes the media_key that matches rows on re-resolution."""
+    return MediaResource(
+        id=f"{post_id}:{num}",
+        relationship="video" if is_video else "images",
+        download_url=url,
+        metadata={"num": num, "is_video": is_video},
+        raw={"url": url, "is_video": is_video, "num": num},
+    )
+
+
 def _post_media(post: dict[str, Any]) -> list[MediaResource]:
     permalink = _permalink(post)
     media: list[MediaResource] = []
 
     def add(url: str, is_video: bool, num: int) -> None:
-        media.append(
-            MediaResource(
-                id=f"{post.get('id')}:{num}",
-                relationship="video" if is_video else "images",
-                download_url=url,
-                metadata={"num": num, "is_video": is_video},
-                raw={"url": url, "is_video": is_video, "num": num},
-            )
-        )
+        media.append(media_resource(post.get("id"), url, is_video, num))
 
     if post.get("is_video") and (post.get("media") or {}).get("reddit_video"):
         add(permalink, True, 1)  # yt-dlp merges audio+video from the post URL

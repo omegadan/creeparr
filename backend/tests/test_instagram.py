@@ -102,3 +102,36 @@ def test_enabled_sources_respects_toggles(env, settings, session_factory, bus):
         }
     )
     assert prov._enabled_sources() == ["posts", "reels", "stories", "tagged"]
+
+
+def _spec_view(specs):
+    return [(s.media_key, s.kind, s.source, s.file_name) for s in specs]
+
+
+def test_post_from_raw_round_trips_media_keys():
+    # reresolve_media rebuilds posts from stored raw_json; the media keys must match what
+    # a scan produced, or sync_media_items deletes the rows and queues duplicates.
+    prov = object.__new__(InstagramProvider)
+    scanned = group_into_posts(_items(), "posts", "someone")[0]
+    rebuilt = InstagramProvider.post_from_raw(prov, scanned.storable_json())
+    assert rebuilt is not None
+    assert _spec_view(InstagramProvider.resolve_media(prov, rebuilt)) == _spec_view(
+        InstagramProvider.resolve_media(prov, scanned)
+    )
+
+
+def test_post_from_raw_handles_rows_stored_before_is_video():
+    # Rows written by older versions stored only url/num/typename/date per media.
+    prov = object.__new__(InstagramProvider)
+    raw = {
+        "data": {"shortcode": "AAA", "owner_id": "555"},
+        "included": [
+            {"url": "https://cdn/1.jpg", "num": 1, "typename": "GraphSidecar", "date": None},
+            {"url": "https://cdn/2.mp4", "num": 2, "typename": "GraphVideo", "date": None},
+        ],
+    }
+    specs = InstagramProvider.resolve_media(prov, InstagramProvider.post_from_raw(prov, raw))
+    assert [(s.media_key, s.kind) for s in specs] == [
+        ("ig:AAA:1", MediaKind.IMAGE),
+        ("ig:AAA:2", MediaKind.VIDEO),
+    ]

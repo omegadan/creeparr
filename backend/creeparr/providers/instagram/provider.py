@@ -22,6 +22,7 @@ from creeparr.providers.instagram.client import (
     InstagramCredentials,
     creator_from_items,
     group_into_posts,
+    media_resource,
 )
 from creeparr.providers.models import (
     CreatorInfo,
@@ -217,19 +218,15 @@ class InstagramProvider(ProviderService):
             return None
         # Rebuild is best-effort from stored media; Instagram URLs expire, so a refresh
         # (get_post) is preferred. Reconstruct enough for re-resolution.
-        from creeparr.providers.models import MediaResource
-
-        media = []
-        for m in raw_json.get("included") or []:
-            if isinstance(m, dict) and m.get("url"):
-                media.append(
-                    MediaResource(
-                        id=str(m.get("num")), relationship="media", download_url=m["url"], raw=m
-                    )
-                )
+        shortcode = str(data.get("shortcode"))
+        media = [
+            media_resource(shortcode, m["url"], m)
+            for m in (raw_json.get("included") or [])
+            if isinstance(m, dict) and m.get("url")
+        ]
         pr = PostResource(
-            id=str(data.get("shortcode")),
-            title=str(data.get("shortcode")),
+            id=shortcode,
+            title=shortcode,
             post_type="instagram_post",
             url=f"{BASE}/p/{data.get('shortcode')}/",
             campaign_id=str(data.get("owner_id") or data.get("username") or ""),

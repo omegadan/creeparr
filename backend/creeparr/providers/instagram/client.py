@@ -113,6 +113,36 @@ def _kind_ext(meta: dict[str, Any], url: str) -> str:
     return tail[-1].lower() if len(tail) == 2 else ""
 
 
+def media_resource(shortcode: str, url: str, meta: dict[str, Any]) -> MediaResource:
+    """One media entry of a post, from gallery-dl metadata or from a stored raw entry.
+
+    Scans and post_from_raw must build identical ids, since the id becomes the
+    media_key that matches rows on re-resolution.
+    """
+    num = int(meta.get("num") or 1)
+    ext = _kind_ext(meta, url)
+    is_video = (
+        bool(meta.get("is_video"))
+        or bool(meta.get("video_url"))
+        or "GraphVideo" in str(meta.get("typename", ""))
+        or ext in ("mp4", "mov")
+    )
+    return MediaResource(
+        id=f"{shortcode}:{num}",
+        relationship="video" if is_video else "images",
+        file_name=f"{shortcode}_{num}.{ext}" if ext else None,
+        download_url=url,
+        mimetype=None,
+        metadata={"num": num, "typename": meta.get("typename"), "is_video": is_video},
+        raw={
+            "url": url,
+            "is_video": is_video,
+            "extension": ext or None,
+            **{k: meta.get(k) for k in ("num", "typename", "date")},
+        },
+    )
+
+
 def group_into_posts(
     items: list[tuple[str, dict[str, Any]]], source: str, username: str
 ) -> list[PostResource]:
@@ -125,22 +155,8 @@ def group_into_posts(
         shortcode = str(
             meta.get("post_shortcode") or meta.get("shortcode") or meta.get("post_id") or url
         )
-        num = int(meta.get("num") or 1)
-        ext = _kind_ext(meta, url)
-        is_video = (
-            bool(meta.get("video_url"))
-            or "GraphVideo" in str(meta.get("typename", ""))
-            or ext in ("mp4", "mov")
-        )
-        media = MediaResource(
-            id=f"{shortcode}:{num}",
-            relationship="video" if is_video else "images",
-            file_name=f"{shortcode}_{num}.{ext}" if ext else None,
-            download_url=url,
-            mimetype=None,
-            metadata={"num": num, "typename": meta.get("typename"), "is_video": is_video},
-            raw={"url": url, **{k: meta.get(k) for k in ("num", "typename", "date")}},
-        )
+        media = media_resource(shortcode, url, meta)
+        is_video = bool(media.metadata["is_video"])
         if shortcode not in posts:
             order.append(shortcode)
             caption = str(meta.get("description") or "").strip()
