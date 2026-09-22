@@ -219,6 +219,27 @@ async def test_stream_does_not_send_cookies_to_cdn(client, respx_mock):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("url", "sends_cookie"),
+    [
+        ("https://www.patreon.com/creator", True),
+        ("https://patreon.com/creator", True),
+        ("https://stream.mux.com/abc.m3u8", False),  # DRM probe master playlist
+        ("https://evil.example/variant.m3u8", False),  # variant host named by the playlist
+        ("https://evilpatreon.com/x", False),
+        ("https://www.patreon.com.evil.example/x", False),
+    ],
+)
+async def test_session_cookie_only_goes_to_patreon_hosts(client, respx_mock, url, sends_cookie):
+    fetch = respx_mock.get(url).mock(return_value=httpx.Response(200, text="#EXTM3U"))
+    await client.fetch_text(url)
+    resp = await client.stream(url)
+    await resp.aclose()
+    for call in fetch.calls:
+        assert ("cookie" in call.request.headers) is sends_cookie, call.request.url
+
+
+@pytest.mark.asyncio
 async def test_rate_limiter_adds_random_delay(monkeypatch):
     import creeparr.patreon.transport as tp
 

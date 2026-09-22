@@ -253,9 +253,9 @@ class OnlyFansProvider(ProviderService):
         headers = dict(self.media_headers())
         if range_start > 0:
             headers["Range"] = f"bytes={range_start}-"
-        host = urlparse(url).netloc.lower()
+        host = urlparse(url).hostname or ""
         # OnlyFans CDN URLs are pre-signed; only send cookies to onlyfans.com itself.
-        if host.endswith("onlyfans.com"):
+        if host == "onlyfans.com" or host.endswith(".onlyfans.com"):
             headers["Cookie"] = self._creds().cookie_header()
         transport = self._transport()
         try:

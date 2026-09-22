@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import httpx
+import pytest
+
 from creeparr.db.enums import MediaKind
 from creeparr.providers.onlyfans.client import OnlyFansClient
+from creeparr.providers.onlyfans.provider import OnlyFansProvider
 from creeparr.providers.onlyfans.signing import DynamicRules, sign_request
 
 RULES = DynamicRules(
@@ -152,3 +156,27 @@ def test_youtube_channel_url_and_entry_parsing():
         '<feed xmlns="http://www.w3.org/2005/Atom" xmlns:yt="http://www.youtube.com/xml/schemas/2015"><entry><yt:videoId>xyz</yt:videoId><published>2026-01-02T03:04:05+00:00</published></entry></feed>'
     )
     assert "xyz" in rss and rss["xyz"].year == 2026
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("url", "sends_cookie"),
+    [
+        ("https://onlyfans.com/file", True),
+        ("https://cdn2.onlyfans.com/file.mp4", True),
+        ("https://evilonlyfans.com/file", False),
+        ("https://onlyfans.com.evil.example/file", False),
+    ],
+)
+async def test_stream_cookie_only_goes_to_onlyfans_hosts(
+    env, settings, session_factory, bus, respx_mock, url, sends_cookie
+):
+    settings.update(
+        {"onlyfans": {"sess": "S3CRET", "auth_id": "42", "http_backend": "httpx"}},
+        allow_secrets=True,
+    )
+    prov = OnlyFansProvider(env, settings, session_factory, bus)
+    route = respx_mock.get(url).mock(return_value=httpx.Response(200, content=b"x"))
+    resp = await prov.stream(url)
+    await resp.aclose()
+    assert ("cookie" in route.calls[0].request.headers) is sends_cookie

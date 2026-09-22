@@ -48,7 +48,7 @@ def name_ext(name: str | None) -> str:
 
 
 def is_patreon_url(url: str | None) -> bool:
-    host = urlparse(url or "").netloc.lower()
+    host = urlparse(url or "").hostname or ""  # lowercased, without port or userinfo
     return host == "patreon.com" or host.endswith(".patreon.com")
 
 

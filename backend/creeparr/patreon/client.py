@@ -26,6 +26,7 @@ from creeparr.patreon.errors import (
     TransportFailure,
     UnexpectedResponse,
 )
+from creeparr.patreon.media_resolver import is_patreon_url
 from creeparr.patreon.parsing import (
     IncludedIndex,
     campaign_from_resource,
@@ -258,7 +259,16 @@ class PatreonClient:
         return payload
 
     async def fetch_text(self, url: str, headers: dict[str, str] | None = None) -> str:
-        resp = await self._request("GET", url, headers=headers, expect_json=False, api=False)
+        """GET a page or playlist as text. Also used for Mux HLS playlists (DRM probe),
+        whose variants can point at any host, so cookies go to patreon.com hosts only."""
+        resp = await self._request(
+            "GET",
+            url,
+            headers=headers,
+            expect_json=False,
+            api=False,
+            with_cookies=is_patreon_url(url),
+        )
         return resp.text
 
     async def stream(
@@ -271,7 +281,6 @@ class PatreonClient:
         extra = dict(headers or {})
         if range_start > 0:
             extra["Range"] = f"bytes={range_start}-"
-        host = urlparse(url).netloc.lower()
         return await self._request(
             "GET",
             url,
@@ -281,7 +290,7 @@ class PatreonClient:
             api=False,
             max_attempts=2,
             classify=False,
-            with_cookies=host.endswith("patreon.com"),
+            with_cookies=is_patreon_url(url),
         )
 
     async def aclose(self) -> None:
