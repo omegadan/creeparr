@@ -181,7 +181,7 @@ def test_verify_files_leaves_an_unmounted_share_alone(env, session_factory, sett
 
 
 def test_root_with_many_files_all_gone_counts_as_unmounted(tmp_path):
-    from creeparr.downloader.manager import UNMOUNTED_MIN_FILES, _root_unavailable
+    from creeparr.downloader.maintenance import UNMOUNTED_MIN_FILES, _root_unavailable
 
     (tmp_path / "lost+found").mkdir()  # not empty, but none of the archive is there
     assert _root_unavailable(tmp_path, UNMOUNTED_MIN_FILES, 0)
