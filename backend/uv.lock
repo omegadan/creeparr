@@ -316,6 +316,65 @@ wheels = [
 ]
 
 [[package]]
+name = "creeparr"
+source = { editable = "." }
+dependencies = [
+    { name = "alembic" },
+    { name = "apscheduler" },
+    { name = "fastapi" },
+    { name = "gallery-dl" },
+    { name = "httpx", extra = ["http2"] },
+    { name = "markdownify" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-multipart" },
+    { name = "sqlalchemy" },
+    { name = "sse-starlette" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "yt-dlp" },
+]
+
+[package.optional-dependencies]
+impersonate = [
+    { name = "curl-cffi" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "respx" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "apscheduler", specifier = ">=3.10,<4" },
+    { name = "curl-cffi", marker = "extra == 'impersonate'", specifier = ">=0.7" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "gallery-dl", specifier = ">=1.32.13" },
+    { name = "httpx", extras = ["http2"], specifier = ">=0.27" },
+    { name = "markdownify", specifier = ">=0.13" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pydantic-settings", specifier = ">=2.3" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "sqlalchemy", specifier = ">=2.0" },
+    { name = "sse-starlette", specifier = ">=2.1" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "yt-dlp", specifier = ">=2025.1.1" },
+]
+provides-extras = ["impersonate"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
+    { name = "respx", specifier = ">=0.21" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
+[[package]]
 name = "curl-cffi"
 version = "0.16.3"
 source = { registry = "https://pypi.org/simple" }
@@ -653,66 +712,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", hash = "sha256:94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", size = 313412, upload-time = "2026-08-04T18:15:28.737Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", hash = "sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", size = 129956, upload-time = "2026-08-04T18:15:27.159Z" },
-]
-
-[[package]]
-name = "creeparr"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "alembic" },
-    { name = "apscheduler" },
-    { name = "fastapi" },
-    { name = "gallery-dl" },
-    { name = "httpx", extra = ["http2"] },
-    { name = "markdownify" },
-    { name = "pydantic" },
-    { name = "pydantic-settings" },
-    { name = "python-multipart" },
-    { name = "sqlalchemy" },
-    { name = "sse-starlette" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "yt-dlp" },
-]
-
-[package.optional-dependencies]
-impersonate = [
-    { name = "curl-cffi" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "respx" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.13" },
-    { name = "apscheduler", specifier = ">=3.10,<4" },
-    { name = "curl-cffi", marker = "extra == 'impersonate'", specifier = ">=0.7" },
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "gallery-dl", specifier = ">=1.32.13" },
-    { name = "httpx", extras = ["http2"], specifier = ">=0.27" },
-    { name = "markdownify", specifier = ">=0.13" },
-    { name = "pydantic", specifier = ">=2.7" },
-    { name = "pydantic-settings", specifier = ">=2.3" },
-    { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "sqlalchemy", specifier = ">=2.0" },
-    { name = "sse-starlette", specifier = ">=2.1" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-    { name = "yt-dlp", specifier = ">=2025.1.1" },
-]
-provides-extras = ["impersonate"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8" },
-    { name = "pytest-asyncio", specifier = ">=0.24" },
-    { name = "respx", specifier = ">=0.21" },
-    { name = "ruff", specifier = ">=0.6" },
 ]
 
 [[package]]

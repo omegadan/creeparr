@@ -1,6 +1,6 @@
 [project]
 name = "creeparr"
-version = "0.1.0"
+dynamic = ["version"]  # read from creeparr/__init__.py
 description = "Self-hosted, arr-style archiver for Patreon creators you support"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -37,6 +37,9 @@ creeparr = "creeparr.__main__:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "creeparr/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["creeparr"]
