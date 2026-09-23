@@ -14,7 +14,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
-from creeparr.patreon.cookies import CookieSet
 from creeparr.patreon.errors import (
     AuthError,
     CloudflareChallengeError,
@@ -33,11 +32,13 @@ from creeparr.patreon.parsing import (
     extract_bootstrap_campaign_id,
     post_from_resource,
 )
-from creeparr.patreon.transport import (
+from creeparr.providers.cookies import CookieSet
+from creeparr.providers.http import (
     RateLimiter,
     Transport,
     TransportResponse,
     parse_retry_after,
+    with_range,
 )
 from creeparr.providers.models import (
     CreatorInfo,
@@ -279,9 +280,7 @@ class PatreonClient:
 
         Session cookies are only sent to patreon.com hosts, never to CDNs.
         """
-        extra = dict(headers or {})
-        if range_start > 0:
-            extra["Range"] = f"bytes={range_start}-"
+        extra = with_range(headers or {}, range_start)
         return await self._request(
             "GET",
             url,

@@ -7,12 +7,12 @@ from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
 from creeparr.patreon.client import PatreonClient
-from creeparr.patreon.cookies import CookieSet
 from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
-from creeparr.patreon.transport import RateLimiter, TransportResponse, build_transport
 from creeparr.providers.base import ProviderService
+from creeparr.providers.cookies import CookieSet
 from creeparr.providers.errors import ForbiddenError, NotConfigured, TransportUnavailable
+from creeparr.providers.http import RateLimiter, TransportResponse, build_transport
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,

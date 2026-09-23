@@ -15,8 +15,8 @@ from creeparr.downloader.handlers.base import (
     ProgressReporter,
     RetryableDownloadError,
 )
-from creeparr.patreon.transport import TransportResponse
 from creeparr.providers.errors import TransportFailure
+from creeparr.providers.http import TransportResponse
 
 log = logging.getLogger(__name__)
 

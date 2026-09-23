@@ -9,9 +9,9 @@ from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from creeparr.db.enums import AuthState, MediaKind, MediaSource
-from creeparr.patreon.transport import HttpxTransport, TransportResponse
 from creeparr.providers.base import ProviderService
-from creeparr.providers.errors import NotFoundError, TransportFailure
+from creeparr.providers.errors import NotFoundError
+from creeparr.providers.http import HttpxTransport, TransportResponse, with_range
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -220,10 +220,5 @@ class RedditProvider(ProviderService):
         return resp.text
 
     async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        headers = dict(self.media_headers())
-        if range_start > 0:
-            headers["Range"] = f"bytes={range_start}-"
-        try:
-            return await self._transport.request("GET", url, headers=headers, stream=True)
-        except TransportFailure:
-            raise
+        headers = with_range(self.media_headers(), range_start)  # public CDNs: no cookies
+        return await self._transport.request("GET", url, headers=headers, stream=True)

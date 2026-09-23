@@ -23,7 +23,7 @@ from creeparr.db.enums import JobStatus, MediaStatus
 from creeparr.db.models import Creator, DownloadJob, MediaItem, Post
 from creeparr.downloader.fs import is_writable_dir
 from creeparr.logging_setup import ring_buffer
-from creeparr.patreon.transport import curl_cffi_available
+from creeparr.providers.http import curl_cffi_available
 from creeparr.services import Services
 
 log = logging.getLogger(__name__)

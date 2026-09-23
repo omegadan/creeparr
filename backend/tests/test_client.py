@@ -241,7 +241,7 @@ async def test_session_cookie_only_goes_to_patreon_hosts(client, respx_mock, url
 
 @pytest.mark.asyncio
 async def test_rate_limiter_adds_random_delay(monkeypatch):
-    import creeparr.patreon.transport as tp
+    import creeparr.providers.http as tp
 
     monkeypatch.setattr(tp.random, "uniform", lambda a, b: b)  # deterministic max
     slept: list[float] = []

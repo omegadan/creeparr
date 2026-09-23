@@ -21,10 +21,10 @@ import httpx
 import yt_dlp
 
 from creeparr.db.enums import AuthState, MediaKind, MediaSource
-from creeparr.patreon.cookies import write_cookiefile
-from creeparr.patreon.transport import TransportResponse
 from creeparr.providers.base import ProviderService
+from creeparr.providers.cookies import write_cookiefile
 from creeparr.providers.errors import NotFoundError, ProviderError
+from creeparr.providers.http import TransportResponse
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,

@@ -14,8 +14,8 @@ from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import make_engine, make_session_factory
 from creeparr.db.migrate import run_migrations
 from creeparr.patreon.client import PatreonClient
-from creeparr.patreon.cookies import CookieSet
-from creeparr.patreon.transport import HttpxTransport, RateLimiter
+from creeparr.providers.cookies import CookieSet
+from creeparr.providers.http import HttpxTransport, RateLimiter
 
 
 @pytest.fixture

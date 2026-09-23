@@ -1,4 +1,4 @@
-"""HTTP transport abstraction so the client can swap httpx for curl_cffi."""
+"""HTTP transport shared by every provider: httpx or curl_cffi, plus rate limiting."""
 
 from __future__ import annotations
 
@@ -8,8 +8,9 @@ import random
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
-from creeparr.patreon.errors import TransportFailure, TransportUnavailable
+from creeparr.providers.errors import TransportFailure, TransportUnavailable
 
 ByteStream = Callable[..., AsyncIterator[bytes]]
 
@@ -76,6 +77,21 @@ class TransportResponse:
                 await extra()
 
         self._close = close
+
+
+def host_matches(url: str | None, domain: str) -> bool:
+    """True if `url`'s host is `domain` or a subdomain of it. The one check that
+    decides where session cookies may go (a suffix test would accept evil{domain})."""
+    host = urlparse(url or "").hostname or ""  # lowercased, without port or userinfo
+    return host == domain or host.endswith("." + domain)
+
+
+def with_range(headers: dict[str, str], range_start: int) -> dict[str, str]:
+    """A copy of `headers` asking for the bytes from `range_start` on (to resume)."""
+    out = dict(headers)
+    if range_start > 0:
+        out["Range"] = f"bytes={range_start}-"
+    return out
 
 
 def parse_retry_after(value: str | None, default: float = 30.0) -> float:

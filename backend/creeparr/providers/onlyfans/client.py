@@ -8,12 +8,6 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
-from creeparr.patreon.transport import (
-    RateLimiter,
-    Transport,
-    TransportResponse,
-    parse_retry_after,
-)
 from creeparr.providers.errors import (
     AuthError,
     ForbiddenError,
@@ -22,6 +16,12 @@ from creeparr.providers.errors import (
     RateLimitedError,
     TransientError,
     UnexpectedResponse,
+)
+from creeparr.providers.http import (
+    RateLimiter,
+    Transport,
+    TransportResponse,
+    parse_retry_after,
 )
 from creeparr.providers.models import (
     CreatorInfo,

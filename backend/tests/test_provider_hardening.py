@@ -11,9 +11,9 @@ import pytest
 
 from creeparr.core.security import get_secret_key
 from creeparr.patreon.client import API_URL
-from creeparr.patreon.cookies import CookieSet
-from creeparr.patreon.transport import TransportResponse
+from creeparr.providers.cookies import CookieSet
 from creeparr.providers.errors import AuthError, NotFoundError, UnexpectedResponse
+from creeparr.providers.http import TransportResponse
 from creeparr.providers.onlyfans.client import OnlyFansClient
 from creeparr.providers.reddit.provider import RedditProvider
 from creeparr.providers.youtube import YouTubeProvider
@@ -22,7 +22,7 @@ from tests.conftest import json_response
 
 
 def test_retry_after_accepts_seconds_and_http_dates():
-    from creeparr.patreon.transport import parse_retry_after
+    from creeparr.providers.http import parse_retry_after
 
     assert parse_retry_after("12") == 12.0
     assert parse_retry_after(None) == 30.0
@@ -99,7 +99,7 @@ def test_secret_key_file_is_private_from_creation(tmp_path):
 async def test_onlyfans_stream_closes_its_one_off_client(
     env, settings, session_factory, bus, respx_mock, monkeypatch
 ):
-    from creeparr.patreon.transport import HttpxTransport
+    from creeparr.providers.http import HttpxTransport
     from creeparr.providers.onlyfans.provider import OnlyFansProvider
 
     closed: list[bool] = []

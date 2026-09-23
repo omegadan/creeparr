@@ -17,7 +17,6 @@ from typing import Any
 
 import httpx
 
-from creeparr.patreon.transport import parse_retry_after
 from creeparr.providers.errors import (
     AuthError,
     NotFoundError,
@@ -25,6 +24,7 @@ from creeparr.providers.errors import (
     RateLimitedError,
     TransportFailure,
 )
+from creeparr.providers.http import parse_retry_after
 from creeparr.providers.models import MediaResource, PostResource
 
 log = logging.getLogger("creeparr.reddit")

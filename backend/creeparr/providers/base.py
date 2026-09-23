@@ -17,7 +17,6 @@ from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import AuthState, EventType
-from creeparr.patreon.transport import TransportResponse
 from creeparr.providers.errors import (
     AuthError,
     CloudflareChallengeError,
@@ -25,6 +24,7 @@ from creeparr.providers.errors import (
     ProviderError,
     TransportFailure,
 )
+from creeparr.providers.http import TransportResponse
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,

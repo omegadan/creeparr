@@ -5,7 +5,7 @@ import json
 import pytest
 
 from creeparr.db.enums import MediaKind
-from creeparr.patreon.transport import RateLimiter, TransportResponse
+from creeparr.providers.http import RateLimiter, TransportResponse
 from creeparr.providers.onlyfans.client import OnlyFansClient, OnlyFansCredentials
 from creeparr.providers.onlyfans.provider import OnlyFansProvider
 from creeparr.providers.onlyfans.signing import DynamicRules

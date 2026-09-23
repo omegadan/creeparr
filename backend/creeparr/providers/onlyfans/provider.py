@@ -11,10 +11,16 @@ from typing import Any, ClassVar
 from urllib.parse import urlparse
 
 from creeparr.db.enums import MediaKind, MediaSource
-from creeparr.patreon.cookies import CookieSet
-from creeparr.patreon.transport import RateLimiter, TransportResponse, build_transport
 from creeparr.providers.base import ProviderService
+from creeparr.providers.cookies import CookieSet
 from creeparr.providers.errors import NotConfigured, ProviderError, TransportFailure
+from creeparr.providers.http import (
+    RateLimiter,
+    TransportResponse,
+    build_transport,
+    host_matches,
+    with_range,
+)
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -251,12 +257,9 @@ class OnlyFansProvider(ProviderService):
             await transport.aclose()
 
     async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        headers = dict(self.media_headers())
-        if range_start > 0:
-            headers["Range"] = f"bytes={range_start}-"
-        host = urlparse(url).hostname or ""
+        headers = with_range(self.media_headers(), range_start)
         # OnlyFans CDN URLs are pre-signed; only send cookies to onlyfans.com itself.
-        if host == "onlyfans.com" or host.endswith(".onlyfans.com"):
+        if host_matches(url, "onlyfans.com"):
             headers["Cookie"] = self._creds().cookie_header()
         transport = self._transport()
         try:

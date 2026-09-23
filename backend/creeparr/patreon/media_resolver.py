@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from creeparr.db.enums import MediaKind, MediaSource
 from creeparr.patreon.models import MediaResource, MediaSpec, PostResource
+from creeparr.providers.http import host_matches
 
 VIDEO_EXT = {"mp4", "mov", "m4v", "webm", "mkv", "avi", "m3u8", "ts", "flv", "wmv"}
 AUDIO_EXT = {"mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "wma"}
@@ -48,8 +49,7 @@ def name_ext(name: str | None) -> str:
 
 
 def is_patreon_url(url: str | None) -> bool:
-    host = urlparse(url or "").hostname or ""  # lowercased, without port or userinfo
-    return host == "patreon.com" or host.endswith(".patreon.com")
+    return host_matches(url, "patreon.com")
 
 
 def is_hls_url(url: str | None) -> bool:
