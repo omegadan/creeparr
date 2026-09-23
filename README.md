@@ -1,11 +1,14 @@
 # Creeparr
 
-A self-hosted, *arr-style archiver for the Patreon creators you support. Add a creator, and
-Creeparr backs up every post you have access to, then keeps checking for new ones.
+A self-hosted, *arr-style archiver for the creators you follow on **Patreon, OnlyFans,
+YouTube, Instagram and Reddit**. Add a creator, and Creeparr slowly backs up every post you
+have access to, then keeps checking for new ones.
 
-- Archives **native Patreon video** (direct files and Mux streams), **YouTube / Vimeo embeds**,
-  and optionally images, audio and attachments per creator.
-- **Import your pledges** in one click, or add creators by URL / vanity name / campaign id.
+- Archives video (direct files, HLS streams, YouTube / Vimeo embeds via yt-dlp), and
+  optionally images, audio and attachments per creator.
+- **Import your subscriptions** in one click, or add creators by URL / handle / id.
+- Gentle by design: per-provider request rates and a downloads-per-hour cap spread out at
+  random, over a queue of any size.
 - Light/dark/auto web UI (theme switch in the sidebar; auto follows your OS): creators grid, per-creator post list with per-file status, live
   download queue, history, settings, system status and logs.
 - Scheduled incremental scans, full back-fills, retries with back-off, DRM detection,
@@ -42,13 +45,12 @@ open http://localhost:7979
 ```
 
 Images are published to `ghcr.io/omegadan/creeparr` by GitHub Actions on every push to
-`main` (`latest`) and on `v*` tags, for `linux/amd64` and `linux/arm64`. While the repository
-is private the package is private too, so `docker login ghcr.io` with a token that has
-`read:packages` before pulling.
+`main` (`latest`) and on `v*` tags, for `linux/amd64` and `linux/arm64`. The image is public;
+no login is needed to pull it. yt-dlp and gallery-dl are upgraded and a new image is
+published automatically every week, so site breakages get fixed without you doing anything.
 
-Then, in **Settings → Accounts**, connect a provider:
-
-**Patreon:**
+Then, in **Settings**, open a provider's tab (Patreon, OnlyFans, YouTube, Instagram, Reddit)
+and connect it. YouTube and Reddit work without an account. For example, **Patreon**:
 
 1. Log in to patreon.com in your browser.
 2. Open DevTools → Application → Cookies → `https://www.patreon.com` and copy the value of
@@ -91,7 +93,7 @@ Every variable is documented in that file. Summary:
 
 | Variable               | Default       | Purpose                                                |
 | ---------------------- | ------------- | ------------------------------------------------------ |
-| `PUID` / `PGID`        | `99` / `100`  | User/group that owns files (Unraid defaults)           |
+| `PUID` / `PGID`        | `99` / `100`  | User/group that owns files (Unraid defaults in compose; the bare image defaults to `1000`) |
 | `TZ`                   | `America/Los_Angeles` | Time zone                                      |
 | `CONFIG_DIR`           | required      | Host path mounted at `/config` (database, logs)        |
 | `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads`: the default archive root for every provider |
@@ -133,7 +135,8 @@ make build   # builds the UI and copies it into backend/creeparr/static
 make docker  # builds the image
 ```
 
-The Docker image is ~275 MB (static ffmpeg). Layout: `backend/creeparr/{patreon,scanner,downloader,api,core,db}` and
+The Docker image is about 720 MB unpacked (Python, yt-dlp, gallery-dl, deno, static ffmpeg).
+Layout: `backend/creeparr/{providers,patreon,scanner,downloader,api,core,db}` and
 `frontend/src/{pages,components,api}`. Architecture notes in [docs/architecture.md](docs/architecture.md);
 what was verified about Patreon's private API in [docs/patreon-api.md](docs/patreon-api.md);
 manual test plan in [docs/e2e-checklist.md](docs/e2e-checklist.md).
@@ -141,8 +144,12 @@ manual test plan in [docs/e2e-checklist.md](docs/e2e-checklist.md).
 ## Status
 
 Early release. Verified against synthetic API fixtures and unit/integration tests; the
-end-to-end checklist against a real Patreon account still needs to be run (see
-`docs/e2e-checklist.md`). Field names in Patreon's private API can change without notice.
+end-to-end checklist against real accounts still needs to be run (see
+`docs/e2e-checklist.md`). The Patreon, OnlyFans and Instagram APIs are private and can
+change without notice.
+
+The version lives in one place, `backend/creeparr/__init__.py`, and goes up by one patch
+number on every push to `main`.
 
 ## Security
 

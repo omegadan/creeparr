@@ -75,7 +75,7 @@ export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onC
       }
     >
       {configured.length === 0 ? (
-        <div className="text-sm text-fg-muted">No provider is connected yet. Add credentials in Settings → Accounts first.</div>
+        <div className="text-sm text-fg-muted">No provider is connected yet. Connect one in Settings first.</div>
       ) : (
         <div className="grid gap-4">
           {configured.length > 1 && (

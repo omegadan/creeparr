@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/omegadan/creeparr/issues</Support>
   <Project>https://github.com/omegadan/creeparr</Project>
-  <Overview>Self-hosted, arr-style archiver for the creators you support on Patreon and OnlyFans. Adds a creator, back-fills every post you have access to, and keeps checking for new ones. Videos always; images, audio and attachments optional per creator. Web UI with a live download queue, history and per-provider settings.</Overview>
+  <Overview>Self-hosted, arr-style archiver for the creators you follow on Patreon, OnlyFans, YouTube, Instagram and Reddit. Adds a creator, back-fills every post you have access to, and keeps checking for new ones. Videos always; images, audio and attachments optional per creator. Web UI with a live download queue, history and per-provider settings.</Overview>
   <Category>Downloaders: MediaApp:Video: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:7979]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/omegadan/creeparr/main/unraid/creeparr.xml</TemplateURL>
@@ -20,7 +20,7 @@
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Description>Self-hosted archiver for Patreon and OnlyFans creators you support. Paste your session cookies in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
+  <Description>Self-hosted archiver for creators on Patreon, OnlyFans, YouTube, Instagram and Reddit. Connect providers in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
@@ -123,11 +123,11 @@
   <Config Name="WebUI Port" Target="7979" Default="7979" Mode="tcp" Description="Port for the web interface" Type="Port" Display="always" Required="true" Mask="false">7979</Config>
   <Config Name="Config" Target="/config" Default="/mnt/user/appdata/creeparr" Mode="rw" Description="Database, logs and session cookies" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/creeparr</Config>
   <Config Name="Downloads" Target="/downloads" Default="/mnt/user/media/creeparr" Mode="rw" Description="Default archive root. Every provider without its own path below is archived here" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/creeparr</Config>
-  <Config Name="Patreon downloads" Target="/downloads-patreon" Default="/mnt/user/media/patreon" Mode="rw" Description="Optional: separate archive root for Patreon. Leave blank to archive Patreon under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/patreon</Config>
-  <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="/mnt/user/media/onlyfans" Mode="rw" Description="Optional: separate archive root for OnlyFans. Leave blank to archive OnlyFans under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/onlyfans</Config>
-  <Config Name="YouTube downloads" Target="/downloads-youtube" Default="/mnt/user/media/youtube" Mode="rw" Description="Optional: separate archive root for YouTube. Leave blank to archive YouTube under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/youtube</Config>
-  <Config Name="Instagram downloads" Target="/downloads-instagram" Default="/mnt/user/media/instagram" Mode="rw" Description="Optional: separate archive root for Instagram. Leave blank to archive Instagram under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/instagram</Config>
-  <Config Name="Reddit downloads" Target="/downloads-reddit" Default="/mnt/user/media/reddit" Mode="rw" Description="Optional: separate archive root for Reddit. Leave blank to archive Reddit under Downloads" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/media/reddit</Config>
+  <Config Name="Patreon downloads" Target="/downloads-patreon" Default="" Mode="rw" Description="Optional: separate archive root for Patreon. Leave blank to archive Patreon under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="" Mode="rw" Description="Optional: separate archive root for OnlyFans. Leave blank to archive OnlyFans under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="YouTube downloads" Target="/downloads-youtube" Default="" Mode="rw" Description="Optional: separate archive root for YouTube. Leave blank to archive YouTube under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Instagram downloads" Target="/downloads-instagram" Default="" Mode="rw" Description="Optional: separate archive root for Instagram. Leave blank to archive Instagram under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Reddit downloads" Target="/downloads-reddit" Default="" Mode="rw" Description="Optional: separate archive root for Reddit. Leave blank to archive Reddit under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Time zone (IANA name)" Type="Variable" Display="advanced" Required="false" Mask="false">America/Los_Angeles</Config>

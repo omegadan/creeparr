@@ -1,7 +1,7 @@
 [project]
 name = "creeparr"
 dynamic = ["version"]  # read from creeparr/__init__.py
-description = "Self-hosted, arr-style archiver for Patreon creators you support"
+description = "Self-hosted, arr-style archiver for creators on Patreon, OnlyFans, YouTube, Instagram and Reddit"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [

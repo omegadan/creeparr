@@ -45,7 +45,7 @@ the forum request is the canonical route.
 
 ## Notes
 
-- The template's default paths are `/mnt/user/appdata/creeparr`,
-  `/mnt/user/media/patreon` and `/mnt/user/media/onlyfans`; users can change them.
+- The template's default paths are `/mnt/user/appdata/creeparr` (config) and
+  `/mnt/user/media/creeparr` (downloads); the per-provider download paths start blank.
 - `<Category>` uses CA tokens `Downloaders:`, `MediaApp:Video:`, `Tools:Utilities`.
   Adjust if a moderator asks for different ones.

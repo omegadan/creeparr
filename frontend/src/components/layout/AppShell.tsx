@@ -79,8 +79,8 @@ export function AppShell() {
           <Link to="/settings/patreon" className="flex items-center gap-2 border-b border-danger/30 bg-danger/10 px-5 py-2 text-sm text-danger">
             <AlertTriangle className="h-4 w-4" />
             {broken.length
-              ? `${broken.map((p) => p.label).join(", ")} session problem. Fix it in Settings → Accounts; scans for that provider are paused.`
-              : "No provider is connected. Add your session in Settings → Accounts to start archiving."}
+              ? `${broken.map((p) => p.label).join(", ")} session problem. Fix it on that provider's Settings tab; scans for that provider are paused.`
+              : "No provider is connected. Connect one in Settings to start archiving."}
           </Link>
         )}
         {status.data?.downloads.paused && (
