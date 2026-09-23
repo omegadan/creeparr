@@ -120,7 +120,8 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
                     "csrf_header_missing",
                     f"state-changing API requests must send the {CSRF_HEADER} header",
                 )
-            gated = path.startswith("/api/v1/") and path not in OPEN_PATHS
+            # /api/docs and /openapi.json describe every route; keep them behind login too.
+            gated = (path.startswith("/api/") or path == "/openapi.json") and path not in OPEN_PATHS
             if gated and not is_authenticated(request, services):
                 return JSONResponse(
                     status_code=401,

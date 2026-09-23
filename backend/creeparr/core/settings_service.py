@@ -193,7 +193,8 @@ def mask_secret(value: str) -> str:
 class SettingsService:
     def __init__(self, session_factory: SessionFactory) -> None:
         self._factory = session_factory
-        self._lock = threading.Lock()
+        # Re-entrant: update() holds it across get() (which may reload) and the write.
+        self._lock = threading.RLock()
         self._cache: AppSettings | None = None
 
     def reload(self) -> AppSettings:
@@ -226,24 +227,25 @@ class SettingsService:
 
     def update(self, patch: dict[str, Any], *, allow_secrets: bool = False) -> AppSettings:
         """Deep-merge `patch` (group -> fields) into current settings and persist changed groups."""
-        current = self.get().model_dump()
-        for group, fields in patch.items():
-            if group not in AppSettings.model_fields:
-                raise ValidationFailed(f"unknown settings group '{group}'")
-            if not isinstance(fields, dict):
-                raise ValidationFailed(f"settings group '{group}' must be an object")
-            for name, value in fields.items():
-                if name not in current[group]:
-                    raise ValidationFailed(f"unknown setting '{group}.{name}'")
-                if not allow_secrets and name in SECRET_FIELDS.get(group, set()):
-                    continue
-                current[group][name] = value
-        try:
-            validated = AppSettings.model_validate(current)
-        except ValidationError as exc:
-            raise ValidationFailed("invalid settings", detail=str(exc)) from exc
-
+        # One lock around read, merge and write: two concurrent updates to different
+        # fields of a group must not each write back the other's stale copy.
         with self._lock:
+            current = self.get().model_dump()
+            for group, fields in patch.items():
+                if group not in AppSettings.model_fields:
+                    raise ValidationFailed(f"unknown settings group '{group}'")
+                if not isinstance(fields, dict):
+                    raise ValidationFailed(f"settings group '{group}' must be an object")
+                for name, value in fields.items():
+                    if name not in current[group]:
+                        raise ValidationFailed(f"unknown setting '{group}.{name}'")
+                    if not allow_secrets and name in SECRET_FIELDS.get(group, set()):
+                        continue
+                    current[group][name] = value
+            try:
+                validated = AppSettings.model_validate(current)
+            except ValidationError as exc:
+                raise ValidationFailed("invalid settings", detail=str(exc)) from exc
             with session_scope(self._factory) as s:
                 for group in patch:
                     row = s.get(Setting, group)

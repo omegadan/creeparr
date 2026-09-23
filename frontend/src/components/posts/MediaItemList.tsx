@@ -49,7 +49,7 @@ export function MediaItemList({ postId }: { postId: number }) {
                     <div className="flex items-center gap-2">
                       {m.status === "completed" && m.kind === "image" && (
                         <a href={`/api/v1/media/${m.id}/file`} target="_blank" rel="noreferrer">
-                          <img src={`/api/v1/media/${m.id}/file`} alt="" className="h-9 w-9 rounded object-cover" />
+                          <img src={`/api/v1/media/${m.id}/file`} alt="" loading="lazy" decoding="async" className="h-9 w-9 rounded object-cover" />
                         </a>
                       )}
                       <span>{m.file_path ? m.file_path.split("/").pop() : m.remote_file_name ?? `${m.kind} ${m.order_index}`}</span>

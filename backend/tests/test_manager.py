@@ -544,3 +544,76 @@ def _job(session_factory, job_id):
         job = s.get(DownloadJob, job_id)
         s.expunge(job)
         return job
+
+
+@pytest.mark.asyncio
+async def test_restart_keeps_interrupted_starts_in_the_hourly_window(
+    env, session_factory, settings, bus, providers
+):
+    _, job_id = seed(session_factory, fx.native_video_post("p1"))
+    started = datetime.now(UTC)
+    with session_scope(session_factory) as s:
+        job = s.get(DownloadJob, job_id)
+        job.status, job.started_at = JobStatus.RUNNING, started
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr._recover_stale_jobs()
+    with session_scope(session_factory) as s:
+        job = s.get(DownloadJob, job_id)
+        assert job.status == JobStatus.QUEUED and job.started_at is not None
+        assert mgr._hourly_starts(s)["patreon"][0] == 1  # still counts toward the cap
+    await providers.aclose_all()
+
+
+@pytest.mark.asyncio
+async def test_dedupe_links_to_the_twin_in_its_own_providers_root(
+    tmp_path, settings, bus, monkeypatch
+):
+    # A twin's file_path is relative to its provider's root. Trying every root could
+    # hardlink to an unrelated file that happens to sit at the same relative path.
+    from creeparr.config import EnvConfig
+    from creeparr.db.engine import make_engine, make_session_factory
+    from creeparr.db.migrate import run_migrations
+    from creeparr.downloader.handlers.base import DownloadResult
+
+    env = EnvConfig(
+        config_dir=tmp_path / "config",
+        download_dir=tmp_path / "downloads",
+        youtube_download_dir=tmp_path / "yt",
+    )
+    env.ensure_dirs()
+    run_migrations(env.database_url)
+    factory = make_session_factory(make_engine(env.database_url))
+    rel = "Chan/clip.mkv"
+    for root, data in ((env.download_dir, b"decoy"), (tmp_path / "yt", b"same")):
+        (root / rel).parent.mkdir(parents=True)
+        (root / rel).write_bytes(data)
+    with session_scope(factory) as s:
+        c = Creator(campaign_id="UC1", name="Chan", provider="youtube")
+        s.add(c)
+        s.flush()
+        post = Post(post_id="v1", creator_id=c.id, title="t", first_seen_at=datetime.now(UTC))
+        s.add(post)
+        s.flush()
+        s.add(
+            MediaItem(
+                creator_id=c.id,
+                post_id=post.id,
+                media_key="k1",
+                kind="video",
+                source="embed_youtube",
+                status=MediaStatus.COMPLETED,
+                file_path=rel,
+                sha256="abc",
+            )
+        )
+    settings.update({"downloads": {"deduplicate": True}})
+    new = tmp_path / "downloads" / "Other" / "copy.mkv"
+    new.parent.mkdir(parents=True)
+    new.write_bytes(b"same")
+    mgr = DownloadManager(env, factory, settings, bus, ProviderRegistry([]))
+
+    class Ctx:
+        job_id, media_id = 1, 999
+
+    assert mgr._dedupe(Ctx(), DownloadResult(new, 4, "abc"))
+    assert new.stat().st_ino == (tmp_path / "yt" / rel).stat().st_ino

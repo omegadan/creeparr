@@ -33,6 +33,14 @@ def _hash_existing(path: Path) -> hashlib._Hash:  # type: ignore[name-defined]
     return h
 
 
+def _content_range_start(value: str | None) -> int | None:
+    # "bytes 1000-1999/2000" -> 1000
+    if not value or not value.startswith("bytes ") or "-" not in value:
+        return None
+    start = value[6:].split("-", 1)[0].strip()
+    return int(start) if start.isdigit() else None
+
+
 def _content_range_total(value: str | None) -> int | None:
     # "bytes 1000-1999/2000"
     if not value or "/" not in value:
@@ -63,8 +71,16 @@ async def download_direct(
     try:
         status = resp.status
         if status == 416 and existing > 0:
-            # Server says our range is past the end: the .part is probably complete.
+            # Our range starts past the end. That means "already complete" only if the
+            # .part is exactly the server's size; otherwise the file changed, so restart.
+            total = _content_range_total(resp.headers.get("content-range"))
             await resp.aclose()
+            if total is not None and total != existing:
+                part.unlink(missing_ok=True)
+                raise RetryableDownloadError(
+                    f"partial file ({existing} bytes) doesn't match the server's {total}",
+                    "resume",
+                )
             size = existing
             sha = (
                 (await asyncio.to_thread(_hash_existing, part)).hexdigest()
@@ -74,6 +90,11 @@ async def download_direct(
             atomic_replace(part, dest)
             return DownloadResult(dest, size, sha)
         if status == 206 and existing > 0:
+            if _content_range_start(resp.headers.get("content-range")) not in (None, existing):
+                # Appending bytes from another offset would corrupt the file.
+                await resp.aclose()
+                part.unlink(missing_ok=True)
+                raise RetryableDownloadError("server resumed at the wrong offset", "resume")
             mode = "ab"
             total = _content_range_total(resp.headers.get("content-range"))
             if compute_sha256:

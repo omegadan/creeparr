@@ -188,3 +188,45 @@ def test_failed_remux_leaves_no_partial_output(tmp_path):
     src.write_bytes(b"data")
     assert remux_container(str(ffmpeg), src, dst) is False
     assert not dst.exists()
+
+
+@pytest.mark.asyncio
+async def test_416_with_a_mismatched_size_restarts(client, respx_mock, tmp_path: Path):
+    # 416 used to mean "the .part is complete" unconditionally, so a .part from a file
+    # that has since changed (or was cut short) became the finished download.
+    part = tmp_path / "v.mp4.part"
+    part.write_bytes(b"x" * 500)
+    respx_mock.get(URL).mock(
+        return_value=httpx.Response(416, headers={"content-range": "bytes */2000"})
+    )
+    rep, _ = reporter()
+    with pytest.raises(RetryableDownloadError):
+        await download_direct(client, URL, tmp_path / "v.mp4", rep)
+    assert not part.exists() and not (tmp_path / "v.mp4").exists()
+
+
+@pytest.mark.asyncio
+async def test_416_with_matching_size_completes(client, respx_mock, tmp_path: Path):
+    part = tmp_path / "v.mp4.part"
+    part.write_bytes(b"x" * 2000)
+    respx_mock.get(URL).mock(
+        return_value=httpx.Response(416, headers={"content-range": "bytes */2000"})
+    )
+    rep, _ = reporter()
+    res = await download_direct(client, URL, tmp_path / "v.mp4", rep)
+    assert res.size == 2000 and (tmp_path / "v.mp4").exists()
+
+
+@pytest.mark.asyncio
+async def test_206_from_the_wrong_offset_restarts(client, respx_mock, tmp_path: Path):
+    part = tmp_path / "v.mp4.part"
+    part.write_bytes(b"a" * 4000)
+    respx_mock.get(URL).mock(
+        return_value=httpx.Response(
+            206, content=b"b" * 100, headers={"content-range": "bytes 0-99/10000"}
+        )
+    )
+    rep, _ = reporter()
+    with pytest.raises(RetryableDownloadError):
+        await download_direct(client, URL, tmp_path / "v.mp4", rep)
+    assert not part.exists()

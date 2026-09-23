@@ -292,3 +292,34 @@ def test_login_is_throttled_after_repeated_failures(env, monkeypatch):
         real = auth.time.monotonic
         monkeypatch.setattr(auth.time, "monotonic", lambda: real() + auth.LOGIN_WINDOW_SECONDS + 1)
         assert c.post("/api/v1/auth/login", json={"password": "hunter2"}).status_code == 200
+
+
+def test_api_docs_need_login_when_a_password_is_set(env):
+    app = create_app(env, start_background=False)
+    with TestClient(app, headers=UI_HEADERS) as c:
+        assert c.get("/openapi.json").status_code == 200  # open while there's no password
+        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        c.cookies.clear()
+        assert c.get("/openapi.json").status_code == 401
+        assert c.get("/api/docs").status_code == 401
+
+
+def test_concurrent_settings_updates_keep_both_changes(settings):
+    # Two updates to different fields of one group, at the same time, must not each
+    # write back the other's stale copy of the group.
+    import threading
+
+    barrier = threading.Barrier(2)
+
+    def bump(field, value):
+        barrier.wait()
+        for _ in range(50):
+            settings.update({"downloads": {field: value}})
+
+    a = threading.Thread(target=bump, args=("concurrency", 5))
+    b = threading.Thread(target=bump, args=("max_per_creator", 4))
+    a.start(), b.start()
+    a.join(), b.join()
+    settings.reload()
+    d = settings.get().downloads
+    assert (d.concurrency, d.max_per_creator) == (5, 4)

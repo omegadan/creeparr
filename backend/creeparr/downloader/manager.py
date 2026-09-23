@@ -1264,7 +1264,8 @@ class DownloadManager:
             return False
         with session_scope(self._factory) as s:
             twin = s.execute(
-                select(MediaItem)
+                select(MediaItem.file_path, Creator.provider)
+                .join(Creator, Creator.id == MediaItem.creator_id)
                 .where(
                     MediaItem.sha256 == result.sha256,
                     MediaItem.id != ctx.media_id,
@@ -1272,15 +1273,14 @@ class DownloadManager:
                     MediaItem.file_path.is_not(None),
                 )
                 .limit(1)
-            ).scalar_one_or_none()
-            twin_rel = twin.file_path if twin else None
-        if not twin_rel:
+            ).first()
+        if twin is None:
             return False
-        for root in self.env.download_roots().values():
-            source = root / twin_rel
-            if source.exists() and try_hardlink(result.path, source):
-                log.info("[job %s] deduplicated (sha %s)", ctx.job_id, result.sha256[:12])
-                return True
+        # The twin's path is relative to its own provider's root, not any root.
+        source = self.env.download_root(twin.provider) / twin.file_path
+        if source.is_file() and try_hardlink(result.path, source):
+            log.info("[job %s] deduplicated (sha %s)", ctx.job_id, result.sha256[:12])
+            return True
         return False
 
     def _maybe_write_nfo(self, ctx: JobContext, result: DownloadResult) -> None:
@@ -1496,7 +1496,8 @@ class DownloadManager:
             for job in stale:
                 job.status = JobStatus.QUEUED
                 job.worker_id = None
-                job.started_at = None
+                # started_at stays: that start counts toward the hourly cap, or every
+                # restart would hand out a fresh batch of download slots.
                 job.stage = None
                 media = s.get(MediaItem, job.media_item_id)
                 if media is not None and media.status == MediaStatus.DOWNLOADING:
