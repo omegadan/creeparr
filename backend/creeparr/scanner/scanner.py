@@ -309,6 +309,20 @@ class Scanner:
                 run.media_queued += stats.queued
         return stats
 
+    def close_interrupted_runs(self) -> int:
+        """Mark runs left 'running' by a crash or kill as errored. Called on startup."""
+        with session_scope(self._factory) as s:
+            runs = s.execute(select(ScanRun).where(ScanRun.status == ScanStatus.RUNNING))
+            n = 0
+            for run in runs.scalars():
+                run.status = ScanStatus.ERROR
+                run.error = "interrupted (Creeparr stopped during the scan)"
+                run.finished_at = run.finished_at or datetime.now(UTC)
+                n += 1
+        if n:
+            log.warning("closed %d scan run(s) interrupted by the last shutdown", n)
+        return n
+
     def _finish_run(
         self,
         run_id: int,
@@ -442,6 +456,13 @@ class Scanner:
             return run_id
         except ProviderError as exc:
             status, error = ScanStatus.ERROR, str(exc)
+        except asyncio.CancelledError:
+            # Shutdown mid-scan: close the run now (synchronously; the loop is going
+            # away) so it doesn't show as running forever.
+            self._finish_run(
+                run_id, creator_id, ScanStatus.CANCELLED, effective_mode, "interrupted by shutdown"
+            )
+            raise
         except Exception as exc:  # noqa: BLE001
             log.exception("scan of creator %s crashed", creator_id)
             status, error = ScanStatus.ERROR, f"{exc.__class__.__name__}: {exc}"

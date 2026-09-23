@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -271,3 +272,44 @@ def test_rescan_keeps_backfilled_date_and_description(session_factory):
         dated = replace(listing, published_at=datetime(2020, 1, 1, tzinfo=UTC), content="New")
         upsert_post(s, creator, dated)
         assert post.published_at.year == 2020 and post.content_html == "New"
+
+
+class HangingClient:
+    """First page arrives, then the next never does (a slow API when shutdown hits)."""
+
+    def __init__(self):
+        self.first_page_done = asyncio.Event()
+
+    async def iter_posts(self, campaign_id):
+        res = fx.native_video_post("p1")
+        page = fx.posts_page([res])
+        yield PostPage(posts=[post_from_resource(res, IncludedIndex(page))], next_url="next")
+        self.first_page_done.set()
+        await asyncio.Event().wait()
+
+
+@pytest.mark.asyncio
+async def test_scan_interrupted_by_shutdown_is_closed(session_factory, settings, bus):
+    cid = make_creator(session_factory)
+    client = HangingClient()
+    scanner = Scanner(session_factory, settings, bus, FakeRegistry(FakeProvider(client)))
+    task = asyncio.create_task(scanner.scan_creator(cid, ScanMode.AUTO))
+    await asyncio.wait_for(client.first_page_done.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    with session_scope(session_factory) as s:
+        run = s.execute(select(ScanRun)).scalar_one()
+        assert run.status == ScanStatus.CANCELLED and run.finished_at is not None
+
+
+def test_runs_left_running_by_a_crash_are_closed_on_startup(session_factory, settings, bus):
+    cid = make_creator(session_factory)
+    with session_scope(session_factory) as s:
+        s.add(ScanRun(creator_id=cid, mode=ScanMode.FULL, status=ScanStatus.RUNNING))
+        s.add(ScanRun(creator_id=cid, mode=ScanMode.FULL, status=ScanStatus.OK))
+    scanner = Scanner(session_factory, settings, bus, FakeRegistry(None))
+    assert scanner.close_interrupted_runs() == 1
+    with session_scope(session_factory) as s:
+        statuses = sorted(r.status for r in s.execute(select(ScanRun)).scalars())
+        assert statuses == [ScanStatus.ERROR, ScanStatus.OK]

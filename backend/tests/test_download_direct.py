@@ -173,3 +173,18 @@ def test_set_times(tmp_path):
     assert abs(f.stat().st_mtime - when.timestamp()) < 2
     assert abs(tmp_path.stat().st_mtime - when.timestamp()) < 2
     set_times(f, None)  # no-op, must not raise
+
+
+def test_failed_remux_leaves_no_partial_output(tmp_path):
+    # A remux that dies part-way must not leave a truncated file next to the fallback.
+    import stat
+
+    from creeparr.downloader.metadata import remux_container
+
+    ffmpeg = tmp_path / "ffmpeg"
+    ffmpeg.write_text('#!/bin/sh\nfor last; do :; done\necho partial > "$last"\nexit 1\n')
+    ffmpeg.chmod(ffmpeg.stat().st_mode | stat.S_IEXEC)
+    src, dst = tmp_path / "in.webm", tmp_path / "out.mp4"
+    src.write_bytes(b"data")
+    assert remux_container(str(ffmpeg), src, dst) is False
+    assert not dst.exists()

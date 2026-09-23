@@ -61,12 +61,24 @@ def test_verify_files_marks_missing_then_restores(env, session_factory, settings
     mgr = make_manager(env, settings, session_factory, bus)
 
     # file present: nothing changes
-    assert mgr.verify_files() == {"checked": 1, "missing": 0, "restored": 0, "requeued": 0}
+    assert mgr.verify_files() == {
+        "checked": 1,
+        "missing": 0,
+        "restored": 0,
+        "requeued": 0,
+        "skipped": 0,
+    }
     assert media_state(session_factory, media_id)[0] == MediaStatus.COMPLETED
 
     # file gone: item becomes missing, post is no longer fully archived, history written
     (env.download_dir / FILE_REL).unlink()
-    assert mgr.verify_files() == {"checked": 1, "missing": 1, "restored": 0, "requeued": 0}
+    assert mgr.verify_files() == {
+        "checked": 1,
+        "missing": 1,
+        "restored": 0,
+        "requeued": 0,
+        "skipped": 0,
+    }
     status, reason, post_status = media_state(session_factory, media_id)
     assert status == MediaStatus.MISSING
     assert reason == DownloadManager.MISSING_REASON
@@ -81,11 +93,23 @@ def test_verify_files_marks_missing_then_restores(env, session_factory, settings
         assert s.execute(select(DownloadJob)).first() is None  # requeue_missing is off
 
     # a second run is idempotent
-    assert mgr.verify_files() == {"checked": 1, "missing": 0, "restored": 0, "requeued": 0}
+    assert mgr.verify_files() == {
+        "checked": 1,
+        "missing": 0,
+        "restored": 0,
+        "requeued": 0,
+        "skipped": 0,
+    }
 
     # file comes back (restored from backup / disk re-mounted): completed again
     (env.download_dir / FILE_REL).write_bytes(b"video")
-    assert mgr.verify_files() == {"checked": 1, "missing": 0, "restored": 1, "requeued": 0}
+    assert mgr.verify_files() == {
+        "checked": 1,
+        "missing": 0,
+        "restored": 1,
+        "requeued": 0,
+        "skipped": 0,
+    }
     status, reason, post_status = media_state(session_factory, media_id)
     assert status == MediaStatus.COMPLETED and reason is None
     assert post_status == PostStatus.COMPLETED
@@ -103,7 +127,13 @@ def test_verify_files_requeues_when_enabled(env, session_factory, settings, bus)
     settings.update({"downloads": {"requeue_missing": True}})
     (env.download_dir / FILE_REL).unlink()
 
-    assert mgr.verify_files() == {"checked": 1, "missing": 1, "restored": 0, "requeued": 1}
+    assert mgr.verify_files() == {
+        "checked": 1,
+        "missing": 1,
+        "restored": 0,
+        "requeued": 1,
+        "skipped": 0,
+    }
     with session_scope(session_factory) as s:
         m = s.get(MediaItem, media_id)
         assert m.status == MediaStatus.QUEUED
@@ -130,3 +160,31 @@ def test_verify_files_task_interval_follows_setting(env, session_factory, settin
     settings.update({"downloads": {"verify_files_hours": 0}})
     sched.apply_settings()
     assert sched.tasks["verify_files"].interval_seconds is None
+
+
+def test_verify_files_leaves_an_unmounted_share_alone(env, session_factory, settings, bus):
+    # A share that failed to mount shows up as an empty download root. Treating every
+    # file as missing would, with requeue on, re-download the whole archive into it.
+    import shutil
+
+    _, media_id = seed_completed(env, session_factory)
+    mgr = make_manager(env, settings, session_factory, bus)
+    settings.update({"downloads": {"requeue_missing": True}})
+    shutil.rmtree(env.download_dir)
+    env.download_dir.mkdir()  # the empty mount point
+
+    result = mgr.verify_files()
+    assert result["skipped"] == 1 and result["missing"] == 0 and result["requeued"] == 0
+    assert media_state(session_factory, media_id)[0] == MediaStatus.COMPLETED
+    with session_scope(session_factory) as s:
+        assert s.execute(select(DownloadJob)).first() is None
+
+
+def test_root_with_many_files_all_gone_counts_as_unmounted(tmp_path):
+    from creeparr.downloader.manager import UNMOUNTED_MIN_FILES, _root_unavailable
+
+    (tmp_path / "lost+found").mkdir()  # not empty, but none of the archive is there
+    assert _root_unavailable(tmp_path, UNMOUNTED_MIN_FILES, 0)
+    assert not _root_unavailable(tmp_path, UNMOUNTED_MIN_FILES, 1)
+    assert not _root_unavailable(tmp_path, UNMOUNTED_MIN_FILES - 1, 0)  # small: real deletes
+    assert _root_unavailable(tmp_path / "nope", 1, 0)

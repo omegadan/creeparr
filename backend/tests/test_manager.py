@@ -415,3 +415,60 @@ async def test_undated_video_is_filed_under_its_backfilled_date(
     creator_dir = env.download_dir / "Example Creator"
     assert [p.name for p in creator_dir.iterdir()] == ["2019-05-04 - Old video [y1]"]
     assert (creator_dir / "2019-05-04 - Old video [y1]" / "post.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_failed_embed_is_left_for_the_backlog(
+    env, session_factory, settings, bus, providers, monkeypatch
+):
+    # When ffmpeg can't embed metadata the file is left untouched; it must not be
+    # recorded as embedded, or the embed_backlog task never tries it again.
+    _, job_id = seed(session_factory, fx.youtube_post("y1", title="Clip"))
+
+    def fake_ytdlp(url, tmp_dir, opts, reporter, label):
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        produced = tmp_dir / "video.mkv"
+        produced.write_bytes(b"\x1a\x45\xdf\xa3")
+        return produced, {}
+
+    monkeypatch.setattr("creeparr.downloader.manager.run_ytdlp", fake_ytdlp)
+    monkeypatch.setattr(type(env), "resolve_ffmpeg", lambda self: "ffmpeg")
+    monkeypatch.setattr("creeparr.downloader.manager.embed_metadata", lambda *a, **k: False)
+    bus.bind(asyncio.get_running_loop())
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    await mgr.start()
+    try:
+        assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
+    finally:
+        await mgr.stop()
+        await providers.aclose_all()
+    with session_scope(session_factory) as s:
+        assert s.execute(select(MediaItem)).scalar_one().metadata_embedded is False
+
+
+@pytest.mark.asyncio
+async def test_permanent_failure_removes_the_part_file(
+    env, session_factory, settings, bus, providers, monkeypatch
+):
+    from creeparr.downloader.handlers.base import PermanentDownloadError
+
+    _, job_id = seed(session_factory, fx.native_video_post("p1", title="Ep 1"))
+    parts: list[Path] = []
+
+    async def fake_direct(client, url, dest, reporter, **kw):
+        part = dest.with_name(dest.name + ".part")
+        part.parent.mkdir(parents=True, exist_ok=True)
+        part.write_bytes(b"half a video")
+        parts.append(part)
+        raise PermanentDownloadError("gone for good", "not_found")
+
+    monkeypatch.setattr("creeparr.downloader.manager.download_direct", fake_direct)
+    bus.bind(asyncio.get_running_loop())
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    await mgr.start()
+    try:
+        assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.FAILED)
+    finally:
+        await mgr.stop()
+        await providers.aclose_all()
+    assert parts and not parts[0].exists()

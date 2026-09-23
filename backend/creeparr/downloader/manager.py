@@ -115,6 +115,31 @@ class RunningJob:
     task: asyncio.Task[None] | None = None
 
 
+# A root with at least this many archived files, none of them present, is taken to be
+# an unmounted share rather than a deliberately emptied archive.
+UNMOUNTED_MIN_FILES = 10
+
+
+def _root_unavailable(root: Path, total: int, present: int) -> bool:
+    """Whether a download root looks unmounted, so its files must not count as missing.
+
+    Otherwise a share that failed to mount would mark the whole archive missing and,
+    with requeue_missing on, start re-downloading all of it into the empty mount point.
+    """
+    try:
+        if not root.is_dir() or next(root.iterdir(), None) is None:
+            return True
+    except OSError:
+        return True
+    return total >= UNMOUNTED_MIN_FILES and present == 0
+
+
+def _remove_partials(parts: list[Path]) -> None:
+    """Drop .part files of a download that won't be resumed (cancelled or failed for good)."""
+    for part in parts:
+        part.unlink(missing_ok=True)
+
+
 def _remove_tmp_dir(tmp_dir: Path) -> None:
     """Remove a job's temp dir, and its post folder too if that is now empty (a folder
     made before a date backfill moved the video elsewhere)."""
@@ -647,11 +672,13 @@ class DownloadManager:
 
         # 4. Download.
         tmp_dir = post_dir / f"{TMP_PREFIX}{ctx.media_id}"
+        parts: list[Path] = []  # direct-download .part files, kept only for a retry's resume
         try:
             if ctx.source in (MediaSource.NATIVE_DIRECT, MediaSource.MEDIA_DOWNLOAD):
                 native_ext = self._guess_ext(ctx)
                 target_ext = self._container_ext(ctx) if ctx.kind == MediaKind.VIDEO else native_ext
                 dest = self._reserve_dest(ctx, post_dir / self._file_name(ctx, target_ext))
+                parts.append(dest.with_name(dest.name + ".part"))
                 reporter.set_stage("downloading")
                 if native_ext == target_ext:
                     result = await download_direct(
@@ -663,6 +690,7 @@ class DownloadManager:
                     )
                 else:
                     tmp_file = dest.with_name(dest.stem + f".src.{native_ext}")
+                    parts.append(tmp_file.with_name(tmp_file.name + ".part"))
                     dl = await download_direct(
                         provider,
                         ctx.url,
@@ -700,10 +728,12 @@ class DownloadManager:
                     self._finalise_ytdlp, ctx, post_dir, produced, settings.downloads.compute_sha256
                 )
         except DownloadCancelled:
+            _remove_partials(parts)
             _remove_tmp_dir(tmp_dir)
             await asyncio.to_thread(self._cancel_job_db, ctx)
             return
         except PermanentDownloadError as exc:
+            _remove_partials(parts)
             _remove_tmp_dir(tmp_dir)
             await asyncio.to_thread(self._fail_job, ctx, str(exc), exc.error_class, retryable=False)
             return
@@ -763,16 +793,16 @@ class DownloadManager:
         }
         thumb_path: Path | None = None
         if ctx.post_thumbnail_url:
-            thumb_path = result.path.with_name(".creeparr-cover.jpg")
+            thumb_path = result.path.with_name(f".creeparr-cover-{ctx.media_id}.jpg")
             thumb_path = await self._fetch_thumbnail(provider, ctx.post_thumbnail_url, thumb_path)
 
         def _do() -> DownloadResult:
             changed = embed_metadata(ffmpeg, result.path, metadata, thumb_path)
             if thumb_path and thumb_path.exists():
                 thumb_path.unlink(missing_ok=True)
-            if not changed:
+            if not changed:  # ffmpeg failed; the file is untouched and the backlog retries
                 return DownloadResult(
-                    result.path, result.size, result.sha256, metadata_embedded=True
+                    result.path, result.size, result.sha256, metadata_embedded=False
                 )
             size = result.path.stat().st_size
             sha = sha256_file(result.path) if self.settings.get().downloads.compute_sha256 else None
@@ -870,7 +900,7 @@ class DownloadManager:
         are queued for re-download.
         """
         requeue = self.settings.get().downloads.requeue_missing
-        checked = missing = restored = requeued = 0
+        checked = missing = restored = requeued = skipped = 0
         with session_scope(self._factory) as s:
             rows = s.execute(
                 select(MediaItem.id, MediaItem.status, MediaItem.file_path, Creator.provider)
@@ -881,10 +911,33 @@ class DownloadManager:
                 )
             ).all()
         # stat() outside the session: a large archive on a slow share takes a while.
-        changed: list[tuple[int, bool]] = []
+        seen: list[tuple[int, str, Path, bool]] = []
+        per_root: dict[Path, list[int]] = {}  # root -> [files recorded, files present]
         for media_id, status, file_rel, provider in rows:
+            root = self.env.download_root(provider)
+            present = (root / file_rel).is_file()
+            seen.append((media_id, status, root, present))
+            counts = per_root.setdefault(root, [0, 0])
+            counts[0] += 1
+            counts[1] += present
+        unavailable = {
+            root
+            for root, (total, present) in per_root.items()
+            if _root_unavailable(root, total, present)
+        }
+        for root in unavailable:
+            log.error(
+                "verify_files: %s looks unmounted (empty, or none of its %d archived files "
+                "are there); leaving its items alone",
+                root,
+                per_root[root][0],
+            )
+        changed: list[tuple[int, bool]] = []
+        for media_id, status, root, present in seen:
+            if root in unavailable:
+                skipped += 1
+                continue
             checked += 1
-            present = (self.env.download_root(provider) / file_rel).is_file()
             if status == MediaStatus.COMPLETED and not present:
                 changed.append((media_id, False))
             elif status == MediaStatus.MISSING and present:
@@ -940,13 +993,20 @@ class DownloadManager:
         if missing or restored:
             self.bus.publish("queue.changed", {})
         log.info(
-            "verified %d archived files: %d missing, %d restored, %d re-queued",
+            "verified %d archived files: %d missing, %d restored, %d re-queued, %d skipped",
             checked,
             missing,
             restored,
             requeued,
+            skipped,
         )
-        return {"checked": checked, "missing": missing, "restored": restored, "requeued": requeued}
+        return {
+            "checked": checked,
+            "missing": missing,
+            "restored": restored,
+            "requeued": requeued,
+            "skipped": skipped,
+        }
 
     async def _embed_existing(self, media_id: int, ffmpeg: str) -> bool:
         with session_scope(self._factory) as s:
@@ -981,18 +1041,24 @@ class DownloadManager:
         thumb_path: Path | None = None
         if thumb_url:
             thumb_path = await self._fetch_thumbnail(
-                provider, thumb_url, abs_path.with_name(".creeparr-cover.jpg")
+                provider, thumb_url, abs_path.with_name(f".creeparr-cover-{media_id}.jpg")
             )
 
-        def _do() -> tuple[int, str | None]:
-            embed_metadata(ffmpeg, abs_path, metadata, thumb_path)
+        def _do() -> tuple[int, str | None] | None:
+            changed = embed_metadata(ffmpeg, abs_path, metadata, thumb_path)
             if thumb_path and thumb_path.exists():
                 thumb_path.unlink(missing_ok=True)
+            if not changed:
+                return None
             size = abs_path.stat().st_size
             sha = sha256_file(abs_path) if self.settings.get().downloads.compute_sha256 else None
             return size, sha
 
-        size, sha = await asyncio.to_thread(_do)
+        done = await asyncio.to_thread(_do)
+        if done is None:
+            log.warning("could not embed metadata into %s; will retry later", abs_path.name)
+            return False
+        size, sha = done
         if published_at:
             set_times(abs_path, published_at)
             set_times(abs_path.parent, published_at)

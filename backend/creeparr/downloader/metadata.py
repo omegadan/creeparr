@@ -103,6 +103,8 @@ def embed_metadata(
 
 def remux_container(ffmpeg: str, src: Path, dst: Path) -> bool:
     """Losslessly remux `src` into a different container `dst` (-c copy)."""
-    if _run([ffmpeg, "-y", "-i", str(src), "-map", "0", "-c", "copy", str(dst)]):
-        return dst.exists() and dst.stat().st_size > 0
+    ok = _run([ffmpeg, "-y", "-i", str(src), "-map", "0", "-c", "copy", str(dst)])
+    if ok and dst.exists() and dst.stat().st_size > 0:
+        return True
+    dst.unlink(missing_ok=True)  # don't leave a partial file beside the fallback
     return False

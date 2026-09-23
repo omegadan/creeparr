@@ -53,6 +53,7 @@ class ScanManager:
 
     async def start(self) -> None:
         self._stop = False
+        await asyncio.to_thread(self.scanner.close_interrupted_runs)
         self._task = asyncio.create_task(self._worker(), name="scan-manager")
 
     async def stop(self) -> None:
