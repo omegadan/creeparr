@@ -323,3 +323,27 @@ def test_concurrent_settings_updates_keep_both_changes(settings):
     settings.reload()
     d = settings.get().downloads
     assert (d.concurrency, d.max_per_creator) == (5, 4)
+
+
+def test_every_api_route_requires_login_when_a_password_is_set(env):
+    # A sweep, so a newly added route can't ship without the auth gate.
+    import re
+
+    from creeparr.api.auth import OPEN_PATHS
+
+    app = create_app(env, start_background=False)
+    paths = app.openapi()["paths"]  # every route, including ones in included routers
+    with TestClient(app, headers=UI_HEADERS) as c:
+        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        c.cookies.clear()
+        checked = 0
+        for template, ops in paths.items():
+            path = re.sub(r"\{[^}]+\}", "1", template)
+            if not path.startswith("/api/") or path in OPEN_PATHS:
+                continue
+            for method in ops:
+                r = c.request(method.upper(), path)
+                assert r.status_code == 401, f"{method.upper()} {template} -> {r.status_code}"
+                checked += 1
+        assert checked > 40  # the sweep actually covered the API
+        assert c.get("/api/v1/events").status_code == 401  # the SSE stream too

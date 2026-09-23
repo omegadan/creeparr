@@ -56,7 +56,13 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
             await services.providers.aclose_all()
             services.engine.dispose()
 
-    app = FastAPI(title="Creeparr", version=__version__, lifespan=lifespan, docs_url="/api/docs")
+    app = FastAPI(
+        title="Creeparr",
+        version=__version__,
+        lifespan=lifespan,
+        docs_url="/api/docs",
+        redoc_url=None,
+    )
     app.state.services = services
 
     @app.exception_handler(AppError)
