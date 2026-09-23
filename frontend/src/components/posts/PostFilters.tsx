@@ -17,7 +17,7 @@ export function PostFilters({ value, onChange }: { value: Filters; onChange: (f:
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <div className="relative">
         <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-fg-dim" />
-        <input className="input w-64 pl-8" placeholder="Search titles…" value={term} onChange={(e) => setTerm(e.target.value)} />
+        <input className="input w-64 pl-8" aria-label="Search titles" placeholder="Search titles…" value={term} onChange={(e) => setTerm(e.target.value)} />
       </div>
       <select className="input w-40" value={value.status ?? ""} onChange={(e) => set("status", e.target.value)}>
         <option value="">All statuses</option>

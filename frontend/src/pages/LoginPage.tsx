@@ -17,8 +17,9 @@ export function LoginPage() {
           <img src="/logo.png" alt="" className="h-8 w-8" />
           <span className="text-lg font-bold">Creeparr</span>
         </div>
-        <label className="label">Password</label>
+        <label className="label" htmlFor="login-password">Password</label>
         <input
+          id="login-password"
           type="password"
           className="input"
           autoFocus

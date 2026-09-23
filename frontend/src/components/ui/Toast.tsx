@@ -29,12 +29,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-80 flex-col gap-2">
+      <div role="status" aria-live="polite" className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-80 flex-col gap-2">
         {items.map((t) => (
           <div key={t.id} className={cx("pointer-events-auto flex items-start gap-2 rounded-md border border-line bg-bg-2 px-3 py-2 text-sm shadow-lg")}>
             <span className="mt-0.5">{icons[t.kind]}</span>
             <span className="flex-1 break-words">{t.message}</span>
-            <button onClick={() => setItems((s) => s.filter((x) => x.id !== t.id))} className="text-fg-dim hover:text-fg"><X className="h-3.5 w-3.5" /></button>
+            <button aria-label="Dismiss" onClick={() => setItems((s) => s.filter((x) => x.id !== t.id))} className="text-fg-dim hover:text-fg"><X className="h-3.5 w-3.5" /></button>
           </div>
         ))}
       </div>

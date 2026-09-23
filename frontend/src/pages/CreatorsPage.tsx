@@ -34,7 +34,7 @@ export function CreatorsPage() {
         subtitle={creators.data ? `${creators.data.length} creator${creators.data.length === 1 ? "" : "s"} archived` : undefined}
         actions={
           <>
-            <input className="input w-48" placeholder="Filter…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <input className="input w-48" aria-label="Filter creators" placeholder="Filter…" value={filter} onChange={(e) => setFilter(e.target.value)} />
             <select className="input w-36" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
               <option value="name">Sort: name</option>
               <option value="recent">Sort: last scan</option>

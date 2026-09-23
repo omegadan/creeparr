@@ -46,7 +46,18 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
             const expanded = open.has(p.id);
             return (
               <Fragment key={p.id}>
-                <tr className={cx("cursor-pointer", expanded && "bg-bg-2/40")} onClick={() => toggle(p.id)}>
+                <tr
+                  className={cx("cursor-pointer", expanded && "bg-bg-2/40")}
+                  onClick={() => toggle(p.id)}
+                  tabIndex={0}
+                  aria-expanded={expanded}
+                  onKeyDown={(e) => {
+                    if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      toggle(p.id);
+                    }
+                  }}
+                >
                   <td className="text-fg-dim">{expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</td>
                   <td className="whitespace-nowrap text-fg-muted">{formatDate(p.published_at)}</td>
                   {showCreator && <td className="text-fg-muted">{p.creator_name}</td>}

@@ -22,7 +22,7 @@ export function LogsPage() {
         title="Logs"
         actions={
           <>
-            <input className="input w-56" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input className="input w-56" aria-label="Search logs" placeholder="Search…" value={search} onChange={(e) => setSearch(e.target.value)} />
             <select className="input w-32" value={level} onChange={(e) => setLevel(e.target.value)}>
               {["DEBUG", "INFO", "WARNING", "ERROR"].map((l) => <option key={l}>{l}</option>)}
             </select>

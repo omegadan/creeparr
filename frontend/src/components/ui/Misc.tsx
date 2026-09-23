@@ -19,11 +19,13 @@ export function EmptyState({ icon, title, hint, action }: { icon?: ReactNode; ti
 
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
   return (
-    <div className={className}>
-      <label className="label">{label}</label>
+    // Wrapping the control in the <label> names it for screen readers and makes the
+    // label text clickable.
+    <label className={cx("block", className)}>
+      <span className="label">{label}</span>
       {children}
-      {hint && <p className="mt-1 text-xs text-fg-dim">{hint}</p>}
-    </div>
+      {hint && <span className="mt-1 block text-xs text-fg-dim">{hint}</span>}
+    </label>
   );
 }
 

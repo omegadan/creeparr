@@ -84,9 +84,9 @@ export function ProviderAccount({ name, settings }: { name: string; settings: Se
               <input className="input font-mono" autoComplete="off" spellCheck={false} placeholder={`stored: ${storedVal}`} value={form[key] ?? ""} onChange={(e) => set(key, e.target.value)} />
             )}
             {isStored(key) && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-ok">
+              <span className="mt-1 flex items-center gap-1 text-xs text-ok">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Stored. Paste a new value to replace it, or Clear below to remove it.
-              </p>
+              </span>
             )}
           </Field>
         );
