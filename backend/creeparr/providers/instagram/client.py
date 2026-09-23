@@ -51,13 +51,15 @@ class InstagramCredentials:
         return c
 
 
+_GALLERY_DL_LOCK = threading.Lock()
+
+
 class InstagramClient:
     """Thin wrapper over gallery-dl's DataJob (blocking; call inside a thread)."""
 
     def __init__(self, creds: InstagramCredentials, sleep_request: float = 1.0) -> None:
         self.creds = creds
         self.sleep_request = sleep_request
-        self._lock = threading.Lock()
 
     def _apply_config(self) -> None:
         from gallery_dl import config
@@ -76,7 +78,9 @@ class InstagramClient:
         from gallery_dl import exception as gdl_exc
         from gallery_dl.job import DataJob
 
-        with self._lock:
+        # gallery-dl's config is process-wide and clients are created per call, so one
+        # lock for all of them: a settings "Test" must not swap a running scan's cookies.
+        with _GALLERY_DL_LOCK:
             self._apply_config()
             jobj = DataJob(url, file=None, resolve=True)
             jobj.run()

@@ -88,10 +88,11 @@ class RedditProvider(ProviderService):
         q = query.strip().rstrip("/")
         if "reddit.com" in q:
             parts = [p for p in urlparse(q if "://" in q else f"https://{q}").path.split("/") if p]
-            if parts and parts[0] in ("r",):
+            if len(parts) > 1 and parts[0] == "r":
                 return f"r/{parts[1]}"
-            if parts and parts[0] in ("u", "user"):
+            if len(parts) > 1 and parts[0] in ("u", "user"):
                 return f"u/{parts[1]}"
+            raise NotFoundError(f"not a subreddit or user URL: {query}")
         low = q.lower()
         if low.startswith("r/"):
             return f"r/{q[2:]}"

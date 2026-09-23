@@ -64,6 +64,36 @@ class TransportResponse:
         if self._close is not None:
             await self._close()
 
+    def also_close(self, extra: Callable[[], Awaitable[None]]) -> None:
+        """Run `extra` (e.g. closing a one-off client) after the response is closed."""
+        first = self._close
+
+        async def close() -> None:
+            try:
+                if first is not None:
+                    await first()
+            finally:
+                await extra()
+
+        self._close = close
+
+
+def parse_retry_after(value: str | None, default: float = 30.0) -> float:
+    """Seconds to wait from a Retry-After header: either seconds or an HTTP date."""
+    if not value:
+        return default
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    from email.utils import parsedate_to_datetime
+
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, when.timestamp() - time.time())
+
 
 class Transport(Protocol):
     async def request(

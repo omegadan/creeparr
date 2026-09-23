@@ -33,7 +33,12 @@ from creeparr.patreon.parsing import (
     extract_bootstrap_campaign_id,
     post_from_resource,
 )
-from creeparr.patreon.transport import RateLimiter, Transport, TransportResponse
+from creeparr.patreon.transport import (
+    RateLimiter,
+    Transport,
+    TransportResponse,
+    parse_retry_after,
+)
 from creeparr.providers.models import (
     CreatorInfo,
     PostPage,
@@ -128,11 +133,7 @@ def classify_response(resp: TransportResponse, *, expect_json: bool = True) -> N
             raise ForbiddenError(detail or "forbidden", status=status, detail=detail)
         raise AuthError("Patreon rejected the request (403)", status=status, detail=detail)
     if status == 429:
-        try:
-            retry_after = float(resp.headers.get("retry-after", "30"))
-        except ValueError:
-            retry_after = 30.0
-        raise RateLimitedError(retry_after, status=status)
+        raise RateLimitedError(parse_retry_after(resp.headers.get("retry-after")), status=status)
     if status == 404:
         raise NotFoundError(detail or "not found", status=status, detail=detail)
     if status >= 500:
@@ -487,7 +488,12 @@ class PatreonClient:
             }
         )
         url: str | None = f"{API_URL}/posts"
+        visited: set[str] = set()
         while url:
+            if url in visited:  # a cursor that points back would otherwise loop forever
+                log.warning("Patreon returned an already-visited page link; stopping: %s", url)
+                return
+            visited.add(url)
             payload = await self._get_posts_page(url, params)
             params = None
             index = IncludedIndex(payload)

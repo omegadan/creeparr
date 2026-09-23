@@ -77,8 +77,9 @@ class CookieSet:
         sid = (session_id or "").strip() or None
         if cookies_txt:
             for c in parse_netscape(cookies_txt):
-                if domain not in c.domain:
-                    continue
+                host = c.domain.lstrip(".").lower()
+                if host != domain and not host.endswith("." + domain):
+                    continue  # e.g. notpatreon.com is not patreon.com
                 if c.name == session_name:
                     if not sid:
                         sid = c.value
@@ -142,6 +143,9 @@ def write_cookiefile(text: str, path: Path) -> int:
 def _atomic_write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(content, encoding="utf-8")
-    os.chmod(tmp, 0o600)
+    tmp.unlink(missing_ok=True)
+    # Created 0600 from the start: cookies are credentials, never briefly world-readable.
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(content)
     os.replace(tmp, path)

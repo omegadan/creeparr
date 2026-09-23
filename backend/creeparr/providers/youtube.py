@@ -14,6 +14,7 @@ import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any, ClassVar
+from urllib.parse import urlparse
 from xml.etree import ElementTree
 
 import httpx
@@ -156,7 +157,11 @@ class YouTubeProvider(ProviderService):
     @staticmethod
     def _channel_videos_url(query: str) -> str:
         q = query.strip()
-        if "youtube.com" in q or "youtu.be" in q:
+        if "://" in q or q.startswith(("www.", "youtube.com", "m.youtube.com")):
+            host = urlparse(q if "://" in q else f"https://{q}").hostname or ""
+            if host not in ("youtube.com", "youtu.be") and not host.endswith(".youtube.com"):
+                # Don't hand arbitrary URLs to yt-dlp's generic extractor.
+                raise NotFoundError(f"not a YouTube URL: {query}")
             base = q.split("?")[0].rstrip("/")
             for tab in ("/videos", "/streams", "/shorts", "/featured", "/about"):
                 if base.endswith(tab):

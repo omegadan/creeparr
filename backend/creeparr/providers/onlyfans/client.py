@@ -8,7 +8,12 @@ from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
-from creeparr.patreon.transport import RateLimiter, Transport, TransportResponse
+from creeparr.patreon.transport import (
+    RateLimiter,
+    Transport,
+    TransportResponse,
+    parse_retry_after,
+)
 from creeparr.providers.errors import (
     AuthError,
     ForbiddenError,
@@ -110,13 +115,25 @@ class OnlyFansClient:
         if status == 404:
             raise NotFoundError("not found")
         if status == 429:
-            raise RateLimitedError(float(resp.headers.get("retry-after", "30")))
+            raise RateLimitedError(parse_retry_after(resp.headers.get("retry-after")))
         if status >= 500:
             raise TransientError(f"server error {status}")
         try:
-            return json.loads(resp.text)
+            data = json.loads(resp.text)
         except ValueError as exc:
+            if status >= 400:
+                raise UnexpectedResponse(f"OnlyFans returned {status}") from exc
             raise UnexpectedResponse("invalid JSON from OnlyFans") from exc
+        # Any other failure (400 "Please refresh the page", or an error body on a 200)
+        # must not read as an empty list, which would end a scan as if it succeeded.
+        err = data.get("error") if isinstance(data, dict) else None
+        if status >= 400 or (err and "list" not in data and "id" not in data):
+            msg = (err.get("message") if isinstance(err, dict) else err) or f"HTTP {status}"
+            low = str(msg).lower()
+            if "wrong user" in low or "refresh" in low or "log in" in low or "login" in low:
+                raise AuthError(f"OnlyFans rejected the session: {msg}")
+            raise UnexpectedResponse(f"OnlyFans error ({status}): {msg}")
+        return data
 
     async def get_me(self) -> UserInfo:
         data = await self._get("/users/me")
@@ -248,7 +265,8 @@ class OnlyFansClient:
             seen += len(items)
             log.debug("OnlyFans messages page: %d items (total %d)", len(items), seen)
             posts = [self._message_from_json(m, external_id) for m in items]
-            before_id = str(items[-1].get("id"))
+            last_id = items[-1].get("id")
+            before_id = str(last_id) if last_id is not None else None
             more = bool(has_more and before_id)
             yield PostPage(posts=posts, next_url="more" if more else None, source="messages")
             if not more:

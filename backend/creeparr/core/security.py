@@ -23,8 +23,9 @@ def get_secret_key(config_dir: Path) -> bytes:
         pass
     key = secrets.token_bytes(32)
     try:
-        path.write_text(key.hex())
-        os.chmod(path, 0o600)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # never readable
+        with os.fdopen(fd, "w") as fh:
+            fh.write(key.hex())
     except OSError:
         pass
     return key

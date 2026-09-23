@@ -136,6 +136,7 @@ class OnlyFansProvider(ProviderService):
         async with self._lock:
             old = self._client
             self._client = None
+            self._rules = None  # the rules URL may have changed too
             if old is not None:
                 await old._transport.aclose()
         self.write_cookie_file()
@@ -259,7 +260,9 @@ class OnlyFansProvider(ProviderService):
             headers["Cookie"] = self._creds().cookie_header()
         transport = self._transport()
         try:
-            return await transport.request("GET", url, headers=headers, stream=True)
+            resp = await transport.request("GET", url, headers=headers, stream=True)
         except TransportFailure:
             await transport.aclose()
             raise
+        resp.also_close(transport.aclose)  # this one-off client goes with the response
+        return resp

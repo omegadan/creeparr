@@ -8,6 +8,7 @@ and external videos are handed to yt-dlp by permalink so audio is merged.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -16,6 +17,7 @@ from typing import Any
 
 import httpx
 
+from creeparr.patreon.transport import parse_retry_after
 from creeparr.providers.errors import (
     AuthError,
     NotFoundError,
@@ -97,7 +99,7 @@ class RedditClient:
         if resp.status_code == 404:
             raise NotFoundError(f"{path} not found")
         if resp.status_code == 429:
-            raise RateLimitedError(float(resp.headers.get("retry-after", "30")))
+            raise RateLimitedError(parse_retry_after(resp.headers.get("retry-after")))
         if resp.status_code in (401, 403):
             raise AuthError(
                 "Reddit blocked this request (403). Try configuring a Reddit app "
@@ -126,6 +128,7 @@ class RedditClient:
             after = (data.get("data") or {}).get("after")
             if not after:
                 break
+            await asyncio.sleep(self.sleep_request)  # be polite between pages
         return posts
 
     async def fetch_profile(self, target: str) -> dict[str, Any]:
