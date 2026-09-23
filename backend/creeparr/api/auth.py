@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import threading
+import time
+from collections import deque
+
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
@@ -15,6 +21,18 @@ router = APIRouter(tags=["auth"])
 COOKIE = "creeparr_session"
 # Paths under /api/v1 that never require authentication.
 OPEN_PATHS = ("/api/v1/auth/login", "/api/v1/auth/status")
+
+
+# Wrong passwords allowed per client within the window before logins are refused.
+LOGIN_MAX_FAILURES = 5
+LOGIN_WINDOW_SECONDS = 300
+_failures: dict[str, deque[float]] = {}
+_failures_lock = threading.Lock()
+
+
+class TooManyAttempts(AppError):
+    status_code = 429
+    code = "too_many_attempts"
 
 
 class Unauthorized(AppError):
@@ -36,11 +54,26 @@ def auth_active(services: Services) -> bool:
     return bool(sec.auth_enabled and sec.password_hash)
 
 
+def session_key(services: Services) -> bytes:
+    """Key that signs session cookies. It covers the password hash and the logout
+    counter, so changing the password or logging out ends every existing session."""
+    sec = services.settings.get().security
+    material = f"{sec.password_hash}|{sec.session_epoch}".encode()
+    return hmac.new(services.auth_secret, material, hashlib.sha256).digest()
+
+
 def is_authenticated(request: Request, services: Services) -> bool:
     if not auth_active(services):
         return True
     token = request.cookies.get(COOKIE)
-    return bool(token and verify_token(services.auth_secret, token))
+    return bool(token and verify_token(session_key(services), token))
+
+
+def _recent_failures(client: str, now: float) -> deque[float]:
+    times = _failures.setdefault(client, deque())
+    while times and now - times[0] > LOGIN_WINDOW_SECONDS:
+        times.popleft()
+    return times
 
 
 @router.get("/auth/status")
@@ -52,11 +85,27 @@ def auth_status(request: Request, services: Services = Depends(get_services)):
 
 
 @router.post("/auth/login")
-def login(body: LoginBody, response: Response, services: Services = Depends(get_services)):
+def login(
+    body: LoginBody,
+    request: Request,
+    response: Response,
+    services: Services = Depends(get_services),
+):
+    client = request.client.host if request.client else "?"
+    now = time.monotonic()
+    with _failures_lock:
+        failures = _recent_failures(client, now)
+        if len(failures) >= LOGIN_MAX_FAILURES:
+            wait = int(LOGIN_WINDOW_SECONDS - (now - failures[0])) + 1
+            raise TooManyAttempts(f"too many wrong passwords; try again in {wait} s")
     sec = services.settings.get().security
     if not sec.password_hash or not verify_password(body.password, sec.password_hash):
+        with _failures_lock:
+            _recent_failures(client, now).append(now)
         raise Unauthorized("incorrect password")
-    token = make_token(services.auth_secret)
+    with _failures_lock:
+        _failures.pop(client, None)
+    token = make_token(session_key(services))
     response.set_cookie(
         COOKIE, token, max_age=30 * 24 * 3600, httponly=True, samesite="lax", path="/"
     )
@@ -64,7 +113,12 @@ def login(body: LoginBody, response: Response, services: Services = Depends(get_
 
 
 @router.post("/auth/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response, services: Services = Depends(get_services)):
+    # Tokens are stateless, so ending one means ending all: bump the signing key.
+    # (Single-user app: "log out" logs out every browser.)
+    if auth_active(services) and is_authenticated(request, services):
+        epoch = services.settings.get().security.session_epoch
+        services.settings.update({"security": {"session_epoch": epoch + 1}})
     response.delete_cookie(COOKIE, path="/")
     return {"ok": True}
 

@@ -139,6 +139,8 @@ class NamingSettings(BaseModel):
 class SecuritySettings(BaseModel):
     auth_enabled: bool = False
     password_hash: str = ""
+    # Part of the session signing key: logging out bumps it, ending every session.
+    session_epoch: int = 0
 
 
 class NotificationSettings(BaseModel):

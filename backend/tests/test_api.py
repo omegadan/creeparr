@@ -246,3 +246,49 @@ def test_queue_is_paged_with_true_totals(app, api):
     assert len(last["jobs"]) == 60 and last["queued_total"] == 260
     ids = {j["id"] for j in first["jobs"]} | {j["id"] for j in last["jobs"]}
     assert len(ids) == 160  # pages don't overlap
+
+
+def test_logout_and_password_change_end_old_sessions(env):
+    app = create_app(env, start_background=False)
+
+    def login(c, password):
+        r = c.post("/api/v1/auth/login", json={"password": password})
+        assert r.status_code == 200
+        return r.cookies["creeparr_session"]
+
+    def with_cookie(c, token):
+        c.cookies.clear()
+        c.cookies.set("creeparr_session", token)
+        return c.get("/api/v1/creators").status_code
+
+    with TestClient(app, headers=UI_HEADERS) as c:
+        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        stolen = login(c, "hunter2")
+        assert with_cookie(c, stolen) == 200
+        assert c.post("/api/v1/auth/logout").status_code == 200
+        # The old cookie no longer works (e.g. one copied off another machine).
+        assert with_cookie(c, stolen) == 401
+
+        before = login(c, "hunter2")
+        assert with_cookie(c, before) == 200
+        r = c.put("/api/v1/auth/password", json={"password": "correct horse"})
+        assert r.status_code == 200
+        assert with_cookie(c, before) == 401  # the password change ended it
+        assert with_cookie(c, login(c, "correct horse")) == 200
+
+
+def test_login_is_throttled_after_repeated_failures(env, monkeypatch):
+    from creeparr.api import auth
+
+    monkeypatch.setattr(auth, "_failures", {})
+    app = create_app(env, start_background=False)
+    with TestClient(app, headers=UI_HEADERS) as c:
+        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        for _ in range(auth.LOGIN_MAX_FAILURES):
+            assert c.post("/api/v1/auth/login", json={"password": "nope"}).status_code == 401
+        r = c.post("/api/v1/auth/login", json={"password": "hunter2"})
+        assert r.status_code == 429 and r.json()["error"]["code"] == "too_many_attempts"
+        # After the window, the right password works again.
+        real = auth.time.monotonic
+        monkeypatch.setattr(auth.time, "monotonic", lambda: real() + auth.LOGIN_WINDOW_SECONDS + 1)
+        assert c.post("/api/v1/auth/login", json={"password": "hunter2"}).status_code == 200
