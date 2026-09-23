@@ -182,7 +182,7 @@ class MediaItem(TimestampMixin, Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     file_path: Mapped[str | None] = mapped_column(String(2048))
     file_size_bytes: Mapped[int | None] = mapped_column(Integer)
-    sha256: Mapped[str | None] = mapped_column(String(64))
+    sha256: Mapped[str | None] = mapped_column(String(64), index=True)  # dedupe lookups
     metadata_embedded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     order_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -225,7 +225,7 @@ class DownloadJob(TimestampMixin, Base):
     eta_seconds: Mapped[int | None] = mapped_column(Integer)
     stage: Mapped[str | None] = mapped_column(String(16))
     worker_id: Mapped[str | None] = mapped_column(String(32))
-    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)  # hourly caps
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     error: Mapped[str | None] = mapped_column(Text)
     error_class: Mapped[str | None] = mapped_column(String(64))

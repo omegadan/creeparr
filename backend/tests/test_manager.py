@@ -472,3 +472,75 @@ async def test_permanent_failure_removes_the_part_file(
         await mgr.stop()
         await providers.aclose_all()
     assert parts and not parts[0].exists()
+
+
+@pytest.mark.asyncio
+async def test_long_work_runs_in_its_own_pool(
+    env, session_factory, settings, bus, providers, monkeypatch
+):
+    # yt-dlp can hold a thread for hours; it must not occupy asyncio's small default
+    # pool, which claims, DB updates and scans all share.
+    import threading
+
+    settings.update({"naming": {"embed_metadata": False}})
+    _, job_id = seed(session_factory, fx.youtube_post("y1", title="Clip"))
+    threads: list[str] = []
+
+    def fake_ytdlp(url, tmp_dir, opts, reporter, label):
+        threads.append(threading.current_thread().name)
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        produced = tmp_dir / "video.mkv"
+        produced.write_bytes(b"\x1a\x45\xdf\xa3")
+        return produced, {}
+
+    monkeypatch.setattr("creeparr.downloader.manager.run_ytdlp", fake_ytdlp)
+    bus.bind(asyncio.get_running_loop())
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    await mgr.start()
+    try:
+        assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
+    finally:
+        await mgr.stop()
+        await providers.aclose_all()
+    assert threads and threads[0].startswith("creeparr-long")
+
+
+@pytest.mark.asyncio
+async def test_progress_is_written_off_the_event_loop_and_not_after_finish(
+    env, session_factory, settings, bus, providers
+):
+    import threading
+
+    _, job_id = seed(session_factory, fx.native_video_post("p1"))
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    with session_scope(session_factory) as s:
+        s.get(DownloadJob, job_id).status = JobStatus.RUNNING
+
+    writers: list[str] = []
+    real = mgr._write_progress
+
+    def spy(jid, data):
+        writers.append(threading.current_thread().name)
+        real(jid, data)
+
+    mgr._write_progress = spy
+    mgr._on_progress(job_id, {"progress_percent": 40.0, "stage": "downloading"})
+    assert await wait_for(lambda: bool(writers))
+    assert writers[0] != threading.main_thread().name  # not on the loop's thread
+    assert await wait_for(lambda: _job(session_factory, job_id).progress_percent == 40.0)
+
+    # A late update arriving after the job finished must not overwrite its end state.
+    with session_scope(session_factory) as s:
+        job = s.get(DownloadJob, job_id)
+        job.status, job.progress_percent, job.stage = JobStatus.COMPLETED, 100.0, None
+    real(job_id, {"progress_percent": 97.0, "stage": "downloading"})
+    job = _job(session_factory, job_id)
+    assert (job.progress_percent, job.stage) == (100.0, None)
+    await providers.aclose_all()
+
+
+def _job(session_factory, job_id):
+    with session_scope(session_factory) as s:
+        job = s.get(DownloadJob, job_id)
+        s.expunge(job)
+        return job

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import logging
 import mimetypes
 import random
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
@@ -177,6 +179,10 @@ class DownloadManager:
         # two same-named files of one post downloading at once get distinct names.
         self._reserved_dests: dict[int, set[Path]] = {}
         self._dest_lock = threading.Lock()
+        # yt-dlp, ffmpeg and hashing can each hold a thread for minutes to hours. They
+        # get their own pool so claims, DB updates and scans (asyncio's default pool,
+        # only cpu_count + 4 threads) never queue behind them.
+        self._long_pool = ThreadPoolExecutor(max_workers=16, thread_name_prefix="creeparr-long")
 
     # ---- lifecycle -----------------------------------------------------------------
 
@@ -391,6 +397,11 @@ class DownloadManager:
             with self._dest_lock:
                 self._reserved_dests.pop(ctx.job_id, None)
             self._kick.set()
+
+    async def _long(self, fn, *args, **kwargs):  # noqa: ANN001, ANN202
+        """Run a long blocking call (download, remux, embed, hash) in the long pool."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(self._long_pool, functools.partial(fn, *args, **kwargs))
 
     async def _sleep(self, seconds: float) -> None:
         self._kick.clear()
@@ -698,7 +709,7 @@ class DownloadManager:
                         reporter,
                         compute_sha256=False,
                     )
-                    result = await asyncio.to_thread(
+                    result = await self._long(
                         self._remux_to, ctx, dl.path, dest, settings.downloads.compute_sha256
                     )
             else:
@@ -716,15 +727,13 @@ class DownloadManager:
                     remote_components=settings.downloads.ytdlp_remote_components,
                 )
                 reporter.set_stage("downloading")
-                produced, yt_meta = await asyncio.to_thread(
-                    run_ytdlp, url, tmp_dir, opts, reporter, label
-                )
+                produced, yt_meta = await self._long(run_ytdlp, url, tmp_dir, opts, reporter, label)
                 await self._backfill_date(ctx, yt_meta)
                 if date_pending:
                     post_dir = root / self._post_dir(ctx)
                     await asyncio.to_thread(self._write_sidecars, ctx, post_dir)
                 reporter.set_stage("verifying")
-                result = await asyncio.to_thread(
+                result = await self._long(
                     self._finalise_ytdlp, ctx, post_dir, produced, settings.downloads.compute_sha256
                 )
         except DownloadCancelled:
@@ -808,7 +817,7 @@ class DownloadManager:
             sha = sha256_file(result.path) if self.settings.get().downloads.compute_sha256 else None
             return DownloadResult(result.path, size, sha, metadata_embedded=True)
 
-        return await asyncio.to_thread(_do)
+        return await self._long(_do)
 
     async def _fetch_thumbnail(self, provider, url: str, dest: Path) -> Path | None:  # noqa: ANN001
         try:
@@ -1054,7 +1063,7 @@ class DownloadManager:
             sha = sha256_file(abs_path) if self.settings.get().downloads.compute_sha256 else None
             return size, sha
 
-        done = await asyncio.to_thread(_do)
+        done = await self._long(_do)
         if done is None:
             log.warning("could not embed metadata into %s; will retry later", abs_path.name)
             return False
@@ -1220,10 +1229,22 @@ class DownloadManager:
     def _on_progress(self, job_id: int, data: dict[str, Any]) -> None:
         self.bus.publish("job.progress", {"id": job_id, **data})
         try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            # Direct downloads report from the event loop; a blocking SQLite write here
+            # would stall the whole server while the scanner holds the write lock.
+            loop.run_in_executor(None, self._write_progress, job_id, data)
+        else:
+            self._write_progress(job_id, data)  # yt-dlp's hooks run in its own thread
+
+    def _write_progress(self, job_id: int, data: dict[str, Any]) -> None:
+        try:
             with session_scope(self._factory) as s:
                 job = s.get(DownloadJob, job_id)
-                if job is None:
-                    return
+                if job is None or job.status != JobStatus.RUNNING:
+                    return  # finished meanwhile; don't overwrite its final state
                 for key in (
                     "progress_percent",
                     "bytes_downloaded",
