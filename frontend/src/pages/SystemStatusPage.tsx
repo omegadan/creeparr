@@ -29,7 +29,11 @@ export function SystemStatusPage() {
     <>
       <PageHeader title="System status" subtitle={`Creeparr v${s.version} · up ${formatDuration(s.uptime_seconds)}`} />
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Patreon session" value={<Badge tone={s.auth.state === "valid" ? "ok" : s.auth.state === "unknown" ? "warn" : "danger"}>{s.auth.state}</Badge>} sub={s.auth.user_name ?? s.auth.error ?? `checked ${timeAgo(s.auth.checked_at)}`} />
+        <Stat
+          label="Sessions"
+          value={`${s.providers.filter((p) => p.auth.state === "valid").length} of ${s.providers.length} connected`}
+          sub={s.providers.map((p) => `${p.label}: ${p.auth.state}`).join(" · ")}
+        />
         <Stat label="Archive" value={`${formatBytes(s.counts.media_bytes)}`} sub={`${s.counts.media_completed} files${s.counts.media_missing ? ` · ${s.counts.media_missing} missing` : ""} · ${Object.entries(s.counts.provider_bytes || {}).map(([p, b]) => `${p}: ${formatBytes(b)}`).join(" · ") || `${s.counts.posts} posts`}`} />
         <Stat label="Queue" value={`${s.counts.running} running · ${s.counts.queued} queued`} sub={`${s.counts.failed} failed · ${s.downloads.workers} workers${s.downloads.paused ? ` · paused (${s.downloads.paused_reason})` : ""}`} />
         <Stat label="Disk" value={formatBytes(s.disk.free_bytes) + " free"} sub={diskPct !== null ? `${diskPct}% used of ${formatBytes(s.disk.total_bytes)}` : undefined} />

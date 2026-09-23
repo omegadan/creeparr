@@ -31,6 +31,10 @@ export const MEDIA_STATUS: Record<MediaStatus, StatusMeta> = {
   missing: { label: "Missing", tone: "danger" },
 };
 
+/** Badge data for a status, including ones this UI version doesn't know yet. */
+export const postStatus = (s: string): StatusMeta => POST_STATUS[s as PostStatus] ?? { label: s, tone: "muted" };
+export const mediaStatus = (s: string): StatusMeta => MEDIA_STATUS[s as MediaStatus] ?? { label: s, tone: "muted" };
+
 export const TONE_CLASS: Record<StatusMeta["tone"], string> = {
   ok: "bg-ok/15 text-ok border-ok/30",
   info: "bg-info/15 text-info border-info/30",

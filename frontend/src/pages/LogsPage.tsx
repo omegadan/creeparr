@@ -3,6 +3,7 @@ import { useLogs } from "../api/hooks/useSystem";
 import { PageHeader } from "../components/layout/AppShell";
 import { Toggle } from "../components/ui/Toggle";
 import { cx } from "../lib/format";
+import { useDebounced } from "../lib/useDebounced";
 
 const LEVEL_CLASS: Record<string, string> = { DEBUG: "text-fg-dim", INFO: "text-fg", WARNING: "text-warn", ERROR: "text-danger", CRITICAL: "text-danger" };
 
@@ -10,7 +11,7 @@ export function LogsPage() {
   const [level, setLevel] = useState("INFO");
   const [search, setSearch] = useState("");
   const [auto, setAuto] = useState(true);
-  const logs = useLogs(level, search, auto);
+  const logs = useLogs(level, useDebounced(search), auto);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (auto) end.current?.scrollIntoView({ block: "end" });

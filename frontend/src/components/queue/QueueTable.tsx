@@ -3,7 +3,7 @@ import type { FailedMedia, Job } from "../../api/types";
 import { useRemoveJob, useRetryJob } from "../../api/hooks/useQueue";
 import { useRetryMedia, useSkipMedia } from "../../api/hooks/usePosts";
 import { formatBytes, formatDuration, formatSpeed, timeAgo } from "../../lib/format";
-import { MEDIA_STATUS, sourceLabel } from "../../lib/status";
+import { mediaStatus, sourceLabel } from "../../lib/status";
 import { ProgressBar } from "../ui/ProgressBar";
 import { Badge, StatusBadge } from "../ui/Badge";
 import { IconButton } from "../ui/Button";
@@ -91,7 +91,7 @@ export function FailedTable({ items }: { items: FailedMedia[] }) {
               <td><Link to={`/creators/${m.creator_id}`} className="text-fg-muted hover:text-fg">{m.creator_name}</Link></td>
               <td className="text-fg-muted">{sourceLabel(m.source)}</td>
               <td>
-                <StatusBadge meta={MEDIA_STATUS[m.status]} />
+                <StatusBadge meta={mediaStatus(m.status)} />
                 {m.next_retry_at && <div className="text-[11px] text-fg-dim">retry {timeAgo(m.next_retry_at)}</div>}
               </td>
               <td className="max-w-md truncate text-xs text-fg-muted" title={m.last_error ?? ""}>{m.last_error ?? m.status_reason}</td>

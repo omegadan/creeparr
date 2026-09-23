@@ -28,6 +28,7 @@ export function useSettingsForm<G extends Group>(settings: Settings, group: G) {
 }
 
 export function num(v: string, fallback: number): number {
+  if (v.trim() === "") return fallback; // a cleared field, not 0
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
 }

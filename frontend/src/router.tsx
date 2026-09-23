@@ -10,6 +10,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SystemStatusPage } from "./pages/SystemStatusPage";
 import { LogsPage } from "./pages/LogsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { RouteError } from "./components/layout/RouteError";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
     children: [
       {
         element: <AppShell />,
+        errorElement: <RouteError />,
         children: [
           { index: true, element: <Navigate to="/creators" replace /> },
           { path: "creators", element: <CreatorsPage /> },

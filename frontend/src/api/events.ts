@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AuthStatus, Job, Queue } from "./types";
+import type { Job, Queue } from "./types";
 
 type Handler = (data: Record<string, unknown>) => void;
 
@@ -17,10 +17,7 @@ export function useServerEvents(): void {
     const invalidate = (keys: unknown[][]) => () => keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
 
     const handlers: Record<string, Handler> = {
-      "auth.status": (d) => {
-        qc.setQueryData<AuthStatus>(["auth"], d as unknown as AuthStatus);
-        debounced("status", invalidate([["system", "status"]]));
-      },
+      "auth.status": () => debounced("status", invalidate([["system", "status"], ["providers"]])),
       "scan.started": () => debounced("creators", invalidate([["creators"], ["system", "status"]])),
       "scan.queued": () => debounced("creators", invalidate([["creators"], ["system", "status"]])),
       "scan.progress": () => debounced("posts", invalidate([["posts"]]), 800),
@@ -52,32 +49,41 @@ export function useServerEvents(): void {
       "settings.changed": () => debounced("settings", invalidate([["settings"], ["system", "status"], ["system", "tasks"]])),
     };
 
-    const es = new EventSource("/api/v1/events");
-    const listeners: Array<[string, (e: MessageEvent) => void]> = [];
-    for (const [name, fn] of Object.entries(handlers)) {
-      const l = (e: MessageEvent) => {
-        try {
-          fn(JSON.parse(e.data));
-        } catch {
-          /* ignore malformed */
-        }
-      };
-      es.addEventListener(name, l);
-      listeners.push([name, l]);
-    }
-    es.addEventListener("hello", (e: MessageEvent) => {
-      try {
-        const d = JSON.parse(e.data);
-        if (d.auth) qc.setQueryData(["auth"], d.auth);
-      } catch {
-        /* ignore */
+    // EventSource retries a dropped connection by itself, but gives up for good on a
+    // non-200 answer (a reverse proxy's 502 while the container restarts). Then we
+    // open a new one ourselves, backing off from 1 s to 30 s.
+    let es: EventSource | null = null;
+    let retryTimer = 0;
+    let delay = 1000;
+    let stopped = false;
+    const connect = () => {
+      es = new EventSource("/api/v1/events");
+      for (const [name, fn] of Object.entries(handlers)) {
+        es.addEventListener(name, (e: MessageEvent) => {
+          try {
+            fn(JSON.parse(e.data));
+          } catch {
+            /* ignore malformed */
+          }
+        });
       }
-      // Reconnected: refresh everything that may have changed while we were away.
-      qc.invalidateQueries();
-    });
+      es.addEventListener("hello", () => {
+        delay = 1000;
+        // (Re)connected: refresh everything that may have changed while we were away.
+        qc.invalidateQueries();
+      });
+      es.onerror = () => {
+        if (stopped || es?.readyState !== EventSource.CLOSED) return; // browser is retrying
+        es.close();
+        retryTimer = window.setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 30_000);
+      };
+    };
+    connect();
     return () => {
-      listeners.forEach(([n, l]) => es.removeEventListener(n, l));
-      es.close();
+      stopped = true;
+      window.clearTimeout(retryTimer);
+      es?.close();
       Object.values(timers.current).forEach((t) => window.clearTimeout(t));
     };
   }, [qc]);

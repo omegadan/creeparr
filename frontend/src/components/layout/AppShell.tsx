@@ -26,6 +26,8 @@ export function AppShell() {
   const connected = providers.filter((p) => p.auth.state === "valid");
   const broken = providers.filter((p) => p.configured && ["invalid", "challenge", "error"].includes(p.auth.state));
   const anyConfigured = providers.some((p) => p.configured);
+  // Where to send the user: the first provider with a problem, else the first tab.
+  const fixTab = `/settings/${(broken[0] ?? providers[0])?.name ?? "patreon"}`;
   const authBad = broken.length > 0 || (!anyConfigured && providers.length > 0);
 
   return (
@@ -62,7 +64,7 @@ export function AppShell() {
           )}
         </nav>
         <div className="border-t border-white/10 px-4 py-3 text-xs">
-          <Link to="/settings/patreon" className="flex items-center gap-2">
+          <Link to={fixTab} className="flex items-center gap-2">
             <span className={cx("h-2 w-2 rounded-full", broken.length ? "bg-danger" : connected.length ? "bg-ok" : "bg-warn")} />
             <span className="truncate text-[var(--color-sidebar-muted)]">
               {connected.length ? connected.map((p) => p.auth.user_name ?? p.label).join(", ") : anyConfigured ? "Session problem" : "Not connected"}
@@ -76,7 +78,7 @@ export function AppShell() {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         {authBad && (
-          <Link to="/settings/patreon" className="flex items-center gap-2 border-b border-danger/30 bg-danger/10 px-5 py-2 text-sm text-danger">
+          <Link to={fixTab} className="flex items-center gap-2 border-b border-danger/30 bg-danger/10 px-5 py-2 text-sm text-danger">
             <AlertTriangle className="h-4 w-4" />
             {broken.length
               ? `${broken.map((p) => p.label).join(", ")} session problem. Fix it on that provider's Settings tab; scans for that provider are paused.`

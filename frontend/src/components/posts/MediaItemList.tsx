@@ -1,7 +1,7 @@
 import { ExternalLink, FileText, Image, Music, RotateCcw, SkipForward, Undo2, Video } from "lucide-react";
 import { usePost, useRetryMedia, useSkipMedia, useUnskipMedia } from "../../api/hooks/usePosts";
 import type { MediaItem } from "../../api/types";
-import { MEDIA_STATUS, sourceLabel } from "../../lib/status";
+import { mediaStatus, sourceLabel } from "../../lib/status";
 import { formatBytes, formatDate, timeAgo } from "../../lib/format";
 import { StatusBadge } from "../ui/Badge";
 import { IconButton } from "../ui/Button";
@@ -59,7 +59,7 @@ export function MediaItemList({ postId }: { postId: number }) {
                     </div>
                   </td>
                   <td className="text-fg-muted">{sourceLabel(m.source)}</td>
-                  <td><StatusBadge meta={MEDIA_STATUS[m.status]} title={m.status_reason ?? undefined} /></td>
+                  <td><StatusBadge meta={mediaStatus(m.status)} title={m.status_reason ?? undefined} /></td>
                   <td className="text-fg-muted">{formatBytes(m.file_size_bytes ?? m.remote_size_bytes)}</td>
                   <td className="max-w-md truncate text-fg-muted" title={m.last_error ?? m.status_reason ?? ""}>
                     {m.status === "completed" ? `archived ${formatDate(m.completed_at, true)}` : m.status === "failed" && m.next_retry_at ? `attempt ${m.attempts} · retry ${timeAgo(m.next_retry_at)} · ${m.last_error ?? ""}` : m.last_error ?? m.status_reason ?? ""}

@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Download, ExternalLink, RefreshCw, SkipForward, Undo2 } from "lucide-react";
 import type { Post } from "../../api/types";
 import { useDownloadPost, useRefreshPost, useSkipPost, useUnskipPost } from "../../api/hooks/usePosts";
-import { POST_STATUS, postTypeLabel } from "../../lib/status";
+import { postStatus, postTypeLabel } from "../../lib/status";
 import { formatDate, cx } from "../../lib/format";
 import { StatusBadge } from "../ui/Badge";
 import { IconButton } from "../ui/Button";
@@ -55,14 +55,14 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
                       {p.thumbnail_url && <img src={p.thumbnail_url} alt="" className="h-8 w-12 rounded object-cover" referrerPolicy="no-referrer" />}
                       <span className="line-clamp-1 font-medium">{p.title || "(untitled)"}</span>
                       {p.url && (
-                        <a href={p.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-fg-dim hover:text-fg" title="Open on Patreon">
+                        <a href={p.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-fg-dim hover:text-fg" title="Open the original post">
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       )}
                     </div>
                   </td>
                   <td className="text-fg-muted">{postTypeLabel(p.post_type)}{p.embed_provider ? ` · ${p.embed_provider}` : ""}</td>
-                  <td><StatusBadge meta={POST_STATUS[p.status]} title={p.status_reason ?? undefined} /></td>
+                  <td><StatusBadge meta={postStatus(p.status)} title={p.status_reason ?? undefined} /></td>
                   <td className="text-xs text-fg-muted">
                     {ms.total === 0 ? "–" : (
                       <span>
@@ -82,7 +82,7 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
                       ) : (
                         <IconButton title="Skip this post" onClick={() => skip.mutate({ id: p.id }, { onError: (e) => error(e) })}><SkipForward className="h-4 w-4" /></IconButton>
                       )}
-                      <IconButton title="Refresh from Patreon" onClick={() => refresh.mutate({ id: p.id }, { onError: (e) => error(e), onSuccess: () => toast("Post refreshed", "success") })}>
+                      <IconButton title="Refresh from the source" onClick={() => refresh.mutate({ id: p.id }, { onError: (e) => error(e), onSuccess: () => toast("Post refreshed", "success") })}>
                         <RefreshCw className="h-4 w-4" />
                       </IconButton>
                     </div>
