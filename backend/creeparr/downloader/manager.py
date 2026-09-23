@@ -115,6 +115,14 @@ class RunningJob:
     task: asyncio.Task[None] | None = None
 
 
+def _remove_tmp_dir(tmp_dir: Path) -> None:
+    """Remove a job's temp dir, and its post folder too if that is now empty (a folder
+    made before a date backfill moved the video elsewhere)."""
+    remove_tree(tmp_dir)
+    with contextlib.suppress(OSError):
+        tmp_dir.parent.rmdir()  # fails, as intended, unless empty
+
+
 class DownloadManager:
     def __init__(
         self,
@@ -140,6 +148,10 @@ class DownloadManager:
         # downloads_per_hour cap is being spread out (see _pacing_gap).
         self._next_start: dict[str, datetime] = {}
         self._claim_lock = threading.Lock()
+        # Destination paths picked by running jobs whose files don't exist yet, so
+        # two same-named files of one post downloading at once get distinct names.
+        self._reserved_dests: dict[int, set[Path]] = {}
+        self._dest_lock = threading.Lock()
 
     # ---- lifecycle -----------------------------------------------------------------
 
@@ -351,6 +363,8 @@ class DownloadManager:
                 log.exception("job %s: could not record failure", ctx.job_id)
         finally:
             self._running.pop(ctx.job_id, None)
+            with self._dest_lock:
+                self._reserved_dests.pop(ctx.job_id, None)
             self._kick.set()
 
     async def _sleep(self, seconds: float) -> None:
@@ -599,9 +613,17 @@ class DownloadManager:
             )
             return
 
-        # 2. Post folder and sidecars.
-        post_dir = self.env.download_root(ctx.provider) / self._post_dir(ctx)
-        await asyncio.to_thread(self._write_sidecars, ctx, post_dir)
+        # 2. Post folder and sidecars. A yt-dlp video with no known date (a YouTube
+        # back-catalogue entry) learns it from the download's metadata, so its folder
+        # name and sidecars wait until then instead of using the first-seen date.
+        root = self.env.download_root(ctx.provider)
+        post_dir = root / self._post_dir(ctx)
+        date_pending = ctx.post_published_at is None and ctx.source not in (
+            MediaSource.NATIVE_DIRECT,
+            MediaSource.MEDIA_DOWNLOAD,
+        )
+        if not date_pending:
+            await asyncio.to_thread(self._write_sidecars, ctx, post_dir)
 
         # 3. DRM: flagged by the provider up front, or probed from the HLS playlist.
         if ctx.remote_metadata.get("drm"):
@@ -629,7 +651,7 @@ class DownloadManager:
             if ctx.source in (MediaSource.NATIVE_DIRECT, MediaSource.MEDIA_DOWNLOAD):
                 native_ext = self._guess_ext(ctx)
                 target_ext = self._container_ext(ctx) if ctx.kind == MediaKind.VIDEO else native_ext
-                dest = unique_path(post_dir / self._file_name(ctx, target_ext))
+                dest = self._reserve_dest(ctx, post_dir / self._file_name(ctx, target_ext))
                 reporter.set_stage("downloading")
                 if native_ext == target_ext:
                     result = await download_direct(
@@ -670,16 +692,19 @@ class DownloadManager:
                     run_ytdlp, url, tmp_dir, opts, reporter, label
                 )
                 await self._backfill_date(ctx, yt_meta)
+                if date_pending:
+                    post_dir = root / self._post_dir(ctx)
+                    await asyncio.to_thread(self._write_sidecars, ctx, post_dir)
                 reporter.set_stage("verifying")
                 result = await asyncio.to_thread(
                     self._finalise_ytdlp, ctx, post_dir, produced, settings.downloads.compute_sha256
                 )
         except DownloadCancelled:
-            remove_tree(tmp_dir)
+            _remove_tmp_dir(tmp_dir)
             await asyncio.to_thread(self._cancel_job_db, ctx)
             return
         except PermanentDownloadError as exc:
-            remove_tree(tmp_dir)
+            _remove_tmp_dir(tmp_dir)
             await asyncio.to_thread(self._fail_job, ctx, str(exc), exc.error_class, retryable=False)
             return
         except RetryableDownloadError as exc:
@@ -687,7 +712,7 @@ class DownloadManager:
             return
         if ctx.kind == MediaKind.VIDEO and settings.naming.embed_metadata:
             result = await self._embed_metadata(ctx, provider, result, reporter)
-        remove_tree(tmp_dir)
+        _remove_tmp_dir(tmp_dir)
         await asyncio.to_thread(self._complete_job, ctx, result)
 
     async def _backfill_date(self, ctx: JobContext, meta: dict[str, Any]) -> None:
@@ -1066,6 +1091,14 @@ class DownloadManager:
         rendered = render_template(naming.file_template, values, naming.max_component_length)
         return str(rendered) if len(rendered.parts) == 1 else sanitize_component(filename)
 
+    def _reserve_dest(self, ctx: JobContext, path: Path) -> Path:
+        """A free file name, also free of names other running jobs are still writing."""
+        with self._dest_lock:
+            taken = set().union(*self._reserved_dests.values())
+            dest = unique_path(path, taken)
+            self._reserved_dests.setdefault(ctx.job_id, set()).add(dest)
+            return dest
+
     def _remux_to(
         self, ctx: JobContext, src: Path, dest: Path, compute_sha256: bool
     ) -> DownloadResult:
@@ -1090,7 +1123,7 @@ class DownloadManager:
         from creeparr.downloader.fs import atomic_replace, sha256_file
 
         ext = produced.suffix.lstrip(".").lower() or "mp4"
-        dest = unique_path(post_dir / self._file_name(ctx, ext))
+        dest = self._reserve_dest(ctx, post_dir / self._file_name(ctx, ext))
         atomic_replace(produced, dest)
         size = dest.stat().st_size
         sha = sha256_file(dest) if compute_sha256 else None

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import string
 import unicodedata
+from collections.abc import Collection
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -85,14 +86,17 @@ def split_name(file_name: str | None) -> tuple[str, str]:
     return p.stem, ext
 
 
-def unique_path(path: Path) -> Path:
-    """Return `path` if free, else `name (2).ext`, `name (3).ext`, ..."""
-    if not path.exists():
+def unique_path(path: Path, taken: Collection[Path] = ()) -> Path:
+    """Return `path` if free, else `name (2).ext`, `name (3).ext`, ...
+
+    `taken` holds paths that are spoken for but don't exist on disk yet.
+    """
+    if not path.exists() and path not in taken:
         return path
     stem, suffix = path.stem, path.suffix
     n = 2
     while True:
         candidate = path.with_name(f"{stem} ({n}){suffix}")
-        if not candidate.exists():
+        if not candidate.exists() and candidate not in taken:
             return candidate
         n += 1

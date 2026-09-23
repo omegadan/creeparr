@@ -357,3 +357,61 @@ async def test_claim_skips_creators_at_their_cap_in_the_query(
     assert mgr._claim_next("w1").job_id == other
     assert mgr._claim_next("w2") is None  # everything left belongs to Busy
     await providers.aclose_all()
+
+
+@pytest.mark.asyncio
+async def test_same_named_files_downloading_together_get_distinct_names(
+    env, session_factory, settings, bus, providers
+):
+    # Patreon keeps uploaders' file names, so one post can hold two "image.png"s and
+    # they download in parallel. Neither file exists while both are being written,
+    # so the name check alone gave both the same path (and the same .part file).
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    target = env.download_dir / "Creator" / "Post" / "image.png"
+
+    class Ctx:
+        def __init__(self, job_id):
+            self.job_id = job_id
+
+    a = mgr._reserve_dest(Ctx(1), target)
+    b = mgr._reserve_dest(Ctx(2), target)
+    assert a == target and b == target.with_name("image (2).png")
+    mgr._reserved_dests.pop(1)  # job 1 finished; its name is free again
+    assert mgr._reserve_dest(Ctx(3), target) == target
+    await providers.aclose_all()
+
+
+@pytest.mark.asyncio
+async def test_undated_video_is_filed_under_its_backfilled_date(
+    env, session_factory, settings, bus, providers, monkeypatch
+):
+    # A YouTube back-catalogue video has no date until yt-dlp reports one. The folder
+    # used to be named from the first-seen date because it was picked before that.
+    settings.update({"naming": {"embed_metadata": False}})
+    post_id, job_id = seed(session_factory, fx.youtube_post("y1", title="Old video"))
+    with session_scope(session_factory) as s:
+        s.get(Post, post_id).published_at = None
+
+    def fake_ytdlp(url, tmp_dir, opts, reporter, label):
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        produced = tmp_dir / "video.mkv"
+        produced.write_bytes(b"\x1a\x45\xdf\xa3")
+        return produced, {"upload_date": "20190504", "description": "About this video"}
+
+    monkeypatch.setattr("creeparr.downloader.manager.run_ytdlp", fake_ytdlp)
+    bus.bind(asyncio.get_running_loop())
+    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    await mgr.start()
+    try:
+        assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
+    finally:
+        await mgr.stop()
+        await providers.aclose_all()
+    with session_scope(session_factory) as s:
+        post = s.get(Post, post_id)
+        media = s.execute(select(MediaItem)).scalar_one()
+        assert post.folder_path == str(Path("Example Creator") / "2019-05-04 - Old video [y1]")
+        assert Path(media.file_path).parent == Path(post.folder_path)
+    creator_dir = env.download_dir / "Example Creator"
+    assert [p.name for p in creator_dir.iterdir()] == ["2019-05-04 - Old video [y1]"]
+    assert (creator_dir / "2019-05-04 - Old video [y1]" / "post.json").exists()

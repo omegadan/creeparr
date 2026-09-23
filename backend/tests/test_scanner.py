@@ -241,3 +241,33 @@ async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory,
     with session_scope(session_factory) as s:
         assert s.execute(select(MediaItem)).scalars().all() == []
         assert s.execute(select(Post)).scalar_one().status == PostStatus.NO_MEDIA
+
+
+def test_rescan_keeps_backfilled_date_and_description(session_factory):
+    # YouTube listings carry no description and (past the RSS window) no date; the
+    # download backfills both from the video's metadata. A later scan must not wipe them.
+    from dataclasses import replace
+
+    from creeparr.scanner.scanner import upsert_post
+
+    res = fx.youtube_post("y1", title="Old video")
+    listing = replace(
+        post_from_resource(res, IncludedIndex(fx.posts_page([res]))),
+        published_at=None,
+        content=None,
+    )
+    backfilled = datetime(2019, 5, 4, tzinfo=UTC)
+    with session_scope(session_factory) as s:
+        creator = Creator(campaign_id=fx.CAMPAIGN_ID, name="C")
+        s.add(creator)
+        s.flush()
+        post, _, _ = upsert_post(s, creator, listing)
+        post.published_at = backfilled
+        post.content_html = "From the video"
+        upsert_post(s, creator, listing)  # the next scan
+        assert post.published_at.replace(tzinfo=UTC) == backfilled
+        assert post.content_html == "From the video"
+        # A listing that does carry values still updates them.
+        dated = replace(listing, published_at=datetime(2020, 1, 1, tzinfo=UTC), content="New")
+        upsert_post(s, creator, dated)
+        assert post.published_at.year == 2020 and post.content_html == "New"

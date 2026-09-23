@@ -139,3 +139,10 @@ def test_html_to_text():
     assert html_to_text("<p>Hello <b>world</b> &amp; more</p>") == "Hello world & more"
     assert html_to_text(None) == ""
     assert len(html_to_text("<p>" + "x" * 5000 + "</p>", limit=100)) == 100
+
+
+def test_unique_path_skips_names_taken_but_not_yet_on_disk(tmp_path: Path):
+    target = tmp_path / "image.png"
+    assert unique_path(target, taken={target}) == tmp_path / "image (2).png"
+    taken = {target, tmp_path / "image (2).png"}
+    assert unique_path(target, taken=taken) == tmp_path / "image (3).png"

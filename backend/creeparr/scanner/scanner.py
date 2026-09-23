@@ -81,11 +81,15 @@ def upsert_post(session: Session, creator: Creator, pr: PostResource) -> tuple[P
         )
     post.creator_id = creator.id
     post.title = pr.title or ""
-    post.content_html = pr.content
+    # A listing without a description or date (YouTube's) must not wipe the ones a
+    # download backfilled from the video's own metadata.
+    if pr.content is not None:
+        post.content_html = pr.content
     post.teaser_text = pr.teaser_text
     post.post_type = pr.post_type
     post.url = pr.url
-    post.published_at = pr.published_at
+    if pr.published_at is not None:
+        post.published_at = pr.published_at
     post.edited_at = pr.edited_at
     post.current_user_can_view = pr.current_user_can_view
     post.thumbnail_url = pr.thumbnail_url
