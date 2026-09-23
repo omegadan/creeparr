@@ -87,8 +87,10 @@ function detail(p: ProviderQueueStatus, nowMs: number): string {
 
 export function ProviderQueueStatusPanel({ providers }: { providers: ProviderQueueStatus[] }) {
   const qc = useQueryClient();
+  // Reading the clock during render is the point here: useTicker re-renders every
+  // second while a countdown shows, so it stays live between refetches.
+  // eslint-disable-next-line react/purity
   const nowMs = Date.now();
-  // Tick every second while a countdown is showing so it stays live between refetches.
   const anyCountdown = providers.some((p) => (p.state === "throttled" || p.state === "pacing") && remainingSeconds(p, nowMs) != null);
   useTicker(anyCountdown);
 

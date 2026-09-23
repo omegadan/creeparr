@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useImportSubscriptions, useProviders, useSubscriptions } from "../../api/hooks/useCreators";
 import { useSettings } from "../../api/hooks/useSettings";
 import type { CreatorDefaults } from "../../api/types";
@@ -13,15 +13,15 @@ import { cx } from "../../lib/format";
 export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const providers = useProviders();
   const configured = (providers.data ?? []).filter((p) => p.configured);
-  const [provider, setProvider] = useState<string>("patreon");
-  useEffect(() => {
-    if (open && configured.length && !configured.some((p) => p.name === provider)) setProvider(configured[0].name);
-  }, [open, configured, provider]);
+  const [chosen, setChosen] = useState<string>("patreon");
+  // The chosen provider while it's connected, otherwise the first one that is.
+  const provider = configured.some((p) => p.name === chosen) ? chosen : (configured[0]?.name ?? chosen);
 
   const subs = useSubscriptions(provider, open);
   const settings = useSettings();
   const importMut = useImportSubscriptions();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // null = the user hasn't changed the selection yet: everything not yet added.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
   const [opts, setOpts] = useState<CreatorDefaults | null>(null);
   const { toast, error } = useToast();
 
@@ -34,16 +34,18 @@ export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onC
   };
 
   const available = useMemo(() => (subs.data ?? []).filter((p) => !p.already_added), [subs.data]);
-  useEffect(() => {
-    if (subs.data) setSelected(new Set(available.map((p) => p.external_id)));
-  }, [subs.data, available]);
+  const selected = useMemo(() => picked ?? new Set(available.map((p) => p.external_id)), [picked, available]);
+  const close = () => {
+    setPicked(null);
+    onClose();
+  };
 
-  const toggle = (id: string) =>
-    setSelected((s) => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+  const toggle = (id: string) => {
+    const n = new Set(selected);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    setPicked(n);
+  };
 
   const doImport = () =>
     importMut.mutate(
@@ -51,7 +53,7 @@ export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onC
       {
         onSuccess: (created) => {
           toast(`Imported ${created.length} creator${created.length === 1 ? "" : "s"}`, "success");
-          onClose();
+          close();
         },
         onError: (e) => error(e, "Import failed"),
       },
@@ -62,12 +64,12 @@ export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onC
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={close}
       title="Import subscriptions"
       wide
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={close}>Cancel</Button>
           <Button variant="primary" onClick={doImport} disabled={selected.size === 0} loading={importMut.isPending}>
             Import {selected.size || ""}
           </Button>
@@ -83,7 +85,7 @@ export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onC
               {configured.map((p) => (
                 <button
                   key={p.name}
-                  onClick={() => setProvider(p.name)}
+                  onClick={() => { setChosen(p.name); setPicked(null); }}
                   className={cx("rounded-md border px-3 py-1.5 text-sm", provider === p.name ? "border-accent bg-accent/15 text-fg" : "border-line text-fg-muted hover:text-fg")}
                 >
                   {p.label}
@@ -101,7 +103,7 @@ export function ImportSubscriptionsModal({ open, onClose }: { open: boolean; onC
                 <thead>
                   <tr>
                     <th className="w-8">
-                      <input type="checkbox" checked={selected.size === available.length && available.length > 0} onChange={(e) => setSelected(e.target.checked ? new Set(available.map((p) => p.external_id)) : new Set())} />
+                      <input type="checkbox" checked={selected.size === available.length && available.length > 0} onChange={(e) => setPicked(e.target.checked ? new Set(available.map((p) => p.external_id)) : new Set())} />
                     </th>
                     <th>Creator</th>
                     <th>Status</th>

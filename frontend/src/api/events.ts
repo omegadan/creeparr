@@ -10,9 +10,10 @@ export function useServerEvents(): void {
   const timers = useRef<Record<string, number>>({});
 
   useEffect(() => {
+    const pending = timers.current; // one object for the effect's lifetime
     const debounced = (key: string, fn: () => void, ms = 400) => {
-      window.clearTimeout(timers.current[key]);
-      timers.current[key] = window.setTimeout(fn, ms);
+      window.clearTimeout(pending[key]);
+      pending[key] = window.setTimeout(fn, ms);
     };
     const invalidate = (keys: unknown[][]) => () => keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
 
@@ -84,7 +85,7 @@ export function useServerEvents(): void {
       stopped = true;
       window.clearTimeout(retryTimer);
       es?.close();
-      Object.values(timers.current).forEach((t) => window.clearTimeout(t));
+      Object.values(pending).forEach((t) => window.clearTimeout(t));
     };
   }, [qc]);
 }
