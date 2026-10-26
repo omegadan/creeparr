@@ -425,14 +425,14 @@ wheels = [
 
 [[package]]
 name = "gallery-dl"
-version = "1.32.17"
+version = "1.32.18"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4e/7e/3ba52253f4edc121c2e5d4cc1bbc613c29822acd3435eecc54e6308157a5/gallery_dl-1.32.17.tar.gz", hash = "sha256:7e49b3140d23b88e020ff24049dfac59edd855d6fdfb11bc725ad44b0335bbb6", size = 762083, upload-time = "2026-10-17T14:19:18.564Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/55/e40b8ce403489e7b3122eee28693efd885ca68256a9c6344fdfbd0842c3e/gallery_dl-1.32.18.tar.gz", hash = "sha256:1c5562af3799a0bec96be0f64d95a416aee688fd09fe3893ca3a6c87bbe65bcd", size = 763172, upload-time = "2026-10-25T09:06:40.817Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/50/2f/10d3f717e3dc38688ce07424652d7e6c5f606d8b7644af4c16e0dc016527/gallery_dl-1.32.17-py3-none-any.whl", hash = "sha256:f88ddeb788506f33385e541dbbfba57376ed04bbf6f3f635249a9dd3a78930ed", size = 942064, upload-time = "2026-10-17T14:19:14.453Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/81/03b8f628bd5c91a62c9c8152358c3b381933dc3fdf6c5aea100e8582da80/gallery_dl-1.32.18-py3-none-any.whl", hash = "sha256:f9081654ee4a0d6f2778376882ab7cecbf3e7ba15ed65b20416388b8789be535", size = 943606, upload-time = "2026-10-25T09:06:36.888Z" },
 ]
 
 [[package]]
@@ -1398,9 +1398,9 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.8.19"
+version = "2026.10.21"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1e/e0/832fa4ca334b766a06933a196066edc3dba37cdb6f14cd98d59bcc69a4b4/yt_dlp-2026.8.19.tar.gz", hash = "sha256:9e213e48cea35c66b378e4447903f118f6392a5fa380a2b6d7070ec86f4e0af1", size = 3052025, upload-time = "2026-08-19T23:48:59.291Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/06/13/d2ea252871826205dc4965cb70e6037ab93697fcabf4feda49fe981f6da0/yt_dlp-2026.10.21.tar.gz", hash = "sha256:cbf748d7d17cd37647c4b9f07b6c25f24384bfd4361407ee5ec519e753d22539", size = 3057326, upload-time = "2026-10-21T21:54:53.563Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/69/b2/8cd1613f56eed7ceb64fbd4df3f1c01246bfb098e6f398228bafda22b80b/yt_dlp-2026.8.19-py3-none-any.whl", hash = "sha256:1d57897e94c6665a0a6f9bc54b34e584284e32c034ffab3a7df25d8f7b24eedf", size = 3185533, upload-time = "2026-08-19T23:48:56.925Z" },
+    { url = "https://files.pythonhosted.org/packages/b7/75/ae700ddc7e0b1095fd06cf7e251627dcf4cafcaff460cce92cdc08023b13/yt_dlp-2026.10.21-py3-none-any.whl", hash = "sha256:94a3a3e2c423129d0bbd2f1be000c4171fa1226c29e251c84aff868f2851c247", size = 3188012, upload-time = "2026-10-21T21:54:50.808Z" },
 ]
