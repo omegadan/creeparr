@@ -122,7 +122,7 @@ Patreon sits behind Cloudflare. If **Test connection** reports a *Cloudflare cha
 
 ```bash
 # backend (Python 3.12, uv)
-cd backend && uv sync --all-extras
+cd backend && uv sync --all-extras   # plain `uv sync` removes curl_cffi (the `impersonate` extra the image ships)
 CREEPARR_CONFIG_DIR=../config CREEPARR_DOWNLOAD_DIR=../downloads \
   uv run uvicorn creeparr.app:create_app --factory --reload --port 7979
 uv run pytest -q && uv run ruff check .
