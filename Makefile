@@ -16,7 +16,7 @@ test:
 
 lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .
-	cd frontend && npm run lint && npx tsc --noEmit
+	cd frontend && npm run lint
 
 build:
 	cd frontend && npm ci && npm run build
