@@ -16,12 +16,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from creeparr.config import EnvConfig
 from creeparr.core.events import EventBus
 from creeparr.core.history import record_event
+from creeparr.core.lifecycle import MediaLifecycle, recompute_post_status
 from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
@@ -56,7 +56,6 @@ from creeparr.downloader.handlers.ytdlp import YtDlpOptions, normalise_vimeo_url
 from creeparr.downloader.maintenance import MaintenanceMixin
 from creeparr.downloader.metadata import embed_metadata, html_to_text
 from creeparr.downloader.paths import PathsMixin, _remove_partials, _remove_tmp_dir
-from creeparr.downloader.queue import recompute_post_status
 from creeparr.downloader.transitions import TransitionsMixin
 from creeparr.patreon.drm import probe_hls_drm
 from creeparr.providers.errors import (
@@ -67,7 +66,6 @@ from creeparr.providers.errors import (
     ProviderError,
 )
 from creeparr.providers.registry import ProviderRegistry
-from creeparr.scanner.scanner import sync_media_items, upsert_post
 
 log = logging.getLogger(__name__)
 
@@ -80,15 +78,18 @@ class DownloadManager(ClaimsMixin, PathsMixin, TransitionsMixin, MaintenanceMixi
         settings: SettingsService,
         bus: EventBus,
         providers: ProviderRegistry,
+        lifecycle: MediaLifecycle,
     ) -> None:
         self.env = env
         self._factory = session_factory
         self.settings = settings
         self.bus = bus
         self.providers = providers
+        self.lifecycle = lifecycle
         self._workers: list[asyncio.Task[None]] = []
         self._running: dict[int, RunningJob] = {}
         self._kick = asyncio.Event()
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._stop = asyncio.Event()
         self.paused_reason: str | None = None
         self._last_disk_check = 0.0
@@ -109,6 +110,7 @@ class DownloadManager(ClaimsMixin, PathsMixin, TransitionsMixin, MaintenanceMixi
     # ---- lifecycle -----------------------------------------------------------------
 
     async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
         self._stop.clear()
         await asyncio.to_thread(self._recover_stale_jobs)
         await asyncio.to_thread(self._sweep_temp_dirs)
@@ -141,10 +143,22 @@ class DownloadManager(ClaimsMixin, PathsMixin, TransitionsMixin, MaintenanceMixi
         # A changed cap or pacing toggle: re-derive the next allowed start from the
         # last persisted start with the new values instead of keeping the old gap.
         self._next_start.clear()
-        self._kick.set()
+        self.notify()
 
     def notify(self) -> None:
-        self._kick.set()
+        """Wake idle workers. Safe from any thread: API requests and scans run in their own."""
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            self._kick.set()
+            return
+        try:
+            on_loop = asyncio.get_running_loop() is loop
+        except RuntimeError:
+            on_loop = False
+        if on_loop:
+            self._kick.set()
+        else:
+            loop.call_soon_threadsafe(self._kick.set)
 
     # ---- pause / resume / cancel ---------------------------------------------------
 
@@ -165,7 +179,7 @@ class DownloadManager(ClaimsMixin, PathsMixin, TransitionsMixin, MaintenanceMixi
         with session_scope(self._factory) as s:
             set_state(s, PAUSED_KEY, False)
         self.bus.publish("queue.resumed", {})
-        self._kick.set()
+        self.notify()
 
     def cancel_job(self, job_id: int) -> bool:
         rj = self._running.get(job_id)
@@ -495,16 +509,13 @@ class DownloadManager(ClaimsMixin, PathsMixin, TransitionsMixin, MaintenanceMixi
 
         def _apply() -> None:
             with session_scope(self._factory) as s:
-                post = s.execute(
-                    select(Post)
-                    .options(selectinload(Post.media_items))
-                    .where(Post.id == ctx.post_id)
-                ).scalar_one_or_none()
+                post = s.get(Post, ctx.post_id)
                 if post is None:
                     return
                 creator = s.get(Creator, post.creator_id)
-                upsert_post(s, creator, pr)
-                sync_media_items(s, creator, post, provider.resolve_media(pr))
+                post = self.lifecycle.sync_post(
+                    s, creator, pr, provider.resolve_media, refresh=True
+                ).post
                 for m in post.media_items:
                     if m.id == ctx.media_id:
                         ctx.url = m.source_url

@@ -347,3 +347,62 @@ def test_every_api_route_requires_login_when_a_password_is_set(env):
                 checked += 1
         assert checked > 40  # the sweep actually covered the API
         assert c.get("/api/v1/events").status_code == 401  # the SSE stream too
+
+
+def test_failed_counts_agree_everywhere(app, api):
+    # Failed means failed, failed permanently or missing on every page; cancelled media
+    # was stopped by the user and counts as skipped.
+    from creeparr.db.engine import session_scope
+    from creeparr.db.enums import MediaStatus
+    from creeparr.db.models import Creator, MediaItem, Post
+
+    statuses = [
+        MediaStatus.FAILED,
+        MediaStatus.FAILED_PERMANENT,
+        MediaStatus.MISSING,
+        MediaStatus.CANCELLED,
+        MediaStatus.COMPLETED,
+    ]
+    with session_scope(app.state.services.session_factory) as s:
+        creator = Creator(campaign_id="1", name="C")
+        s.add(creator)
+        s.flush()
+        post = Post(post_id="p1", creator_id=creator.id, title="t")
+        s.add(post)
+        for n, status in enumerate(statuses):
+            post.media_items.append(
+                MediaItem(creator_id=creator.id, media_key=f"m{n}", status=status)
+            )
+
+    summary = api.get("/api/v1/posts").json()["items"][0]["media_summary"]
+    assert (summary["failed"], summary["skipped"]) == (3, 1)
+    assert api.get("/api/v1/queue").json()["failed_total"] == 3
+    assert api.get("/api/v1/system/status").json()["counts"]["failed"] == 3
+
+
+def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
+    from sqlalchemy import select
+
+    from creeparr.db.engine import session_scope
+    from creeparr.db.enums import MediaStatus
+    from creeparr.db.models import Creator, MediaItem
+    from creeparr.patreon.media_resolver import resolve_media
+    from creeparr.patreon.parsing import IncludedIndex, post_from_resource
+
+    services = app.state.services
+    res = fx.image_post("p1", ["m1"])
+    pr = post_from_resource(res, IncludedIndex(fx.posts_page([res], [fx.media_resource("m1")])))
+    with session_scope(services.session_factory) as s:
+        creator = Creator(campaign_id=fx.CAMPAIGN_ID, name="C", include_images=True)
+        s.add(creator)
+        s.flush()
+        creator_id = creator.id
+        services.lifecycle.sync_post(s, creator, pr, resolve_media)
+    assert api.get("/api/v1/queue").json()["queued_total"] > 0
+
+    r = api.patch(f"/api/v1/creators/{creator_id}", json={"include_images": False})
+    assert r.status_code == 200, r.text
+    assert api.get("/api/v1/queue").json()["queued_total"] == 0
+    assert services.downloads._claim_next("w0") is None  # no worker downloads them anyway
+    with session_scope(services.session_factory) as s:
+        assert {m.status for m in s.execute(select(MediaItem)).scalars()} == {MediaStatus.SKIPPED}

@@ -261,14 +261,9 @@ class SchedulerService:
         return await asyncio.to_thread(self.services.downloads.verify_files)
 
     async def _reresolve_media(self) -> dict[str, int]:
-        from creeparr.scanner.scanner import reresolve_all
-
-        result = await asyncio.to_thread(
-            reresolve_all, self.services.session_factory, self.services.providers, self.services.bus
+        return await asyncio.to_thread(
+            self.services.lifecycle.reresolve_all, self.services.providers
         )
-        if result["queued"]:
-            self.services.downloads.notify()
-        return result
 
     async def _prune(self) -> dict[str, int]:
         h = self.services.settings.get().history

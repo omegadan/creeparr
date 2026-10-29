@@ -32,6 +32,10 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
     run_migrations(env.database_url)
     services = build_services(env)
     _normalize_settings(services)
+    try:
+        services.lifecycle.reconcile()  # before any worker can claim a job
+    except Exception:  # noqa: BLE001
+        log.exception("could not bring media rows up to the current rules; retrying next start")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
