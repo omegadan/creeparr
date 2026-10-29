@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 
 from creeparr.config import EnvConfig
 from creeparr.core.events import EventBus
+from creeparr.core.lifecycle import MediaLifecycle
 from creeparr.core.notifications import NotificationService
 from creeparr.core.security import get_secret_key
 from creeparr.core.settings_service import SettingsService
@@ -33,6 +34,7 @@ class Services:
     settings: SettingsService
     bus: EventBus
     providers: ProviderRegistry
+    lifecycle: MediaLifecycle
     scanner: Scanner
     scan_manager: ScanManager
     downloads: DownloadManager
@@ -59,9 +61,11 @@ def build_services(env: EnvConfig) -> Services:
             RedditProvider(env, settings, factory, bus),
         ]
     )
-    scanner = Scanner(factory, settings, bus, providers)
+    lifecycle = MediaLifecycle(factory, bus)
+    scanner = Scanner(factory, settings, bus, providers, lifecycle)
     scan_manager = ScanManager(scanner, factory, providers, bus)
-    downloads = DownloadManager(env, factory, settings, bus, providers)
+    downloads = DownloadManager(env, factory, settings, bus, providers, lifecycle)
+    lifecycle.workers = downloads  # cancels running downloads, wakes workers for new jobs
     notifications = NotificationService(settings, bus)
     return Services(
         env=env,
@@ -70,6 +74,7 @@ def build_services(env: EnvConfig) -> Services:
         settings=settings,
         bus=bus,
         providers=providers,
+        lifecycle=lifecycle,
         scanner=scanner,
         scan_manager=scan_manager,
         downloads=downloads,

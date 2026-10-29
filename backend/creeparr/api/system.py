@@ -19,7 +19,7 @@ from creeparr import __version__
 from creeparr.api.deps import get_services
 from creeparr.core.errors import NotFound
 from creeparr.db.engine import session_scope
-from creeparr.db.enums import JobStatus, MediaStatus
+from creeparr.db.enums import FAILED_MEDIA_STATUSES, JobStatus, MediaStatus
 from creeparr.db.models import Creator, DownloadJob, MediaItem, Post
 from creeparr.downloader.fs import is_writable_dir
 from creeparr.logging_setup import ring_buffer
@@ -112,7 +112,7 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
         failed = s.execute(
             select(func.count())
             .select_from(MediaItem)
-            .where(MediaItem.status.in_([MediaStatus.FAILED, MediaStatus.FAILED_PERMANENT]))
+            .where(MediaItem.status.in_(FAILED_MEDIA_STATUSES))
         ).scalar_one()
     try:
         usage = shutil.disk_usage(services.env.download_dir)
