@@ -64,7 +64,7 @@ export function AddCreatorModal({ open, onClose }: { open: boolean; onClose: () 
     );
   };
 
-  const providerList = providers.data ?? [{ name: "patreon", label: "Patreon" }, { name: "onlyfans", label: "OnlyFans" }];
+  const providerList = providers.data ?? [];
 
   return (
     <Modal

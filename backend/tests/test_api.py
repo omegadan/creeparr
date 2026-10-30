@@ -56,14 +56,19 @@ def test_patreon_auth_roundtrip(api, respx_mock):
     r = api.put("/api/v1/settings/auth/patreon", json={"session_id": "newsid-abcdef"})
     assert r.status_code == 200 and r.json()["ok"]
     assert r.json()["settings"]["session_id"].endswith("cdef")
-    status = api.get("/api/v1/system/status").json()
-    assert status["auth"]["state"] == "valid" and status["auth"]["user_name"] == "Test Patron"
+    auth = patreon_auth(api)
+    assert auth["state"] == "valid" and auth["user_name"] == "Test Patron"
     respx_mock.get(f"{API_URL}/current_user").mock(
         return_value=httpx.Response(401, json={"errors": [{"detail": "nope"}]})
     )
     r = api.post("/api/v1/settings/auth/patreon/test")
     assert r.json() == {"ok": False, "reason": "auth_invalid", "detail": r.json()["detail"]}
-    assert api.get("/api/v1/system/status").json()["auth"]["state"] == "invalid"
+    assert patreon_auth(api)["state"] == "invalid"
+
+
+def patreon_auth(api) -> dict:
+    providers = api.get("/api/v1/system/status").json()["providers"]
+    return next(p["auth"] for p in providers if p["name"] == "patreon")
 
 
 def test_lookup_add_and_list_creator(api, respx_mock):
@@ -389,7 +394,6 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
     from creeparr.db.engine import session_scope
     from creeparr.db.enums import MediaStatus
     from creeparr.db.models import Creator, MediaItem
-    from creeparr.patreon.media_resolver import resolve_media
     from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 
     services = app.state.services
@@ -400,7 +404,7 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
         s.add(creator)
         s.flush()
         creator_id = creator.id
-        services.lifecycle.sync_post(s, creator, pr, resolve_media)
+        services.lifecycle.sync_post(s, creator, pr, fx.POSTS)
     assert api.get("/api/v1/queue").json()["queued_total"] > 0
 
     r = api.patch(f"/api/v1/creators/{creator_id}", json={"include_images": False})
@@ -409,3 +413,13 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
     assert services.claims.next("w0") is None  # no worker downloads them anyway
     with session_scope(services.session_factory) as s:
         assert {m.status for m in s.execute(select(MediaItem)).scalars()} == {MediaStatus.SKIPPED}
+
+
+def test_the_providers_endpoint_serves_the_description(api):
+    providers = {p["name"]: p for p in api.get("/api/v1/providers").json()}
+    reddit = providers["reddit"]
+    assert reddit["label"] == "Reddit" and reddit["intro"].startswith("Public subreddits")
+    assert [c["key"] for c in reddit["credentials"]] == ["client_id", "client_secret"]
+    assert reddit["credentials"][0]["optional"] is True
+    assert reddit["download_dir_variable"] == "CREEPARR_REDDIT_DOWNLOAD_DIR"
+    assert providers["instagram"]["post_types"]["instagram_story"] == "Story"

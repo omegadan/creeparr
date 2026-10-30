@@ -76,13 +76,31 @@ export interface Subscription {
   creator_id: number | null;
 }
 
+export interface CredentialField {
+  key: string;
+  label: string;
+  hint: string;
+  optional: boolean;
+  multiline: boolean;
+}
+
+/** A provider as its description says, plus its account state. */
 export interface ProviderInfo {
   name: string;
   label: string;
+  /** Shown above the account form. */
+  intro: string;
+  credentials: CredentialField[];
+  /** Every post type its scans store, with its label. */
+  post_types: Record<string, string>;
+  download_dir_variable: string;
   configured: boolean;
   credential_fields: string[];
   auth: AuthStatus;
 }
+
+/** Each provider's own archive root, as `<provider>_download_dir` (null = the default root). */
+type ProviderDirs = { [key: `${string}_download_dir`]: string | null };
 
 export interface ScanRun {
   id: number;
@@ -366,7 +384,7 @@ export interface Settings {
     notify_scan_completed: boolean;
   };
   history: { retention_days: number; job_retention_days: number };
-  env: { config_dir: string; download_dir: string; patreon_download_dir: string | null; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null; port: number; log_level: string; ffmpeg: string | null };
+  env: { config_dir: string; download_dir: string; port: number; log_level: string; ffmpeg: string | null } & ProviderDirs;
 }
 
 export type SettingsPatch = {
@@ -384,14 +402,13 @@ export interface SystemStatus {
   version: string;
   started_at: string;
   uptime_seconds: number;
-  auth: AuthStatus;
   providers: ProviderInfo[];
   scan: { running: { creator_id: number; mode: string } | null; pending: { creator_id: number; mode: string; trigger: string }[] };
   next_scan_at: string | null;
   downloads: { paused: boolean; paused_reason: string | null; workers: number; running_jobs: number[]; free_bytes: number };
   counts: { creators: number; posts: number; media_completed: number; media_missing: number; media_bytes: number; provider_bytes: Record<string, number>; queued: number; running: number; failed: number };
   disk: { free_bytes: number | null; total_bytes: number | null; used_bytes: number | null };
-  paths: { config_dir: string; download_dir: string; patreon_download_dir: string | null; onlyfans_download_dir: string | null; youtube_download_dir: string | null; instagram_download_dir: string | null; reddit_download_dir: string | null };
+  paths: { config_dir: string; download_dir: string } & ProviderDirs;
   ffmpeg: string | null;
   ytdlp_version: string;
   http_backend: string;

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import random
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
@@ -50,7 +49,14 @@ from creeparr.providers.models import MediaSpec, PostResource
 if TYPE_CHECKING:
     from creeparr.providers.registry import ProviderRegistry
 
-MediaResolver = Callable[[PostResource], list[MediaSpec]]
+
+class PostSource(Protocol):
+    """What syncing a post asks its provider (a ProviderService)."""
+
+    def resolve_media(self, post: PostResource) -> list[MediaSpec]: ...
+
+    def post_changed(self, stored_raw: dict[str, Any] | None, post: PostResource) -> bool: ...
+
 
 log = logging.getLogger(__name__)
 
@@ -275,7 +281,7 @@ class MediaLifecycle:
         session: Session,
         creator: Creator,
         pr: PostResource,
-        resolver: MediaResolver,
+        source: PostSource,
         *,
         refresh: bool = False,
     ) -> SyncResult:
@@ -287,12 +293,12 @@ class MediaLifecycle:
         Links are marked fresh only then. Wanted media is queued when the creator
         auto-downloads.
         """
-        post, is_new, changed = _upsert_post(session, creator, pr)
+        post, is_new, changed = _upsert_post(session, creator, pr, source)
         if is_new or changed:
             self._effects(session).dirty.add(post.id)
         awaiting = any(item.status in _AWAITING_LINKS for item in post.media_items)
         if is_new or changed or refresh or awaiting:
-            self._sync_media(session, creator, post, resolver(pr))
+            self._sync_media(session, creator, post, source.resolve_media(pr))
             post.urls_fetched_at = datetime.now(UTC)
         queued = self._auto_queue(session, creator, post)
         self._recompute(session, post)
@@ -977,7 +983,9 @@ def _post_label(post: Post) -> str:
     return f"{post.creator.name if post.creator else ''} / {post.title}"
 
 
-def _upsert_post(session: Session, creator: Creator, pr: PostResource) -> tuple[Post, bool, bool]:
+def _upsert_post(
+    session: Session, creator: Creator, pr: PostResource, source: PostSource
+) -> tuple[Post, bool, bool]:
     """Insert or update a post row. Returns (post, is_new, changed)."""
     post = session.execute(
         select(Post)
@@ -996,7 +1004,7 @@ def _upsert_post(session: Session, creator: Creator, pr: PostResource) -> tuple[
             or post.current_user_can_view != pr.current_user_can_view
             or post.title != pr.title
             or post.embed_url != pr.embed_url
-            or _post_file_url(post) != _post_file_url_from_resource(pr)
+            or source.post_changed(post.raw_json, pr)
         )
     post.creator_id = creator.id
     post.title = pr.title or ""
@@ -1018,17 +1026,6 @@ def _upsert_post(session: Session, creator: Creator, pr: PostResource) -> tuple[
     post.last_seen_at = now
     session.flush()
     return post, is_new, changed
-
-
-def _post_file_url(post: Post) -> str | None:
-    raw = post.raw_json or {}
-    attrs = (raw.get("data") or {}).get("attributes") or {}
-    pf = attrs.get("post_file") or {}
-    return pf.get("url") if isinstance(pf, dict) else None
-
-
-def _post_file_url_from_resource(pr: PostResource) -> str | None:
-    return (pr.post_file or {}).get("url")
 
 
 def derive_post_status(post: Post) -> str:

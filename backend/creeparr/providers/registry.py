@@ -16,7 +16,7 @@ class ProviderRegistry:
         self._by_name: dict[str, ProviderService] = {s.name: s for s in services}
         self._hosts: dict[str, ProviderService] = {}
         for service in services:
-            for source in service.hosts:
+            for source in service.description.hosts:
                 if source in self._hosts:
                     raise ValueError(
                         f"{source} is hosted by both {self._hosts[source].name} and {service.name}"

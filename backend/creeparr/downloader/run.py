@@ -208,7 +208,7 @@ class DownloadRun:
                 creator = s.get(Creator, media.creator_id)
                 if post is None or creator is None:
                     return None
-                self.lifecycle.sync_post(s, creator, pr, provider.resolve_media, refresh=True)
+                self.lifecycle.sync_post(s, creator, pr, provider, refresh=True)
                 return _snapshot(s, claim)
 
         renewed = await asyncio.to_thread(_apply)
@@ -222,11 +222,11 @@ class DownloadRun:
         hosted_by = self.providers.hosting(media.source)
         via = hosted_by or provider
         choice = settings.downloads.container
-        container = choice if choice in ("mp4", "mkv") else provider.video_container
+        container = choice if choice in ("mp4", "mkv") else provider.description.video_container
         if hosted_by is not None or media.source not in EMBED_SOURCES:
             message = (
                 f"{via.label} requires a signed-in session for this video. "
-                f"{via.sign_in_help}, then retry."
+                f"{via.description.sign_in_help}, then retry."
             )
         else:
             site = (urlparse(media.url or "").hostname or "").removeprefix("www.")

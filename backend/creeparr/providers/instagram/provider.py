@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 from creeparr.db.enums import MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import CookieSet, write_cookiefile
+from creeparr.providers.description import COOKIES_TXT, CredentialField, ProviderDescription
 from creeparr.providers.errors import NotConfigured, NotFoundError
 from creeparr.providers.instagram.client import (
     BASE,
@@ -44,10 +45,34 @@ _SOURCES = {post_type: source for source, post_type in POST_TYPES.items()}
 _LISTED_ONLY = {POST_TYPES["stories"], POST_TYPES["highlights"]}
 
 
+DESCRIPTION = ProviderDescription(
+    name="instagram",
+    label="Instagram",
+    intro=(
+        "Reads Instagram from your logged-in session. Copy the sessionid cookie from "
+        "instagram.com in your browser. Instagram is strict about automation; use a dedicated "
+        "account."
+    ),
+    credentials=(
+        CredentialField(
+            "sessionid",
+            "sessionid cookie",
+            "instagram.com → DevTools → Application → Cookies → sessionid",
+        ),
+        COOKIES_TXT,
+    ),
+    post_types={
+        POST_TYPES["posts"]: "Post",
+        POST_TYPES["reels"]: "Reel",
+        POST_TYPES["stories"]: "Story",
+        POST_TYPES["highlights"]: "Highlight",
+        POST_TYPES["tagged"]: "Tagged",
+    },
+)
+
+
 class InstagramProvider(ProviderService):
-    name: ClassVar[str] = "instagram"
-    label: ClassVar[str] = "Instagram"
-    credential_fields: ClassVar[tuple[str, ...]] = ("sessionid", "cookies_txt")
+    description: ClassVar[ProviderDescription] = DESCRIPTION
 
     # ---- credentials / config ------------------------------------------------------
 
@@ -231,7 +256,7 @@ class InstagramProvider(ProviderService):
         pr = PostResource(
             id=shortcode,
             title=shortcode,
-            post_type="instagram_post",
+            post_type=POST_TYPES["posts"],
             url=f"{BASE}/p/{data.get('shortcode')}/",
             campaign_id=str(data.get("owner_id") or data.get("username") or ""),
             media=media,

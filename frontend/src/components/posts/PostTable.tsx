@@ -2,7 +2,9 @@ import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Download, ExternalLink, RefreshCw, SkipForward, Undo2 } from "lucide-react";
 import type { Post } from "../../api/types";
 import { useDownloadPost, useRefreshPost, useSkipPost, useUnskipPost } from "../../api/hooks/usePosts";
-import { postStatus, postTypeLabel } from "../../lib/status";
+import { postStatus } from "../../lib/status";
+import { postTypeLabel } from "../../lib/providers";
+import { usePostTypeLabels } from "../../api/hooks/useCreators";
 import { formatDate, cx } from "../../lib/format";
 import { StatusBadge } from "../ui/Badge";
 import { IconButton } from "../ui/Button";
@@ -11,6 +13,7 @@ import { useToast } from "../ui/Toast";
 
 export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?: boolean }) {
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const postTypes = usePostTypeLabels();
   const download = useDownloadPost();
   const skip = useSkipPost();
   const unskip = useUnskipPost();
@@ -72,7 +75,7 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
                       )}
                     </div>
                   </td>
-                  <td className="text-fg-muted">{postTypeLabel(p.post_type)}{p.embed_provider ? ` · ${p.embed_provider}` : ""}</td>
+                  <td className="text-fg-muted">{postTypeLabel(postTypes, p.post_type)}{p.embed_provider ? ` · ${p.embed_provider}` : ""}</td>
                   <td><StatusBadge meta={postStatus(p.status)} title={p.status_reason ?? undefined} /></td>
                   <td className="text-xs text-fg-muted">
                     {ms.total === 0 ? "–" : (

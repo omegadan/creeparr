@@ -3,7 +3,7 @@ applies, its media session and the one stream, who hosts embeds, and DRM."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import httpx
@@ -195,8 +195,11 @@ def test_youtube_hosts_youtube_videos_whoever_posted_them(make):
 
 def test_two_providers_hosting_one_source_is_refused(make):
     class OtherTube(RedditProvider):
-        name = "othertube"
-        hosts = frozenset({MediaSource.EMBED_YOUTUBE})
+        description = replace(
+            RedditProvider.description,
+            name="othertube",
+            hosts=frozenset({MediaSource.EMBED_YOUTUBE}),
+        )
 
     with pytest.raises(ValueError, match="hosted by both"):
         ProviderRegistry([make(YouTubeProvider), make(OtherTube)])

@@ -299,7 +299,7 @@ async def test_dedupe_links_to_the_twin_in_its_own_providers_root(tmp_path):
     env = EnvConfig(
         config_dir=tmp_path / "config",
         download_dir=tmp_path / "downloads",
-        youtube_download_dir=tmp_path / "yt",
+        provider_dirs={"youtube": tmp_path / "yt"},
     )
     env.ensure_dirs()
     run_migrations(env.database_url)
