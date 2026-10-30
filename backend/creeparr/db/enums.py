@@ -21,6 +21,10 @@ class MediaSource(StrEnum):
     MEDIA_DOWNLOAD = "media_download"
 
 
+# Videos hosted elsewhere (YouTube, Vimeo, ...): no provider links to renew or session to need.
+EMBED_SOURCES = {MediaSource.EMBED_YOUTUBE, MediaSource.EMBED_VIMEO, MediaSource.EMBED_OTHER}
+
+
 class MediaStatus(StrEnum):
     DISCOVERED = "discovered"
     QUEUED = "queued"

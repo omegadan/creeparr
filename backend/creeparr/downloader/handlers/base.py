@@ -1,37 +1,116 @@
-"""Shared handler types."""
+"""The handler seam: what a handler is given and what it hands back.
+
+A handler brings one media item's file to disk, over plain HTTP or with yt-dlp. Either it
+reserves the file's final name before it starts (so a direct download can resume its `.part`
+file there), or it downloads into the scratch folder and returns the file, with what it
+learned about the post, for the download run to file in the post's folder.
+"""
 
 from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+
+from creeparr.core.downloads import FailureKind
 
 
 class DownloadCancelled(Exception):
     pass
 
 
-class RetryableDownloadError(Exception):
-    def __init__(self, message: str, error_class: str = "retryable") -> None:
+class DownloadFailed(Exception):
+    def __init__(self, kind: FailureKind, message: str, label: str) -> None:
         super().__init__(message)
-        self.error_class = error_class
+        self.kind = kind
+        self.label = label
 
 
-class PermanentDownloadError(Exception):
-    def __init__(self, message: str, error_class: str = "permanent") -> None:
-        super().__init__(message)
-        self.error_class = error_class
+@dataclass(frozen=True)
+class MediaSnapshot:
+    """A download's media item, with its post and creator, as read when the download starts
+    (and again after it renews the post's links)."""
+
+    job_id: int
+    attempt: int
+    provider: str
+    media_id: int
+    kind: str
+    source: str
+    url: str | None
+    remote_file_name: str | None
+    mimetype: str | None
+    order_index: int
+    remote_metadata: Mapping[str, Any]
+    post_id: int
+    post_ext_id: str
+    post_title: str
+    published_at: datetime | None
+    first_seen_at: datetime | None
+    post_type: str | None
+    embed_provider: str | None
+    urls_fetched_at: datetime | None
+    can_view: bool
+    creator_id: int
+    creator_name: str
+    creator_folder: str | None
+    creator_vanity: str | None
+    campaign_id: str
+
+    @property
+    def label(self) -> str:
+        """How log lines name this download."""
+        return f"[job {self.job_id} media {self.media_id}]"
 
 
-@dataclass
-class DownloadResult:
+@dataclass(frozen=True)
+class Learned:
+    """What a download found out about its post: yt-dlp knows an undated video's date."""
+
+    published_at: datetime | None = None
+    description: str | None = None
+
+
+@dataclass(frozen=True)
+class Fetched:
     path: Path
-    size: int
+    #: False: the file is in the scratch folder, and the run files it in the post's folder.
+    placed: bool = True
+    #: Set when the handler hashed the file while writing it; otherwise the run hashes it.
     sha256: str | None = None
-    metadata_embedded: bool = False
+    learned: Learned | None = None
+
+
+class Placement(Protocol):
+    def reserve(self, ext: str) -> Path:
+        """The file's final path, kept from every other running download. Raises
+        RuntimeError while the post's date is still to be learned: use scratch() then."""
+        ...
+
+    def scratch(self) -> Path:
+        """This download's scratch folder, created if needed. It is kept after a failure that
+        will be retried, so the next attempt can resume."""
+        ...
+
+
+class Handler(Protocol):
+    #: Learns an undated post's date while downloading, so the post's folder waits for it.
+    learns_date: bool
+
+    async def fetch(
+        self, media: MediaSnapshot, place: Placement, progress: ProgressReporter
+    ) -> Fetched:
+        """Bring the media's file to disk. Raises DownloadFailed or DownloadCancelled.
+
+        Partial files it makes outside the scratch folder are kept after a failure that will
+        be retried, and removed after any other failure or a cancel. Blocking work runs in
+        the long-work pool.
+        """
+        ...
 
 
 class ProgressReporter:

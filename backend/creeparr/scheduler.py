@@ -15,8 +15,8 @@ from sqlalchemy import delete, select
 
 from creeparr.core.errors import Conflict
 from creeparr.db.engine import session_scope
-from creeparr.db.enums import ScanMode
-from creeparr.db.models import Creator, History
+from creeparr.db.enums import JobStatus, ScanMode
+from creeparr.db.models import Creator, DownloadJob, History
 
 if TYPE_CHECKING:
     from creeparr.services import Services
@@ -245,20 +245,20 @@ class SchedulerService:
         return n
 
     async def _requeue_failed(self) -> dict[str, int]:
-        n = await asyncio.to_thread(self.services.downloads.requeue_due_retries)
+        n = await asyncio.to_thread(self.services.lifecycle.retry_due)
         return {"requeued": n}
 
     async def _session_check(self) -> dict[str, bool]:
         return {p.name: await p.check_session() for p in self.services.providers}
 
     async def _embed_backlog(self) -> dict:
-        return await self.services.downloads.embed_backlog()
+        return await self.services.library.embed_backlog()
 
     async def _restamp_files(self) -> dict:
-        return await asyncio.to_thread(self.services.downloads.restamp_files)
+        return await asyncio.to_thread(self.services.library.restamp_files)
 
     async def _verify_files(self) -> dict:
-        return await asyncio.to_thread(self.services.downloads.verify_files)
+        return await asyncio.to_thread(self.services.library.verify_files)
 
     async def _reresolve_media(self) -> dict[str, int]:
         return await asyncio.to_thread(
@@ -267,15 +267,27 @@ class SchedulerService:
 
     async def _prune(self) -> dict[str, int]:
         h = self.services.settings.get().history
-        cutoff = datetime.now(UTC) - timedelta(days=h.retention_days)
+        now = datetime.now(UTC)
 
-        def _do() -> int:
+        def _history() -> int:
+            cutoff = now - timedelta(days=h.retention_days)
             with session_scope(self.services.session_factory) as s:
                 res = s.execute(delete(History).where(History.occurred_at < cutoff))
                 return res.rowcount or 0
 
-        removed_history = await asyncio.to_thread(_do)
-        removed_jobs = await asyncio.to_thread(
-            self.services.downloads.prune_jobs, h.job_retention_days
-        )
+        def _jobs() -> int:
+            cutoff = now - timedelta(days=h.job_retention_days)
+            with session_scope(self.services.session_factory) as s:
+                res = s.execute(
+                    delete(DownloadJob).where(
+                        DownloadJob.status.in_(
+                            [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]
+                        ),
+                        DownloadJob.finished_at < cutoff,
+                    )
+                )
+                return res.rowcount or 0
+
+        removed_history = await asyncio.to_thread(_history)
+        removed_jobs = await asyncio.to_thread(_jobs)
         return {"history": removed_history, "jobs": removed_jobs}

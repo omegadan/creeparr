@@ -229,15 +229,18 @@ def test_allowed_hosts_env_and_password_lift_host_check(env):
 def test_queue_is_paged_with_true_totals(app, api):
     from creeparr.db.engine import session_scope
     from creeparr.db.models import Creator
-    from tests.test_manager import queue_posts
+    from tests import patreon_fixtures as fx
+    from tests.downloads import queue_post
 
-    factory = app.state.services.session_factory
+    services = app.state.services
+    factory = services.session_factory
     with session_scope(factory) as s:
         c = Creator(campaign_id="1", name="Big Archive")
         s.add(c)
         s.flush()
         cid = c.id
-    queue_posts(factory, cid, [f"p{i}" for i in range(260)])
+    for i in range(260):
+        queue_post(factory, services.lifecycle, fx.native_video_post(f"p{i}"), cid)
 
     first = api.get("/api/v1/queue", params={"page_size": 100}).json()
     assert first["queued_total"] == 260 and first["running_total"] == 0
@@ -403,6 +406,6 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
     r = api.patch(f"/api/v1/creators/{creator_id}", json={"include_images": False})
     assert r.status_code == 200, r.text
     assert api.get("/api/v1/queue").json()["queued_total"] == 0
-    assert services.downloads._claim_next("w0") is None  # no worker downloads them anyway
+    assert services.claims.next("w0") is None  # no worker downloads them anyway
     with session_scope(services.session_factory) as s:
         assert {m.status for m in s.execute(select(MediaItem)).scalars()} == {MediaStatus.SKIPPED}

@@ -1,31 +1,44 @@
-"""The media lifecycle: how media and posts change status in response to actions and scans.
+"""The media lifecycle: how media and posts change status in response to actions, scans and
+downloads.
 
-User actions and post syncs change a media item's status, `wanted` flag and attempt count
-only through `MediaLifecycle`, and a post's status is only ever derived from its media. The
-methods work in the caller's session and leave it flushed. The events and worker wake-ups
-a change calls for are sent once that session commits, and dropped if it rolls back.
-
-The download workers still record job outcomes themselves with the low-level helpers at
-the bottom of this module, until that moves here too.
+User actions, post syncs, downloads and the file checks change a media item's status,
+`wanted` flag and attempt count only through `MediaLifecycle`, and a post's status is only
+ever derived from its media. The methods work in the caller's session and leave it flushed.
+The events and worker wake-ups a change calls for are sent once that session commits, and
+dropped if it rolls back.
 """
 
 from __future__ import annotations
 
 import logging
+import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
-from sqlalchemy import event, or_, select
+from sqlalchemy import event, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
+from creeparr.core.downloads import (
+    Claim,
+    Completed,
+    Failed,
+    FailureKind,
+    Outcome,
+    mentions_drm,
+)
 from creeparr.core.events import EventBus
+from creeparr.core.history import added_payload, record_event
+from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import (
     ACTIVE_MEDIA_STATUSES,
     FAILED_MEDIA_STATUSES,
+    EventType,
+    JobStage,
     JobStatus,
     MediaKind,
     MediaStatus,
@@ -42,7 +55,9 @@ MediaResolver = Callable[[PostResource], list[MediaSpec]]
 log = logging.getLogger(__name__)
 
 # Rows written under older rules are brought up to date once per version (see reconcile).
-RULES_VERSION = 1
+#   1: post statuses re-derived; queued downloads of unwanted media cancelled
+#   2: yt-dlp's DRM failures moved from failed permanently to unsupported (DRM)
+RULES_VERSION = 2
 RULES_KEY = "media_lifecycle_rules"
 
 KIND_DISABLED_REASON = "kind disabled for creator"
@@ -50,6 +65,9 @@ USER_SKIP_REASON = "skipped by user"
 REMOVED_REASON = "removed from queue"
 CLEARED_REASON = "cleared from failed list"
 NO_ACCESS_REASON = "post is not accessible with the current pledge"
+CANCELLED_REASON = "cancelled by user"
+DRM_REASON = "DRM-protected; cannot be archived"
+MISSING_REASON = "file not found on disk"
 
 # Stopped by the user or the creator preferences: never downloaded on their own.
 _STOPPED = {MediaStatus.SKIPPED, MediaStatus.CANCELLED}
@@ -58,6 +76,20 @@ _UNSUPPORTED = {MediaStatus.UNSUPPORTED, MediaStatus.UNSUPPORTED_DRM}
 _FINISHED = {MediaStatus.COMPLETED, *_UNSUPPORTED}
 # Posts per transaction when reconcile re-derives every post's status.
 _RECONCILE_BATCH = 500
+
+# Where a failed download leaves its media. Every kind not listed is retried with back-off
+# until the attempt limit, then fails permanently.
+_FAILURE_STATUS: dict[FailureKind, MediaStatus] = {
+    FailureKind.DRM: MediaStatus.UNSUPPORTED_DRM,
+    FailureKind.UNSUPPORTED: MediaStatus.UNSUPPORTED,
+    FailureKind.NO_ACCESS: MediaStatus.NO_ACCESS,
+    FailureKind.FILE_GONE: MediaStatus.FAILED_PERMANENT,
+    FailureKind.POST_GONE: MediaStatus.FAILED_PERMANENT,
+    FailureKind.NEEDS_COOKIES: MediaStatus.FAILED_PERMANENT,
+    FailureKind.UNAVAILABLE: MediaStatus.FAILED_PERMANENT,
+}
+# A signed-out provider is usually fixed within minutes, so its retries don't back off longer.
+_AUTH_BACKOFF_CAP_SECONDS = 600
 
 
 class Workers(Protocol):
@@ -85,6 +117,9 @@ class _Effects:
 
     dirty: set[int] = field(default_factory=set)  # posts whose media changed
     posts: dict[int, dict[str, Any]] = field(default_factory=dict)  # post.changed payloads
+    history: list[dict[str, Any]] = field(default_factory=list)  # history.added payloads
+    started: list[dict[str, Any]] = field(default_factory=list)  # job.started payloads
+    finished: list[dict[str, Any]] = field(default_factory=list)  # job.finished payloads
     queue_changed: bool = False
     wake: bool = False
     cancel: set[int] = field(default_factory=set)  # running jobs to stop
@@ -92,10 +127,15 @@ class _Effects:
 
 class MediaLifecycle:
     def __init__(
-        self, session_factory: SessionFactory, bus: EventBus, workers: Workers | None = None
+        self,
+        session_factory: SessionFactory,
+        bus: EventBus,
+        settings: SettingsService,
+        workers: Workers | None = None,
     ) -> None:
         self._factory = session_factory
         self.bus = bus
+        self.settings = settings
         # The download manager. It is attached once both exist, since it uses this too.
         self.workers = workers
         self._key = ("media_lifecycle", id(self))
@@ -276,17 +316,191 @@ class MediaLifecycle:
                 posts_done += 1
         return {"posts": posts_done, "queued": queued}
 
+    # ---- downloads -----------------------------------------------------------------
+
+    def start_download(self, session: Session, job: DownloadJob, worker_id: str) -> Claim | None:
+        """Mark a queued download running and its media downloading.
+
+        Returns None if another worker started it first. `job.started` goes out on commit.
+        """
+        started = session.execute(
+            update(DownloadJob)
+            .where(DownloadJob.id == job.id, DownloadJob.status == JobStatus.QUEUED)
+            .values(
+                status=JobStatus.RUNNING,
+                worker_id=worker_id,
+                started_at=datetime.now(UTC),
+                stage=JobStage.RESOLVING,
+                progress_percent=0.0,
+            )
+        ).rowcount
+        if not started:
+            return None
+        session.refresh(job)
+        item = job.media_item
+        self._set(session, item, status=MediaStatus.DOWNLOADING)
+        self._effects(session).started.append(
+            {"id": job.id, "media_item_id": item.id, "post_id": item.post_id}
+        )
+        session.flush()
+        return Claim(job.id, item.id, item.post_id, job.attempt)
+
+    def record_outcome(self, session: Session, claim: Claim, outcome: Outcome) -> None:
+        """Record how a download ended: its media's status, attempts and retry time, the job
+        and history. `job.finished` and `post.changed` go out on commit.
+
+        If the media item no longer exists (its creator was deleted, or an edit removed it
+        from the post), the download is dropped as cancelled, whatever its outcome.
+        """
+        job = session.get(DownloadJob, claim.job_id)
+        item = session.execute(
+            select(MediaItem)
+            .options(
+                selectinload(MediaItem.post).selectinload(Post.media_items),
+                selectinload(MediaItem.post).selectinload(Post.creator),
+            )
+            .where(MediaItem.id == claim.media_id)
+        ).scalar_one_or_none()
+        finished: dict[str, Any] = {
+            "id": claim.job_id,
+            "media_item_id": claim.media_id,
+            "post_id": claim.post_id,
+        }
+        if item is None:
+            log.info(
+                "[job %s] media item %s no longer exists; dropping job",
+                claim.job_id,
+                claim.media_id,
+            )
+            if job is not None:
+                _end_job(job, JobStatus.CANCELLED)
+            finished["status"] = JobStatus.CANCELLED
+        elif isinstance(outcome, Completed):
+            self._completed(session, claim, item, job, outcome)
+            finished["status"] = JobStatus.COMPLETED
+        elif isinstance(outcome, Failed):
+            self._failed(session, claim, item, job, outcome)
+            finished["status"] = JobStatus.FAILED
+            finished["error"] = outcome.message
+        else:
+            self._cancelled(session, item, job)
+            finished["status"] = JobStatus.CANCELLED
+        if item is not None:
+            self._recompute(session, item.post)
+        self._effects(session).finished.append(finished)
+        session.flush()
+
+    def retry_due(self) -> int:
+        """Queue the failed downloads whose retry time has come. Returns how many."""
+        n = 0
+        with session_scope(self._factory) as s:
+            items = (
+                s.execute(
+                    select(MediaItem)
+                    .options(selectinload(MediaItem.post).selectinload(Post.media_items))
+                    .where(
+                        MediaItem.status == MediaStatus.FAILED,
+                        MediaItem.wanted.is_(True),
+                        MediaItem.next_retry_at.is_not(None),
+                        MediaItem.next_retry_at <= datetime.now(UTC),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for item in items:
+                if self._queue_again(s, item) is not None:
+                    n += 1
+                self._recompute(s, item.post)
+        if n:
+            log.info("re-queued %d failed downloads", n)
+        return n
+
+    def recover_interrupted(self) -> int:
+        """Put the downloads a restart interrupted back in the queue. Returns how many.
+
+        Their start still counts toward the hourly limit, or every restart would hand out a
+        fresh batch of downloads.
+        """
+        with session_scope(self._factory) as s:
+            jobs = (
+                s.execute(
+                    select(DownloadJob)
+                    .options(selectinload(DownloadJob.media_item))
+                    .where(DownloadJob.status == JobStatus.RUNNING)
+                )
+                .scalars()
+                .all()
+            )
+            for job in jobs:
+                job.status = JobStatus.QUEUED
+                job.worker_id = None
+                job.stage = None
+                item = job.media_item
+                if item is not None and item.status == MediaStatus.DOWNLOADING:
+                    self._set(s, item, status=MediaStatus.QUEUED)
+        if jobs:
+            log.info("re-queued %d jobs interrupted by a restart", len(jobs))
+        return len(jobs)
+
+    # ---- the library's file checks -------------------------------------------------
+
+    def file_missing(self, session: Session, item: MediaItem, *, requeue: bool) -> bool:
+        """An archived item's file is gone from disk. It becomes missing and, with `requeue`,
+        is queued to download again. Returns whether it was queued."""
+        self._set(session, item, status=MediaStatus.MISSING, status_reason=MISSING_REASON)
+        self._history(
+            session,
+            item,
+            EventType.MEDIA_MISSING,
+            f"{PurePosixPath(item.file_path or '').name} is missing from disk",
+            level="warning",
+            data={"file_path": item.file_path},
+        )
+        queued = requeue and self._queue_again(session, item) is not None
+        self._effects(session).queue_changed = True  # the failed list shows missing media
+        self._recompute(session, item.post)
+        session.flush()
+        return queued
+
+    def file_found(self, session: Session, item: MediaItem) -> None:
+        """A missing item's file is back on disk (a re-mounted share, a restored backup)."""
+        self._set(session, item, status=MediaStatus.COMPLETED, status_reason=None)
+        self._history(
+            session,
+            item,
+            EventType.MEDIA_RESTORED,
+            f"{PurePosixPath(item.file_path or '').name} is back on disk",
+            data={"file_path": item.file_path},
+        )
+        self._effects(session).queue_changed = True
+        self._recompute(session, item.post)
+        session.flush()
+
     # ---- upgrades ------------------------------------------------------------------
 
     def reconcile(self) -> dict[str, int] | None:
         """Bring rows written under older rules up to date, once per RULES_VERSION.
 
-        Cancels queued downloads of media that is no longer wanted and re-derives every
-        post's status. Returns what changed, or None when the rows were already current.
+        Moves media that yt-dlp failed permanently over DRM to unsupported (DRM), cancels
+        queued downloads of media that is no longer wanted and re-derives every post's
+        status. Returns what changed, or None when the rows were already current.
         """
         with session_scope(self._factory) as s:
             if get_state(s, RULES_KEY, 0) >= RULES_VERSION:
                 return None
+            drm = [
+                item
+                for item in s.execute(
+                    select(MediaItem).where(
+                        MediaItem.status == MediaStatus.FAILED_PERMANENT,
+                        MediaItem.last_error.ilike("%drm%"),
+                    )
+                ).scalars()
+                if mentions_drm(item.last_error)
+            ]
+            for item in drm:
+                self._set(s, item, status=MediaStatus.UNSUPPORTED_DRM, status_reason=DRM_REASON)
             jobs = (
                 s.execute(
                     select(DownloadJob)
@@ -324,12 +538,13 @@ class MediaLifecycle:
             set_state(s, RULES_KEY, RULES_VERSION)
         log.info(
             "media lifecycle rules v%d: %d post statuses updated, %d queued downloads of "
-            "unwanted media cancelled",
+            "unwanted media cancelled, %d DRM failures marked unsupported",
             RULES_VERSION,
             posts_changed,
             len(jobs),
+            len(drm),
         )
-        return {"posts": posts_changed, "jobs": len(jobs)}
+        return {"posts": posts_changed, "jobs": len(jobs), "drm": len(drm)}
 
     # ---- rules ---------------------------------------------------------------------
 
@@ -369,6 +584,17 @@ class MediaLifecycle:
                 n += 1
         return n
 
+    def _queue_again(self, session: Session, item: MediaItem) -> DownloadJob | None:
+        """Queue a wanted item again on its own (a retry that's due, a missing file), keeping
+        its count of attempts. Returns its job, or None if it can't be queued."""
+        if not item.wanted or item.status in (
+            MediaStatus.NO_ACCESS,
+            MediaStatus.DOWNLOADING,
+            *_FINISHED,
+        ):
+            return None
+        return _active_job(session, item.id) or self._add_job(session, item, priority=0)
+
     def _add_job(self, session: Session, item: MediaItem, *, priority: int) -> DownloadJob:
         self._set(session, item, status=MediaStatus.QUEUED, status_reason=None)
         job = _new_job(session, item, priority)
@@ -376,6 +602,124 @@ class MediaLifecycle:
         fx.queue_changed = True
         fx.wake = True
         return job
+
+    def _completed(
+        self,
+        session: Session,
+        claim: Claim,
+        item: MediaItem,
+        job: DownloadJob | None,
+        done: Completed,
+    ) -> None:
+        now = datetime.now(UTC)
+        self._set(
+            session, item, status=MediaStatus.COMPLETED, status_reason=None, next_retry_at=None
+        )
+        item.file_path = done.file_path
+        item.file_size_bytes = done.size
+        item.sha256 = done.sha256
+        item.metadata_embedded = done.metadata_embedded
+        item.completed_at = now
+        item.last_error = None
+        if job is not None:
+            _end_job(job, JobStatus.COMPLETED, now)
+            job.progress_percent = 100.0
+            job.bytes_downloaded = done.size
+            job.total_bytes = done.size
+        name = PurePosixPath(done.file_path).name
+        self._history(
+            session,
+            item,
+            EventType.DOWNLOAD_COMPLETED,
+            f"Downloaded {name} ({_post_label(item.post)})",
+            data={"file_path": done.file_path, "size": done.size, "source": item.source},
+        )
+        log.info("[job %s] completed %s (%d bytes)", claim.job_id, done.file_path, done.size)
+
+    def _failed(
+        self,
+        session: Session,
+        claim: Claim,
+        item: MediaItem,
+        job: DownloadJob | None,
+        failure: Failed,
+    ) -> None:
+        d = self.settings.get().downloads
+        now = datetime.now(UTC)
+        attempts = item.attempts + (0 if failure.kind == FailureKind.AUTH else 1)
+        status = _FAILURE_STATUS.get(failure.kind)
+        retry_at = None
+        if status is not None:
+            reason = DRM_REASON if status == MediaStatus.UNSUPPORTED_DRM else failure.message
+        elif attempts >= d.max_attempts:
+            status = MediaStatus.FAILED_PERMANENT
+            reason = f"gave up after {attempts} attempts: {failure.message}"
+        else:
+            status, reason = MediaStatus.FAILED, failure.message
+            backoff = min(d.retry_base_seconds * (2 ** max(attempts - 1, 0)), d.retry_cap_seconds)
+            backoff *= random.uniform(0.8, 1.2)
+            if failure.kind == FailureKind.AUTH:
+                backoff = min(backoff, _AUTH_BACKOFF_CAP_SECONDS)
+            retry_at = now + timedelta(seconds=backoff)
+        self._set(
+            session,
+            item,
+            status=status,
+            status_reason=reason,
+            attempts=attempts,
+            next_retry_at=retry_at,
+        )
+        item.last_error = failure.message
+        if job is not None:
+            _end_job(job, JobStatus.FAILED, now)
+            job.error = failure.message
+            job.error_class = failure.label
+        self._history(
+            session,
+            item,
+            EventType.MEDIA_UNSUPPORTED if status in _UNSUPPORTED else EventType.DOWNLOAD_FAILED,
+            f"{_post_label(item.post)}: {failure.message}",
+            level="error" if status == MediaStatus.FAILED_PERMANENT else "warning",
+            data={
+                "error_class": failure.label,
+                "attempt": claim.attempt,
+                "retry_at": retry_at.isoformat() if retry_at else None,
+            },
+        )
+        log.warning("[job %s] failed (%s): %s", claim.job_id, failure.label, failure.message)
+
+    def _cancelled(self, session: Session, item: MediaItem, job: DownloadJob | None) -> None:
+        if job is not None:
+            _end_job(job, JobStatus.CANCELLED)
+        # Skipped or removed while it ran, it keeps that status.
+        if item.status == MediaStatus.DOWNLOADING:
+            self._set(session, item, status=MediaStatus.CANCELLED, status_reason=CANCELLED_REASON)
+        self._history(
+            session, item, EventType.DOWNLOAD_CANCELLED, f"Cancelled {_post_label(item.post)}"
+        )
+
+    def _history(
+        self,
+        session: Session,
+        item: MediaItem,
+        event_type: EventType,
+        message: str,
+        *,
+        level: str = "info",
+        data: dict[str, Any] | None = None,
+    ) -> None:
+        row = record_event(
+            session,
+            None,
+            event_type,
+            message,
+            level=level,
+            creator_id=item.creator_id,
+            post_id=item.post_id,
+            media_item_id=item.id,
+            data=data,
+        )
+        self._effects(session).history.append(added_payload(row))
 
     def _skip(self, session: Session, item: MediaItem, reason: str) -> None:
         if item.status == MediaStatus.COMPLETED:
@@ -488,7 +832,7 @@ class MediaLifecycle:
 
     def _recompute(self, session: Session, post: Post) -> None:
         before = post.status
-        recompute_post_status(post)
+        post.status = derive_post_status(post)
         fx = self._effects(session)
         if post.status != before or post.id in fx.dirty:
             fx.posts[post.id] = {
@@ -512,8 +856,14 @@ class MediaLifecycle:
             return
         # The change is already committed; a failure here must not look like it wasn't.
         try:
+            for payload in fx.history:
+                self.bus.publish("history.added", payload)
             for payload in fx.posts.values():
                 self.bus.publish("post.changed", payload)
+            for payload in fx.started:
+                self.bus.publish("job.started", payload)
+            for payload in fx.finished:
+                self.bus.publish("job.finished", payload)
             if fx.queue_changed:
                 self.bus.publish("queue.changed", {})
             if self.workers is not None:
@@ -583,6 +933,17 @@ def _cancel_queued(job: DownloadJob) -> None:
     job.finished_at = datetime.now(UTC)
 
 
+def _end_job(job: DownloadJob, status: JobStatus, now: datetime | None = None) -> None:
+    job.status = status
+    job.finished_at = now or datetime.now(UTC)
+    job.stage = None
+
+
+def _post_label(post: Post) -> str:
+    """The post as history names it: "creator / title"."""
+    return f"{post.creator.name if post.creator else ''} / {post.title}"
+
+
 def _upsert_post(session: Session, creator: Creator, pr: PostResource) -> tuple[Post, bool, bool]:
     """Insert or update a post row. Returns (post, is_new, changed)."""
     post = session.execute(
@@ -637,7 +998,8 @@ def _post_file_url_from_resource(pr: PostResource) -> str | None:
     return (pr.post_file or {}).get("url")
 
 
-def _derived_status(post: Post) -> str:
+def derive_post_status(post: Post) -> str:
+    """A post's status, derived from its media; the lifecycle stores nothing else."""
     if not post.current_user_can_view:
         return PostStatus.NO_ACCESS
     items = list(post.media_items)
@@ -657,38 +1019,3 @@ def _derived_status(post: Post) -> str:
     if statuses <= _UNSUPPORTED:
         return PostStatus.UNSUPPORTED
     return PostStatus.PARTIAL
-
-
-# ---- low-level helpers the download workers use while they record job outcomes ---------
-
-
-def enqueue_media(
-    session: Session, item: MediaItem, *, priority: int = 0, force: bool = False
-) -> DownloadJob | None:
-    """Move a media item to `queued` and create a job. Returns the job or None if not queued."""
-    if item.status in (MediaStatus.NO_ACCESS, MediaStatus.DOWNLOADING):
-        return None
-    if not force and (not item.wanted or item.status in _FINISHED):
-        return None
-    existing = _active_job(session, item.id)
-    if existing is not None:
-        if existing.priority < priority:
-            existing.priority = priority
-        return existing
-    if force:
-        item.wanted = True
-    item.status = MediaStatus.QUEUED
-    item.status_reason = None
-    return _new_job(session, item, priority)
-
-
-def recompute_post_status(post: Post) -> None:
-    """Derive a post's status from its media; nothing sets it any other way."""
-    post.status = _derived_status(post)
-
-
-def publish_post_changed(bus: EventBus | None, post: Post) -> None:
-    if bus is not None:
-        bus.publish(
-            "post.changed", {"id": post.id, "creator_id": post.creator_id, "status": post.status}
-        )

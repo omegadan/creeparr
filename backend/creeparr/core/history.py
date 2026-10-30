@@ -35,15 +35,17 @@ def record_event(
     session.add(row)
     session.flush()
     if bus is not None:
-        bus.publish(
-            "history.added",
-            {
-                "id": row.id,
-                "event_type": row.event_type,
-                "level": level,
-                "message": message,
-                "creator_id": creator_id,
-                "post_id": post_id,
-            },
-        )
+        bus.publish("history.added", added_payload(row))
     return row
+
+
+def added_payload(row: History) -> dict[str, Any]:
+    """The `history.added` event for a new row."""
+    return {
+        "id": row.id,
+        "event_type": row.event_type,
+        "level": row.level,
+        "message": row.message,
+        "creator_id": row.creator_id,
+        "post_id": row.post_id,
+    }

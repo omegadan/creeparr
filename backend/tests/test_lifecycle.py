@@ -1,29 +1,33 @@
-"""The media lifecycle, tested through its interface: actions, syncs and reconcile."""
+"""The media lifecycle, tested through its interface: actions, syncs, downloads and reconcile."""
 
 from __future__ import annotations
 
 import itertools
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from unittest.mock import ANY
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from creeparr.core.downloads import Cancelled, Claim, Completed, Failed, FailureKind, Outcome
 from creeparr.core.lifecycle import (
+    CANCELLED_REASON,
+    DRM_REASON,
     KIND_DISABLED_REASON,
     RULES_KEY,
     RULES_VERSION,
     USER_SKIP_REASON,
     MediaLifecycle,
-    recompute_post_status,
+    derive_post_status,
 )
 from creeparr.core.state import get_state
 from creeparr.db.engine import session_scope
-from creeparr.db.enums import JobStatus, MediaKind, MediaStatus, PostStatus
-from creeparr.db.models import Creator, DownloadJob, MediaItem, Post
+from creeparr.db.enums import EventType, JobStatus, MediaKind, MediaStatus, PostStatus
+from creeparr.db.models import Creator, DownloadJob, History, MediaItem, Post
 from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from tests import patreon_fixtures as fx
@@ -65,8 +69,8 @@ def workers() -> FakeWorkers:
 
 
 @pytest.fixture
-def lifecycle(session_factory, bus, workers) -> MediaLifecycle:
-    return MediaLifecycle(session_factory, bus, workers)
+def lifecycle(session_factory, bus, settings, workers) -> MediaLifecycle:
+    return MediaLifecycle(session_factory, bus, settings, workers)
 
 
 @dataclass
@@ -79,6 +83,7 @@ class M:
     reason: str | None = None
     job: str | None = None
     attempts: int = 0
+    error: str | None = None
 
 
 def user_skipped(kind: str = VIDEO) -> M:
@@ -118,6 +123,7 @@ def seed(factory, items: list[M], *, can_view: bool = True, **creator_kw: Any) -
                 status_reason=m.reason,
                 wanted=m.wanted,
                 attempts=m.attempts,
+                last_error=m.error,
             )
             post.media_items.append(item)
             s.flush()
@@ -131,7 +137,7 @@ def seed(factory, items: list[M], *, can_view: bool = True, **creator_kw: Any) -
                         attempt=m.attempts + 1,
                     )
                 )
-        recompute_post_status(post)
+        post.status = derive_post_status(post)
         return post.id
 
 
@@ -516,6 +522,237 @@ def test_a_scan_reapplying_preferences_cancels_queued_downloads(session_factory,
         }
 
 
+# ---- downloads -------------------------------------------------------------------------
+
+
+def start(lifecycle: MediaLifecycle, factory, post_id: int) -> Claim:
+    """Start the post's queued download, as claiming does."""
+    with session_scope(factory) as s:
+        claim = lifecycle.start_download(s, jobs(s, post_id)[-1], "w0")
+    assert claim is not None
+    return claim
+
+
+def record(lifecycle: MediaLifecycle, factory, claim: Claim, outcome: Outcome) -> None:
+    with session_scope(factory) as s:
+        lifecycle.record_outcome(s, claim, outcome)
+
+
+def queued(factory, **m: Any) -> int:
+    return seed(factory, [M(S.QUEUED, job=JobStatus.QUEUED, **m)])
+
+
+def test_starting_a_download_marks_it_running_and_announces_it_on_commit(
+    session_factory, lifecycle, bus
+):
+    post_id = queued(session_factory)
+    with session_scope(session_factory) as s:
+        job = jobs(s, post_id)[0]
+        claim = lifecycle.start_download(s, job, "w3")
+        assert claim == Claim(job.id, job.media_item_id, post_id, 1)
+        assert lifecycle.start_download(s, job, "w4") is None  # it's taken
+        assert bus.events == []  # nothing before the commit
+    with session_scope(session_factory) as s:
+        post = load(s, post_id)
+        job = jobs(s, post_id)[0]
+        assert (job.status, job.worker_id, job.stage) == (JobStatus.RUNNING, "w3", "resolving")
+        assert job.started_at is not None
+        assert post.media_items[0].status == S.DOWNLOADING
+    payload = {"id": claim.job_id, "media_item_id": claim.media_id, "post_id": post_id}
+    assert bus.events == [("job.started", payload)]
+
+
+def test_a_completed_download_archives_its_media(session_factory, lifecycle, bus):
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+    bus.events.clear()
+
+    record(lifecycle, session_factory, claim, Completed("C/P/clip.mp4", 42, "abc", True))
+
+    with session_scope(session_factory) as s:
+        post = load(s, post_id)
+        item, job = post.media_items[0], jobs(s, post_id)[0]
+        assert (item.status, item.file_path, item.file_size_bytes, item.sha256) == (
+            S.COMPLETED,
+            "C/P/clip.mp4",
+            42,
+            "abc",
+        )
+        assert item.metadata_embedded and item.completed_at is not None
+        assert (job.status, job.progress_percent, job.bytes_downloaded, job.stage) == (
+            JobStatus.COMPLETED,
+            100.0,
+            42,
+            None,
+        )
+        assert post.status == PostStatus.COMPLETED
+        entry = s.execute(select(History)).scalar_one()
+        assert entry.event_type == EventType.DOWNLOAD_COMPLETED
+        assert entry.message == "Downloaded clip.mp4 (Example Creator / A post)"
+    finished = {
+        "id": claim.job_id,
+        "media_item_id": claim.media_id,
+        "post_id": post_id,
+        "status": JobStatus.COMPLETED,
+    }
+    assert ("job.finished", finished) in bus.events
+    assert ("post.changed", {"id": post_id, "creator_id": ANY, "status": "completed"}) in bus.events
+    assert [e for e, _ in bus.events].count("history.added") == 1
+
+
+@pytest.mark.parametrize("kind", list(FailureKind))
+def test_each_kind_of_failure_leaves_its_media_where_the_table_says(
+    session_factory, lifecycle, kind
+):
+    where = {
+        FailureKind.DRM: (S.UNSUPPORTED_DRM, DRM_REASON),
+        FailureKind.UNSUPPORTED: (S.UNSUPPORTED, "boom"),
+        FailureKind.NO_ACCESS: (S.NO_ACCESS, "boom"),
+        FailureKind.AUTH: (S.FAILED, "boom"),
+        FailureKind.RETRYABLE: (S.FAILED, "boom"),
+    }.get(kind, (S.FAILED_PERMANENT, "boom"))
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+
+    record(lifecycle, session_factory, claim, Failed(kind, "boom", "some_label"))
+
+    with session_scope(session_factory) as s:
+        item, job = load(s, post_id).media_items[0], jobs(s, post_id)[0]
+        assert (item.status, item.status_reason, item.last_error) == (*where, "boom")
+        assert (job.status, job.error, job.error_class) == (JobStatus.FAILED, "boom", "some_label")
+        # Exactly the kinds a download keeps its partial files for are retried.
+        assert (item.next_retry_at is not None) == kind.retried
+        assert item.attempts == (0 if kind == FailureKind.AUTH else 1)
+
+
+def test_retries_back_off_until_the_attempt_limit(session_factory, lifecycle, settings):
+    settings.update({"downloads": {"max_attempts": 3, "retry_base_seconds": 60}})
+    post_id = queued(session_factory, attempts=1)
+    claim = start(lifecycle, session_factory, post_id)
+    before = datetime.now(UTC)
+
+    record(lifecycle, session_factory, claim, Failed(FailureKind.RETRYABLE, "HTTP 503", "server"))
+
+    with session_scope(session_factory) as s:
+        item = load(s, post_id).media_items[0]
+        assert (item.status, item.attempts) == (S.FAILED, 2)
+        # 60 s doubled for the second attempt, give or take 20%
+        assert before + timedelta(seconds=95) < item.next_retry_at < before + timedelta(seconds=145)
+        item.next_retry_at = datetime.now(UTC)  # due now
+    assert lifecycle.retry_due() == 1
+    with session_scope(session_factory) as s:
+        retry = jobs(s, post_id)[-1]
+        assert (retry.status, retry.attempt) == (JobStatus.QUEUED, 3)
+        assert load(s, post_id).media_items[0].attempts == 2  # an automatic retry keeps them
+
+    claim = start(lifecycle, session_factory, post_id)
+    record(lifecycle, session_factory, claim, Failed(FailureKind.RETRYABLE, "HTTP 503", "server"))
+
+    with session_scope(session_factory) as s:
+        item = load(s, post_id).media_items[0]
+        assert (item.status, item.status_reason, item.next_retry_at) == (
+            S.FAILED_PERMANENT,
+            "gave up after 3 attempts: HTTP 503",
+            None,
+        )
+
+
+def test_a_signed_out_provider_retries_soon_without_using_an_attempt(
+    session_factory, lifecycle, settings
+):
+    settings.update({"downloads": {"retry_base_seconds": 3600}})
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+
+    record(lifecycle, session_factory, claim, Failed(FailureKind.AUTH, "auth: expired", "auth"))
+
+    with session_scope(session_factory) as s:
+        item = load(s, post_id).media_items[0]
+        assert item.attempts == 0
+        assert item.next_retry_at <= datetime.now(UTC) + timedelta(minutes=10)
+
+
+def test_a_cancelled_download_cancels_its_media(session_factory, lifecycle):
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+
+    record(lifecycle, session_factory, claim, Cancelled())
+
+    with session_scope(session_factory) as s:
+        post = load(s, post_id)
+        item = post.media_items[0]
+        assert (item.status, item.status_reason) == (S.CANCELLED, CANCELLED_REASON)
+        assert jobs(s, post_id)[0].status == JobStatus.CANCELLED
+        assert post.status == PostStatus.SKIPPED
+        entry = s.execute(select(History)).scalar_one()
+        assert entry.event_type == EventType.DOWNLOAD_CANCELLED
+
+
+def test_media_skipped_while_downloading_stays_skipped_when_the_download_stops(
+    session_factory, lifecycle, workers
+):
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+    with session_scope(session_factory) as s:
+        lifecycle.skip_media(s, load(s, post_id).media_items[0])
+    assert workers.cancelled == [claim.job_id]
+
+    record(lifecycle, session_factory, claim, Cancelled())
+
+    with session_scope(session_factory) as s:
+        item = load(s, post_id).media_items[0]
+        assert (item.status, item.status_reason) == (S.SKIPPED, USER_SKIP_REASON)
+
+
+def test_an_outcome_for_media_that_no_longer_exists_drops_the_download(
+    session_factory, lifecycle, bus
+):
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+    with session_scope(session_factory) as s:  # the creator was deleted, say
+        s.delete(load(s, post_id).media_items[0])
+    bus.events.clear()
+
+    record(lifecycle, session_factory, claim, Completed("C/P/clip.mp4", 42, None, False))
+
+    finished = {
+        "id": claim.job_id,
+        "media_item_id": claim.media_id,
+        "post_id": post_id,
+        "status": JobStatus.CANCELLED,
+    }
+    assert bus.events == [("job.finished", finished)]
+
+
+def test_an_outcome_recorded_in_a_rolled_back_session_is_not_announced(
+    session_factory, lifecycle, bus
+):
+    post_id = queued(session_factory)
+    claim = start(lifecycle, session_factory, post_id)
+    bus.events.clear()
+
+    with pytest.raises(RuntimeError), session_scope(session_factory) as s:
+        lifecycle.record_outcome(s, claim, Completed("C/P/clip.mp4", 42, None, False))
+        raise RuntimeError("the commit never happens")
+
+    assert bus.events == []
+    with session_scope(session_factory) as s:
+        assert load(s, post_id).media_items[0].status == S.DOWNLOADING
+
+
+def test_a_restart_puts_interrupted_downloads_back_in_the_queue(session_factory, lifecycle):
+    post_id = queued(session_factory)
+    start(lifecycle, session_factory, post_id)
+
+    assert lifecycle.recover_interrupted() == 1
+
+    with session_scope(session_factory) as s:
+        job = jobs(s, post_id)[0]
+        assert (job.status, job.worker_id, job.stage) == (JobStatus.QUEUED, None, None)
+        assert job.started_at is not None  # still counts toward the hourly limit
+        assert load(s, post_id).media_items[0].status == S.QUEUED
+
+
 # ---- upgrades --------------------------------------------------------------------------
 
 
@@ -530,7 +767,7 @@ def test_reconcile_brings_old_rows_under_the_current_rules_once(session_factory,
         load(s, skipped_with_video).status = PostStatus.SKIPPED
         load(s, all_cancelled).status = PostStatus.PENDING
 
-    assert lifecycle.reconcile() == {"posts": 2, "jobs": 1}
+    assert lifecycle.reconcile() == {"posts": 2, "jobs": 1, "drm": 0}
     with session_scope(session_factory) as s:
         assert load(s, skipped_with_video).status == PostStatus.COMPLETED
         assert load(s, all_cancelled).status == PostStatus.SKIPPED
@@ -539,12 +776,32 @@ def test_reconcile_brings_old_rows_under_the_current_rules_once(session_factory,
     assert lifecycle.reconcile() is None  # once per rules version
 
 
-def test_a_failed_announcement_does_not_undo_the_change(session_factory, workers):
+def test_reconcile_moves_yt_dlp_drm_failures_to_unsupported(session_factory, lifecycle):
+    # yt-dlp's DRM errors used to fail media permanently instead of marking it unsupported.
+    message = "ERROR: [vimeo] 12: This video is DRM protected"
+    drm = seed(session_factory, [M(S.FAILED_PERMANENT, reason=message, error=message)])
+    private = seed(session_factory, [M(S.FAILED_PERMANENT, error="ERROR: Private video")])
+    in_a_word = seed(session_factory, [M(S.FAILED_PERMANENT, error="hydrma.example timed out")])
+
+    assert lifecycle.reconcile()["drm"] == 1
+
+    with session_scope(session_factory) as s:
+        post = load(s, drm)
+        assert (post.media_items[0].status, post.media_items[0].status_reason) == (
+            S.UNSUPPORTED_DRM,
+            DRM_REASON,
+        )
+        assert post.status == PostStatus.UNSUPPORTED
+        assert load(s, private).media_items[0].status == S.FAILED_PERMANENT
+        assert load(s, in_a_word).media_items[0].status == S.FAILED_PERMANENT
+
+
+def test_a_failed_announcement_does_not_undo_the_change(session_factory, settings, workers):
     class BrokenBus:
         def publish(self, event, data=None):
             raise RuntimeError("subscriber went away")
 
-    lifecycle = MediaLifecycle(session_factory, BrokenBus(), workers)
+    lifecycle = MediaLifecycle(session_factory, BrokenBus(), settings, workers)
     post_id = seed(session_factory, [M(S.QUEUED, job=JobStatus.QUEUED)])
     with session_scope(session_factory) as s:
         lifecycle.skip_media(s, load(s, post_id).media_items[0])
