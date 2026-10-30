@@ -12,7 +12,7 @@ const NAV = [
   { to: "/activity/queue", label: "Queue", icon: Download },
   { to: "/activity/history", label: "History", icon: Activity },
   { group: "Settings" },
-  { to: "/settings/patreon", label: "Settings", icon: Settings, match: "/settings" },
+  { to: "/settings", label: "Settings", icon: Settings, match: "/settings" },
   { group: "System" },
   { to: "/system/status", label: "Status", icon: Gauge },
   { to: "/system/logs", label: "Logs", icon: FileText },
@@ -27,7 +27,7 @@ export function AppShell() {
   const broken = providers.filter((p) => p.configured && ["invalid", "challenge", "error"].includes(p.auth.state));
   const anyConfigured = providers.some((p) => p.configured);
   // Where to send the user: the first provider with a problem, else the first tab.
-  const fixTab = `/settings/${(broken[0] ?? providers[0])?.name ?? "patreon"}`;
+  const fixTab = broken[0] ? `/settings/${broken[0].name}` : "/settings";
   const authBad = broken.length > 0 || (!anyConfigured && providers.length > 0);
 
   return (

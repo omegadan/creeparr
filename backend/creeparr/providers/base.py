@@ -16,7 +16,8 @@ from creeparr.core.history import record_event
 from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
-from creeparr.db.enums import EMBED_SOURCES, AuthState, EventType, MediaSource
+from creeparr.db.enums import EMBED_SOURCES, AuthState, EventType
+from creeparr.providers.description import ProviderDescription
 from creeparr.providers.errors import (
     AuthError,
     CloudflareChallengeError,
@@ -40,14 +41,8 @@ log = logging.getLogger(__name__)
 class ProviderService(ABC):
     """One per provider. Owns the HTTP client and the account's auth status."""
 
-    name: ClassVar[str] = "base"
-    label: ClassVar[str] = "Base"
-    #: Secret settings keys (group == provider name) accepted by the auth endpoints.
-    credential_fields: ClassVar[tuple[str, ...]] = ()
-    #: The container the "auto" setting means for this provider's creators' videos.
-    video_container: ClassVar[str] = "mp4"
-    #: Embeds this provider fetches with its own session, whoever posted them.
-    hosts: ClassVar[frozenset[MediaSource]] = frozenset()
+    #: Everything known about the provider without asking it (see providers/description).
+    description: ClassVar[ProviderDescription]
 
     def __init__(
         self,
@@ -61,6 +56,14 @@ class ProviderService(ABC):
         self._factory = session_factory
         self.bus = bus
         self._lock = asyncio.Lock()
+
+    @property
+    def name(self) -> str:
+        return self.description.name
+
+    @property
+    def label(self) -> str:
+        return self.description.label
 
     # ---- settings helpers ----------------------------------------------------------
 
@@ -84,11 +87,6 @@ class ProviderService(ABC):
     def written_cookie_file(self) -> Path | None:
         """The cookie file, if one is written (for yt-dlp)."""
         return self.cookie_file if self.cookie_file.exists() else None
-
-    @property
-    def sign_in_help(self) -> str:
-        """What to do when one of this provider's videos asks for a signed-in session."""
-        return f"Check the {self.label} session in Settings -> Accounts -> {self.label}"
 
     # ---- lifecycle -----------------------------------------------------------------
 
@@ -134,6 +132,11 @@ class ProviderService(ABC):
 
     @abstractmethod
     def resolve_media(self, post: PostResource) -> list[MediaSpec]: ...
+
+    def post_changed(self, stored_raw: dict[str, Any] | None, post: PostResource) -> bool:
+        """Whether the post changed in a way only this provider can tell, from its stored JSON.
+        The lifecycle checks the edit date, access, title and embed link itself."""
+        return False
 
     @abstractmethod
     def post_from_raw(self, raw_json: dict[str, Any]) -> PostResource | None:
@@ -278,9 +281,8 @@ class ProviderService(ABC):
 
     def describe(self) -> dict[str, Any]:
         return {
-            "name": self.name,
-            "label": self.label,
+            **self.description.as_json(),
             "configured": self.is_configured,
-            "credential_fields": list(self.credential_fields),
+            "credential_fields": list(self.description.credential_keys),
             "auth": self.get_auth_status(),
         }

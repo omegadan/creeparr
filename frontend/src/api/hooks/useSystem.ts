@@ -1,15 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, qs } from "../client";
-import type { AuthStatus, LogLine, SystemStatus, TaskInfo } from "../types";
+import type { LogLine, SystemStatus, TaskInfo } from "../types";
 
 export const useSystemStatus = (refetchInterval = 15_000) =>
   useQuery({ queryKey: ["system", "status"], queryFn: () => get<SystemStatus>("/system/status"), refetchInterval });
-
-export function useAuthStatus(): AuthStatus | undefined {
-  const status = useSystemStatus();
-  const live = useQuery<AuthStatus>({ queryKey: ["auth"], queryFn: async () => (await get<SystemStatus>("/system/status")).auth, staleTime: Infinity });
-  return live.data ?? status.data?.auth;
-}
 
 export const useTasks = () => useQuery({ queryKey: ["system", "tasks"], queryFn: () => get<TaskInfo[]>("/system/tasks"), refetchInterval: 10_000 });
 

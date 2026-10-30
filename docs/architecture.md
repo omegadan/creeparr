@@ -139,8 +139,24 @@ call, closed with the response, so a settings change never closes one in use. Ea
 also answers `renews_links(media)` and `drm_protected(media)`, and declares the embeds it
 `hosts` (YouTube: YouTube videos) and its `video_container` (YouTube: MKV).
 
-Adding a provider: implement `ProviderService`, register it in `services.py`, add a settings
-group, and it appears in the UI automatically (Add-creator picker, its Settings tab, badges).
+Each provider class carries a `ProviderDescription` (`providers/description.py`): its name
+(also its settings group and `creators.provider`), label, account fields with their labels and
+hints, setup text, the post types its scans store with their labels, and `video_container`,
+`hosts` and `sign_in_help`. `/providers` serves it, and the UI takes provider labels, badges,
+Settings tabs, the account form, post-type labels and download-folder rows from there. Secrets
+are marked on the settings model's fields (`SecretStr`, `SecretText`), and a provider's own
+archive root is read from `CREEPARR_<NAME>_DOWNLOAD_DIR`. A provider can add its own check
+that a post changed (`post_changed`, from the stored JSON; Patreon compares its file link).
+
+Adding a provider:
+1. Its package: a `ProviderService` subclass with its `description`.
+2. Its settings model, as a field of `AppSettings` named after it, with secrets marked.
+3. One line in `services.py`.
+
+It then shows up everywhere in the UI. Its Settings tab is the generic one (account and
+downloads per hour) until it gets a hand-made form in `SettingsPage`'s `PROVIDER_FORMS`. The
+deploy files (`docker-compose.yml`, `env.example`, `unraid/creeparr.xml`) list its download
+folder variable for Docker and Unraid users.
 
 ## Not yet implemented / ideas
 

@@ -25,7 +25,6 @@ export function useSetAuth(provider: string) {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["system"] });
       qc.invalidateQueries({ queryKey: ["providers"] });
-      qc.invalidateQueries({ queryKey: ["auth"] });
     },
   });
 }
@@ -41,7 +40,6 @@ export function useClearAuth(provider: string) {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["system"] });
       qc.invalidateQueries({ queryKey: ["providers"] });
-      qc.invalidateQueries({ queryKey: ["auth"] });
     },
   });
 }

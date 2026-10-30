@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import type { Settings } from "../../api/types";
 import { useNamingPreview } from "../../api/hooks/useSettings";
+import { useProviders } from "../../api/hooks/useCreators";
 import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
@@ -12,6 +13,7 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
   const naming = useSettingsForm(settings, "naming");
   const history = useSettingsForm(settings, "history");
   const preview = useNamingPreview();
+  const providers = useProviders().data ?? [];
   const { post_folder_template, file_template } = naming.form;
   useEffect(() => {
     const t = window.setTimeout(() => preview.mutate({ post_folder_template, file_template }), 300);
@@ -56,11 +58,11 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
         <dl className="grid grid-cols-[10rem_1fr] gap-y-1 font-mono text-xs">
           <dt className="text-fg-dim">config_dir</dt><dd>{settings.env.config_dir}</dd>
           <dt className="text-fg-dim">download_dir</dt><dd>{settings.env.download_dir}</dd>
-          <dt className="text-fg-dim">patreon_dir</dt><dd>{settings.env.patreon_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
-          <dt className="text-fg-dim">onlyfans_dir</dt><dd>{settings.env.onlyfans_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
-          <dt className="text-fg-dim">youtube_dir</dt><dd>{settings.env.youtube_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
-          <dt className="text-fg-dim">instagram_dir</dt><dd>{settings.env.instagram_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
-          <dt className="text-fg-dim">reddit_dir</dt><dd>{settings.env.reddit_download_dir ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
+          {providers.map((p) => (
+            <Fragment key={p.name}>
+              <dt className="text-fg-dim">{p.name}_dir</dt><dd>{settings.env[`${p.name}_download_dir`] ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
+            </Fragment>
+          ))}
           <dt className="text-fg-dim">port</dt><dd>{settings.env.port}</dd>
           <dt className="text-fg-dim">log_level</dt><dd>{settings.env.log_level}</dd>
           <dt className="text-fg-dim">ffmpeg</dt><dd>{settings.env.ffmpeg ?? <span className="text-danger">not found</span>}</dd>

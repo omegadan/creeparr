@@ -10,9 +10,10 @@ from creeparr.db.enums import MediaSource
 from creeparr.patreon.client import PatreonClient
 from creeparr.patreon.drm import probe_hls_drm
 from creeparr.patreon.media_resolver import resolve_media
-from creeparr.patreon.parsing import IncludedIndex, post_from_resource
+from creeparr.patreon.parsing import IncludedIndex, file_link_changed, post_from_resource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import CookieSet
+from creeparr.providers.description import COOKIES_TXT, CredentialField, ProviderDescription
 from creeparr.providers.errors import ForbiddenError, NotConfigured, TransportUnavailable
 from creeparr.providers.http import RateLimiter, build_transport
 from creeparr.providers.media import MediaRef, MediaSession
@@ -28,10 +29,36 @@ from creeparr.providers.models import (
 log = logging.getLogger(__name__)
 
 
+DESCRIPTION = ProviderDescription(
+    name="patreon",
+    label="Patreon",
+    intro="Reads posts your Patreon account already has access to. Locked posts stay locked.",
+    credentials=(
+        CredentialField(
+            "session_id",
+            "session_id cookie",
+            "patreon.com → DevTools → Application → Cookies → session_id",
+        ),
+        COOKIES_TXT,
+    ),
+    # Patreon's own post types, as its API names them.
+    post_types={
+        "video_external_file": "Video",
+        "video_embed": "Embed",
+        "image_file": "Images",
+        "audio_file": "Audio",
+        "podcast": "Podcast",
+        "text_only": "Text",
+        "text": "Text",
+        "poll": "Poll",
+        "link": "Link",
+        "livestream_youtube": "Livestream",
+    },
+)
+
+
 class PatreonProvider(ProviderService):
-    name: ClassVar[str] = "patreon"
-    label: ClassVar[str] = "Patreon"
-    credential_fields: ClassVar[tuple[str, ...]] = ("session_id", "cookies_txt")
+    description: ClassVar[ProviderDescription] = DESCRIPTION
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -129,6 +156,9 @@ class PatreonProvider(ProviderService):
         if not isinstance(data, dict):
             return None
         return post_from_resource(data, IncludedIndex({"included": raw_json.get("included") or []}))
+
+    def post_changed(self, stored_raw: dict[str, Any] | None, post: PostResource) -> bool:
+        return file_link_changed(stored_raw, post)
 
     def media_session(self) -> MediaSession:
         s = self.settings.get().patreon

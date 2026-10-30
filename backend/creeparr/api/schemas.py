@@ -129,9 +129,21 @@ class ImportSubscriptionsRequest(BaseModel):
     defaults: CreatorDefaults = Field(default_factory=CreatorDefaults)
 
 
+class CredentialFieldOut(BaseModel):
+    key: str
+    label: str
+    hint: str
+    optional: bool
+    multiline: bool
+
+
 class ProviderOut(BaseModel):
     name: str
     label: str
+    intro: str
+    credentials: list[CredentialFieldOut]
+    post_types: dict[str, str]
+    download_dir_variable: str
     configured: bool
     credential_fields: list[str]
     auth: dict[str, Any]

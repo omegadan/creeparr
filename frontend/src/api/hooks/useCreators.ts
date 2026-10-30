@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, patch, post, qs } from "../client";
 import type { CreatorDefaults, CreatorPreview, Creator, ProviderInfo, ScanRun, Subscription } from "../types";
+import { postTypeLabels } from "../../lib/providers";
 
 export const useCreators = () => useQuery({ queryKey: ["creators"], queryFn: () => get<Creator[]>("/creators") });
 export const useCreator = (id: number) =>
@@ -9,6 +11,12 @@ export const useScanRuns = (id: number) =>
   useQuery({ queryKey: ["scans", id], queryFn: () => get<ScanRun[]>(`/creators/${id}/scans?limit=10`), enabled: Number.isFinite(id) });
 export const useProviders = () =>
   useQuery({ queryKey: ["providers"], queryFn: () => get<ProviderInfo[]>("/providers") });
+
+/** Every provider's post types with their labels. */
+export function usePostTypeLabels(): Record<string, string> {
+  const providers = useProviders();
+  return useMemo(() => postTypeLabels(providers.data ?? []), [providers.data]);
+}
 
 export const useSubscriptions = (provider: string, enabled: boolean) =>
   useQuery({

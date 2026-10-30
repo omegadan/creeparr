@@ -288,3 +288,20 @@ MUX_VARIANT_WIDEVINE = """#EXTM3U
 seg0.m4s
 #EXT-X-ENDLIST
 """
+
+
+class PatreonPosts:
+    """Patreon's side of syncing a post, without a PatreonProvider (a PostSource)."""
+
+    def resolve_media(self, post):  # noqa: ANN001, ANN201
+        from creeparr.patreon.media_resolver import resolve_media
+
+        return resolve_media(post)
+
+    def post_changed(self, stored_raw, post):  # noqa: ANN001, ANN201
+        from creeparr.patreon.parsing import file_link_changed
+
+        return file_link_changed(stored_raw, post)
+
+
+POSTS = PatreonPosts()

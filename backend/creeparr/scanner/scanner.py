@@ -12,7 +12,7 @@ from sqlalchemy import select
 
 from creeparr.core.events import EventBus
 from creeparr.core.history import record_event
-from creeparr.core.lifecycle import MediaLifecycle, MediaResolver
+from creeparr.core.lifecycle import MediaLifecycle, PostSource
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import EventType, ScanMode, ScanStatus
@@ -90,7 +90,7 @@ class Scanner:
         run_id: int,
         posts: list[PostResource],
         overlap: int,
-        resolver: MediaResolver,
+        source: PostSource,
     ) -> PageStats:
         stats = PageStats()
         with session_scope(self._factory) as s:
@@ -99,7 +99,7 @@ class Scanner:
                 raise ScanCancelled("creator deleted during scan")
             run = s.get(ScanRun, run_id)
             for pr in posts:
-                result = self.lifecycle.sync_post(s, creator, pr, resolver)
+                result = self.lifecycle.sync_post(s, creator, pr, source)
                 stats.seen += 1
                 stats.queued += result.queued
                 if result.is_new:
@@ -222,7 +222,7 @@ class Scanner:
                         run_id,
                         page.posts,
                         overlap,
-                        provider.resolve_media,
+                        provider,
                     )
                     self.bus.publish(
                         "scan.progress",

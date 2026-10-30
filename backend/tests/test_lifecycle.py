@@ -28,7 +28,6 @@ from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import EventType, JobStatus, MediaKind, MediaStatus, PostStatus
 from creeparr.db.models import Creator, DownloadJob, History, MediaItem, Post
-from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from tests import patreon_fixtures as fx
 
@@ -489,19 +488,19 @@ def test_a_rescan_marks_links_fresh_only_when_it_resyncs_the_media(session_facto
     edited = resource(fx.native_video_post("p1", edited_at="2026-04-01T00:00:00.000+00:00"))
     with session_scope(session_factory) as s:
         creator = new_creator(s)
-        post = lifecycle.sync_post(s, creator, listing, resolve_media).post
+        post = lifecycle.sync_post(s, creator, listing, fx.POSTS).post
         assert post.urls_fetched_at is not None
         post.media_items[0].status = S.COMPLETED
         post.urls_fetched_at = LONG_AGO
         # Unchanged, with nothing waiting: the media rows keep their old links.
-        assert not lifecycle.sync_post(s, creator, listing, resolve_media).changed
+        assert not lifecycle.sync_post(s, creator, listing, fx.POSTS).changed
         assert post.urls_fetched_at == LONG_AGO
         # Edited: the media are re-synced from the new data, so the links are fresh.
-        lifecycle.sync_post(s, creator, edited, resolve_media)
+        lifecycle.sync_post(s, creator, edited, fx.POSTS)
         assert post.urls_fetched_at > LONG_AGO
         # The Refresh button and a download renewing its links always re-sync.
         post.urls_fetched_at = LONG_AGO
-        lifecycle.sync_post(s, creator, edited, resolve_media, refresh=True)
+        lifecycle.sync_post(s, creator, edited, fx.POSTS, refresh=True)
         assert post.urls_fetched_at > LONG_AGO
 
 
@@ -510,12 +509,12 @@ def test_a_rescan_renews_the_links_of_media_queued_or_failed(session_factory, li
     listing = resource(fx.native_video_post("p1"))
     with session_scope(session_factory) as s:
         creator = new_creator(s)
-        post = lifecycle.sync_post(s, creator, listing, resolve_media).post
+        post = lifecycle.sync_post(s, creator, listing, fx.POSTS).post
         post.media_items[0].status = status
         post.media_items[0].source_url = "https://expired.example/v.mp4"
         post.urls_fetched_at = LONG_AGO
         # The post didn't change, so an incremental scan still counts it as known.
-        assert not lifecycle.sync_post(s, creator, listing, resolve_media).changed
+        assert not lifecycle.sync_post(s, creator, listing, fx.POSTS).changed
         assert post.urls_fetched_at > LONG_AGO
         assert post.media_items[0].source_url != "https://expired.example/v.mp4"
 
@@ -525,12 +524,12 @@ def test_a_scan_reapplying_preferences_cancels_queued_downloads(session_factory,
     with session_scope(session_factory) as s:
         creator = new_creator(s, include_images=True)
         post = lifecycle.sync_post(
-            s, creator, resource(fx.image_post("p1", ["m1"]), media), resolve_media
+            s, creator, resource(fx.image_post("p1", ["m1"]), media), fx.POSTS
         ).post
         assert jobs(s, post.id) and {j.status for j in jobs(s, post.id)} == {JobStatus.QUEUED}
         creator.include_images = False
         edited = fx.image_post("p1", ["m1"], edited_at="2026-04-01T00:00:00.000+00:00")
-        lifecycle.sync_post(s, creator, resource(edited, media), resolve_media)
+        lifecycle.sync_post(s, creator, resource(edited, media), fx.POSTS)
         assert {j.status for j in jobs(s, post.id)} == {JobStatus.CANCELLED}
         assert {(m.status, m.status_reason) for m in post.media_items} == {
             (S.SKIPPED, KIND_DISABLED_REASON)
@@ -852,3 +851,26 @@ def test_a_failed_announcement_does_not_undo_the_change(session_factory, setting
         lifecycle.skip_media(s, load(s, post_id).media_items[0])
     with session_scope(session_factory) as s:
         assert load(s, post_id).media_items[0].status == S.SKIPPED
+
+
+def test_a_new_link_for_a_patreon_posts_own_file_counts_as_a_change(session_factory, lifecycle):
+    listing = fx.native_video_post("p1")
+    moved = fx.native_video_post("p1")
+    moved["attributes"]["post_file"] = {**moved["attributes"]["post_file"], "url": "https://x/new"}
+    with session_scope(session_factory) as s:
+        creator = new_creator(s)
+        post = lifecycle.sync_post(s, creator, resource(listing), fx.POSTS).post
+        post.media_items[0].status = S.COMPLETED  # nothing waiting, so only a change re-syncs
+        assert not lifecycle.sync_post(s, creator, resource(listing), fx.POSTS).changed
+        assert lifecycle.sync_post(s, creator, resource(moved), fx.POSTS).changed
+
+
+def test_patreon_tells_a_new_link_for_its_posts_own_file(env, settings, session_factory, bus):
+    from creeparr.providers.patreon import PatreonProvider
+
+    provider = PatreonProvider(env, settings, session_factory, bus)
+    stored = fx.native_video_post("p1")
+    moved = fx.native_video_post("p1")
+    moved["attributes"]["post_file"] = {**moved["attributes"]["post_file"], "url": "https://x/new"}
+    assert not provider.post_changed({"data": stored}, resource(stored))
+    assert provider.post_changed({"data": stored}, resource(moved))

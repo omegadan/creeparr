@@ -106,10 +106,10 @@ class Embedder:
             if media is None or media.post is None:
                 return None
             post, creator = media.post, media.post.creator
-            name = creator.name if creator else ""
+            name = creator.name
             description = html_to_text(post.content_html or post.teaser_text)
             return _Tags(
-                provider=creator.provider if creator else "patreon",
+                provider=creator.provider,
                 metadata={
                     "title": post.title or "",
                     "artist": name,

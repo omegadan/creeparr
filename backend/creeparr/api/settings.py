@@ -31,7 +31,7 @@ async def _apply_side_effects(services: Services, groups: set[str]) -> None:
 def get_settings(services: Services = Depends(get_services)) -> dict[str, Any]:
     data = services.settings.masked()
     data["env"] = {
-        **services.env.describe_paths(),
+        **services.env.describe_paths(p.name for p in services.providers),
         "port": services.env.port,
         "log_level": services.env.log_level,
         "ffmpeg": services.env.resolve_ffmpeg(),
@@ -57,7 +57,7 @@ def _credentials(provider, body: AuthBody | None) -> dict[str, str]:  # noqa: AN
     if body is None:
         return {}
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
-    unknown = set(fields) - set(provider.credential_fields)
+    unknown = set(fields) - set(provider.description.credential_keys)
     if unknown:
         raise ValidationFailed(
             f"unknown credential field(s) for {provider.label}: {sorted(unknown)}"
@@ -90,7 +90,7 @@ async def test_auth(
 async def clear_auth(provider_name: str, services: Services = Depends(get_services)):
     provider = services.providers.get(provider_name)
     services.settings.update(
-        {provider.name: dict.fromkeys(provider.credential_fields, "")}, allow_secrets=True
+        {provider.name: dict.fromkeys(provider.description.credential_keys, "")}, allow_secrets=True
     )
     await provider.rebuild()
     await provider.check_session()
