@@ -2,6 +2,7 @@ import { Fragment, useEffect } from "react";
 import type { Settings } from "../../api/types";
 import { useNamingPreview } from "../../api/hooks/useSettings";
 import { useProviders } from "../../api/hooks/useCreators";
+import { providerDir } from "../../lib/providers";
 import { Section, Field } from "../ui/Misc";
 import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
@@ -60,7 +61,7 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
           <dt className="text-fg-dim">download_dir</dt><dd>{settings.env.download_dir}</dd>
           {providers.map((p) => (
             <Fragment key={p.name}>
-              <dt className="text-fg-dim">{p.name}_dir</dt><dd>{settings.env[`${p.name}_download_dir`] ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
+              <dt className="text-fg-dim">{p.name}_dir</dt><dd>{providerDir(settings.env, p.name) ?? <span className="text-fg-dim">(same as download_dir)</span>}</dd>
             </Fragment>
           ))}
           <dt className="text-fg-dim">port</dt><dd>{settings.env.port}</dd>

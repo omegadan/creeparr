@@ -5,6 +5,7 @@ import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Misc";
 import { Badge } from "../components/ui/Badge";
 import { formatBytes, formatDate, formatDuration, timeAgo } from "../lib/format";
+import { providerDir } from "../lib/providers";
 import { useToast } from "../components/ui/Toast";
 
 function Stat({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
@@ -40,7 +41,7 @@ export function SystemStatusPage() {
         <Stat label="Next scan" value={s.next_scan_at ? timeAgo(s.next_scan_at).replace("in ", "in ") : "disabled"} sub={s.scan.running ? `scanning creator #${s.scan.running.creator_id}` : `${s.scan.pending.length} pending`} />
         <Stat label="yt-dlp" value={s.ytdlp_version} sub={s.ffmpeg ? `ffmpeg: ${s.ffmpeg}` : "ffmpeg NOT FOUND"} />
         <Stat label="HTTP backend" value={s.http_backend} sub={s.curl_cffi_available ? "curl_cffi available" : "curl_cffi not installed"} />
-        <Stat label="Paths" value={<span className="font-mono text-sm">{s.paths.download_dir}</span>} sub={[`config: ${s.paths.config_dir}`, ...s.providers.flatMap((p) => { const dir = s.paths[`${p.name}_download_dir`]; return dir ? [`${p.name}: ${dir}`] : []; })].join(" · ")} />
+        <Stat label="Paths" value={<span className="font-mono text-sm">{s.paths.download_dir}</span>} sub={[`config: ${s.paths.config_dir}`, ...s.providers.flatMap((p) => { const dir = providerDir(s.paths, p.name); return dir ? [`${p.name}: ${dir}`] : []; })].join(" · ")} />
       </div>
       <h2 className="mb-2 text-sm font-semibold text-fg-muted">Scheduled tasks</h2>
       <div className="card overflow-x-auto">

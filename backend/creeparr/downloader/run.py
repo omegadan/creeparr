@@ -30,7 +30,7 @@ from creeparr.core.downloads import (
 from creeparr.core.lifecycle import MediaLifecycle
 from creeparr.core.settings_service import AppSettings, SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
-from creeparr.db.enums import EMBED_SOURCES, MediaKind, MediaSource, MediaStatus
+from creeparr.db.enums import EMBED_SOURCES, JobStage, MediaKind, MediaSource, MediaStatus
 from creeparr.db.models import Creator, MediaItem, Post
 from creeparr.downloader.embed import Embedder
 from creeparr.downloader.fs import set_times, sha256_file, try_hardlink
@@ -155,7 +155,7 @@ class DownloadRun:
             fetched = await handler.fetch(media, plan, place, progress)
             path = fetched.path
             if not fetched.placed:
-                progress.set_stage("verifying")
+                progress.set_stage(JobStage.VERIFYING)
                 path = await asyncio.to_thread(place.file, fetched.path, fetched.learned)
         except DownloadCancelled:
             place.remove_scratch()

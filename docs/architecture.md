@@ -64,7 +64,25 @@ FastAPI (uvicorn)
    publishes `post.changed` for each post it changed, `queue.changed` when jobs changed,
    `job.started` and `job.finished` (with the post's id) and the history entries it wrote,
    only after the transaction commits (nothing if it rolls back), and wakes the workers
-   then.
+   then. Each event is a model in `core/server_events.py` (see the wire contract below).
+
+## Wire contract
+
+Every JSON response and every server-sent event is declared once, as a pydantic model:
+responses in `api/schemas.py` (each route names its `response_model`), events in
+`core/server_events.py` (`EventBus.publish` takes one). `api/contract.py` adds the events to
+the OpenAPI description and generates `frontend/src/api/schema.ts` from it; `types.ts` only
+names those types for the UI, and `events.ts` types each handler by its event.
+
+- After changing a response or an event, run `make api-types`. A backend test fails while
+  `schema.ts` is stale, and another fails on a JSON route with no declared response.
+- Statuses go over the wire as their enums (`db/enums.py`, `ClaimState`), so the UI's unions
+  are generated. The UI still renders a value it doesn't know: a tab opened before an
+  upgrade can meet one.
+- Which actions a post or media item offers comes from the lifecycle (`item_actions`,
+  `post_actions`), sent as `actions`; the UI shows a button per action.
+- The `hello` event carries the server's version. A tab that reconnects to a different
+  version (the container restarted on a new image) offers to reload.
 
 ## Status model
 
@@ -151,7 +169,8 @@ that a post changed (`post_changed`, from the stored JSON; Patreon compares its 
 Adding a provider:
 1. Its package: a `ProviderService` subclass with its `description`.
 2. Its settings model, as a field of `AppSettings` named after it, with secrets marked.
-3. One line in `services.py`.
+3. One line in `providers/catalog.py`, then `make api-types` (the settings and paths
+   responses list each provider).
 
 It then shows up everywhere in the UI. Its Settings tab is the generic one (account and
 downloads per hour) until it gets a hand-made form in `SettingsPage`'s `PROVIDER_FORMS`. The

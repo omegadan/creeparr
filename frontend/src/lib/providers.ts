@@ -24,3 +24,9 @@ export function providerLabel(providers: readonly Described[], name: string): st
 export function settingsForm<F>(name: string, forms: Readonly<Record<string, F>>, generic: F): F {
   return Object.hasOwn(forms, name) ? forms[name] : generic;
 }
+
+/** A provider's own archive root, from paths that list one per provider; null when it uses
+ * the default root. */
+export function providerDir(paths: { config_dir: string; download_dir: string }, name: string): string | null {
+  return (paths as unknown as Record<string, string | null | undefined>)[`${name}_download_dir`] ?? null;
+}

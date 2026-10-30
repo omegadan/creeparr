@@ -1,4 +1,4 @@
-.PHONY: dev backend frontend test lint build docker migration
+.PHONY: dev backend frontend test lint build docker migration api-types
 
 # Run backend + frontend dev servers (two terminals recommended; this uses & for convenience)
 dev:
@@ -29,3 +29,7 @@ docker:
 # usage: make migration m="add foo column"
 migration:
 	cd backend && CREEPARR_CONFIG_DIR=../config uv run alembic revision --autogenerate -m "$(m)"
+
+# Regenerate the UI's API types after changing a response or event model.
+api-types:
+	cd backend && uv run python -m creeparr.api.contract

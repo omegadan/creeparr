@@ -88,10 +88,10 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
                   </td>
                   <td className="text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-0.5">
-                      <IconButton title="Download / re-queue" onClick={() => download.mutate({ id: p.id, body: { force: p.status === "completed" } }, { onError: (e) => error(e), onSuccess: () => toast("Queued", "success") })}>
+                      <IconButton title="Download / re-queue" onClick={() => download.mutate({ id: p.id, body: { force: p.actions.includes("force_download") } }, { onError: (e) => error(e), onSuccess: () => toast("Queued", "success") })}>
                         <Download className="h-4 w-4" />
                       </IconButton>
-                      {p.status === "skipped" ? (
+                      {p.actions.includes("unskip") ? (
                         <IconButton title="Unskip" onClick={() => unskip.mutate({ id: p.id }, { onError: (e) => error(e) })}><Undo2 className="h-4 w-4" /></IconButton>
                       ) : (
                         <IconButton title="Skip this post" onClick={() => skip.mutate({ id: p.id }, { onError: (e) => error(e) })}><SkipForward className="h-4 w-4" /></IconButton>

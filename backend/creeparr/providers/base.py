@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 from creeparr.config import EnvConfig
 from creeparr.core.events import EventBus
 from creeparr.core.history import record_event
+from creeparr.core.server_events import AuthStatusEvent
 from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
@@ -230,7 +231,7 @@ class ProviderService(ABC):
                         level="error",
                         data={"provider": self.name},
                     )
-        self.bus.publish("auth.status", status)
+        self.bus.publish(AuthStatusEvent(**status))
         return status
 
     def mark_auth_invalid(self, exc: ProviderError) -> None:

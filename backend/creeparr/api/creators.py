@@ -23,11 +23,14 @@ from creeparr.api.schemas import (
     LookupRequest,
     ProviderOut,
     ScanRequestBody,
+    ScanRequestedOut,
     ScanRunOut,
+    ScansQueuedOut,
     SubscriptionOut,
 )
 from creeparr.core.errors import Conflict, NotFound, UpstreamError, ValidationFailed
 from creeparr.core.history import record_event
+from creeparr.core.server_events import CreatorChangedEvent
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import EventType, JobStatus, MediaStatus, PostStatus, ScanMode
 from creeparr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
@@ -175,7 +178,7 @@ def _create_creator(
             creator_id=creator.id,
         )
         cid = creator.id
-    services.bus.publish("creator.changed", {"id": cid})
+    services.bus.publish(CreatorChangedEvent(id=cid))
     return cid
 
 
@@ -352,7 +355,7 @@ def patch_creator(
     if prefs_changed:
         services.lifecycle.apply_creator_prefs(db, creator)
     db.flush()
-    services.bus.publish("creator.changed", {"id": creator.id})
+    services.bus.publish(CreatorChangedEvent(id=creator.id))
     stats = creator_stats(db, [creator.id])[creator.id]
     return to_out(creator, stats, services.scan_manager.is_busy(creator.id))
 
@@ -403,10 +406,10 @@ def delete_creator(
                     parent.rmdir()
             except OSError:
                 pass
-    services.bus.publish("creator.changed", {"id": creator_id, "deleted": True})
+    services.bus.publish(CreatorChangedEvent(id=creator_id, deleted=True))
 
 
-@router.post("/creators/{creator_id}/scan", status_code=202)
+@router.post("/creators/{creator_id}/scan", status_code=202, response_model=ScanRequestedOut)
 def scan_creator(
     creator_id: int,
     body: ScanRequestBody | None = None,
@@ -423,7 +426,7 @@ def scan_creator(
     return {"queued": queued, "status": services.scan_manager.status()}
 
 
-@router.post("/creators/scan-all", status_code=202)
+@router.post("/creators/scan-all", status_code=202, response_model=ScansQueuedOut)
 def scan_all(services: Services = Depends(get_services)):
     n = services.scan_manager.request_scan_all(ScanMode.AUTO, trigger="manual")
     return {"queued": n}
@@ -474,5 +477,5 @@ async def refresh_metadata(creator_id: int, services: Services = Depends(get_ser
             c.raw_json = info.raw
 
     await asyncio.to_thread(_apply)
-    services.bus.publish("creator.changed", {"id": creator_id})
+    services.bus.publish(CreatorChangedEvent(id=creator_id))
     return await asyncio.to_thread(_get_out, services, creator_id)
