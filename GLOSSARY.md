@@ -22,6 +22,23 @@ _Avoid_: asset, file (the file is what a download produces)
 **Scan**:
 Reading a creator's posts from its provider to record new and changed posts and their media.
 
+**Library**:
+The folders and files Creeparr archives media into.
+
+## Downloads
+
+**Download**:
+One try at archiving a media item's file. It waits in the queue, runs, and ends completed, failed or cancelled.
+_Avoid_: job, task
+
+**Hourly limit**:
+The most downloads that may start from one provider in any hour.
+_Avoid_: rate limit, cap
+
+**Pacing**:
+Spreading a provider's download starts at random intervals across the hour, under its hourly limit.
+_Avoid_: spacing out, throttling
+
 ## Media lifecycle
 
 **Media lifecycle**:
@@ -60,6 +77,12 @@ Media that was archived but whose file is no longer on disk.
 **Failed**:
 The media that need attention: failed and waiting to retry, failed permanently, or missing.
 _Avoid_: errored, broken
+
+**Unsupported**:
+Media Creeparr can't archive: DRM-protected, or from a site or in a format it doesn't support.
+
+**No access**:
+Media of a post the signed-in account can't view, such as a higher tier's post.
 
 **Post status**:
 A summary derived from the statuses of a post's wanted media; never set directly.

@@ -7,10 +7,13 @@ FastAPI (uvicorn)
 ├── /api/v1/*         REST + SSE (/api/v1/events)
 ├── /                 built React SPA (backend/creeparr/static)
 ├── ScanManager       one worker; walks posts via each provider, hands each to MediaLifecycle
-├── DownloadManager   N asyncio workers; claims jobs, runs handlers, retries with back-off
-├── MediaLifecycle    status changes from user actions and post syncs; derives post status
+├── DownloadManager   N asyncio workers: Claims picks the next download, DownloadRun runs it,
+│                     MediaLifecycle records how it ended
+├── MediaLifecycle    every media status change: user actions, post syncs, download
+│                     outcomes, file checks; derives post status
+├── Library           upkeep of the archived files: verify, restamp, embed backlog
 ├── APScheduler       scan_monitored / full_rescan / requeue_failed / session_check /
-│                     prune / verify_files / embed_backlog
+│                     prune / verify_files / embed_backlog / restamp_files
 └── SQLite (WAL)      creators, posts, media_items, download_jobs, scan_runs, history, settings
 ```
 
@@ -25,18 +28,31 @@ FastAPI (uvicorn)
    the creator's preferences; queue wanted media if the creator auto-downloads; derive the
    post status. Incremental scans stop after `scan.overlap_posts` consecutive already-known,
    unchanged posts.
-3. **Download** (`downloader/manager.py`): a worker atomically claims a `queued` job. If the
-   post's signed URLs are stale (too old, or marked stale by a user retry) or the job is a
-   retry attempt, it renews them first (`sync_post` with `refresh=True`). It then writes
-   sidecars, probes HLS playlists for DRM, and hands
-   off to `handlers/direct.py` (httpx streaming with `.part` resume) or `handlers/ytdlp.py`
-   (yt-dlp as a library for Mux HLS, YouTube, Vimeo and Reddit video). Results are moved
-   atomically into the final path rendered from the naming templates. The claim query
-   applies every skip rule (disabled or throttled provider, creator at its cap) itself, so
-   the queue can be any length without jobs starving behind ones that can't start.
+3. **Download** (`downloader/`): a worker (`manager.py`) asks `Claims` (`claims.py`) for the
+   next download. The claim query applies every skip rule itself (disabled or throttled
+   provider, pacing, creator at its cap), so the queue can be any length without jobs
+   starving behind ones that can't start, and `MediaLifecycle.start_download` marks the
+   winner running. `DownloadRun` (`run.py`) turns the claim into an outcome without
+   touching any status:
+   - If the post's signed URLs are stale (too old, or marked stale by a user retry) or the
+     job is a retry attempt, it renews them first (`sync_post` with `refresh=True`).
+   - It writes sidecars, checks for DRM (the provider's flag, or a probe of the HLS
+     playlist), and hands off to a handler at the seam in `handlers/base.py`:
+     `handlers/direct.py` (httpx streaming, resuming a `.part` file at the final name) or
+     `handlers/ytdlp.py` (yt-dlp as a library for Mux HLS, YouTube, Vimeo and Reddit video).
+     yt-dlp works in a scratch folder, because an undated post (YouTube's back catalogue)
+     learns its date, and so its folder, from the download.
+   - Files land at names rendered from the naming templates (`paths.py`), reserved against
+     the other running downloads (`placement.py`). Videos get their post's metadata and
+     cover embedded (`embed.py`, shared with the embed backlog), then dedupe, the NFO and
+     the post's date on the file follow.
+
+   The worker hands the outcome to `MediaLifecycle.record_outcome`, whose failure table
+   decides the media's status and its retries (see the status model below).
 4. **Events**: every state change publishes on an in-process `EventBus`; the SSE endpoint
    streams them and the UI invalidates TanStack Query caches accordingly. `MediaLifecycle`
-   publishes `post.changed` for each post it changed and `queue.changed` when jobs changed,
+   publishes `post.changed` for each post it changed, `queue.changed` when jobs changed,
+   `job.started` and `job.finished` (with the post's id) and the history entries it wrote,
    only after the transaction commits (nothing if it rolls back), and wakes the workers
    then.
 
@@ -65,8 +81,21 @@ item-level actions (retry, skip, unskip one item, and the failed list's retry al
 override them. Flipping a flag re-applies it to existing media, queues newly wanted items, and
 cancels the queued downloads of items no longer wanted (a running download finishes).
 
+A download ends completed, failed or cancelled. A failure's kind alone decides what
+happens to its media: DRM → `unsupported_drm`; unsupported → `unsupported`; no access →
+`no_access`; a file or post that's gone, missing YouTube cookies or an unavailable video →
+`failed_permanent`; anything else → `failed`, retried with exponential back-off until
+`downloads.max_attempts`. A signed-out provider doesn't use up an attempt and is retried
+within 10 minutes. A cancelled download cancels its media, unless the user skipped it while
+it ran.
+
 A user retry or re-download starts over: `attempts` goes back to 0 and the post's links are
-marked stale so the download renews them first. Skipping never touches an archived item.
+marked stale so the download renews them first. Automatic retries keep counting. Skipping
+never touches an archived item.
+
+The library's `verify_files` task marks archived media whose file has vanished as
+`missing` (queuing it again with `downloads.requeue_missing`) and restores it when the file
+comes back, through the lifecycle like every other status change.
 
 When these rules change, `RULES_VERSION` goes up and `MediaLifecycle.reconcile` re-derives
 the stored rows once, at the next startup.

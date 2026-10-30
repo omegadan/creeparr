@@ -6,11 +6,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-from creeparr.downloader.handlers.base import (
-    PermanentDownloadError,
-    ProgressReporter,
-    RetryableDownloadError,
-)
+from creeparr.core.downloads import FailureKind
+from creeparr.downloader.handlers.base import DownloadFailed, ProgressReporter
 from creeparr.downloader.handlers.direct import download_direct
 
 URL = "https://c10.patreonusercontent.com/video.mp4?token=x"
@@ -75,26 +72,26 @@ async def test_truncated_is_retryable(client, respx_mock, tmp_path: Path):
         return_value=httpx.Response(200, content=b"abc", headers={"content-length": "10"})
     )
     rep, _ = reporter()
-    with pytest.raises(RetryableDownloadError) as ei:
+    with pytest.raises(DownloadFailed) as ei:
         await download_direct(client, URL, tmp_path / "v.bin", rep)
-    assert ei.value.error_class == "truncated"
+    assert (ei.value.kind, ei.value.label) == (FailureKind.RETRYABLE, "truncated")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "status,exc,klass",
+    "status,kind,label",
     [
-        (403, RetryableDownloadError, "expired_url"),
-        (404, PermanentDownloadError, "not_found"),
-        (503, RetryableDownloadError, "server"),
+        (403, FailureKind.RETRYABLE, "expired_url"),
+        (404, FailureKind.FILE_GONE, "not_found"),
+        (503, FailureKind.RETRYABLE, "server"),
     ],
 )
-async def test_status_classification(client, respx_mock, tmp_path: Path, status, exc, klass):
+async def test_status_classification(client, respx_mock, tmp_path: Path, status, kind, label):
     respx_mock.get(URL).mock(return_value=httpx.Response(status, content=b""))
     rep, _ = reporter()
-    with pytest.raises(exc) as ei:
+    with pytest.raises(DownloadFailed) as ei:
         await download_direct(client, URL, tmp_path / "v.bin", rep)
-    assert ei.value.error_class == klass
+    assert (ei.value.kind, ei.value.label) == (kind, label)
 
 
 @pytest.mark.asyncio
@@ -200,7 +197,7 @@ async def test_416_with_a_mismatched_size_restarts(client, respx_mock, tmp_path:
         return_value=httpx.Response(416, headers={"content-range": "bytes */2000"})
     )
     rep, _ = reporter()
-    with pytest.raises(RetryableDownloadError):
+    with pytest.raises(DownloadFailed):
         await download_direct(client, URL, tmp_path / "v.mp4", rep)
     assert not part.exists() and not (tmp_path / "v.mp4").exists()
 
@@ -227,6 +224,6 @@ async def test_206_from_the_wrong_offset_restarts(client, respx_mock, tmp_path: 
         )
     )
     rep, _ = reporter()
-    with pytest.raises(RetryableDownloadError):
+    with pytest.raises(DownloadFailed):
         await download_direct(client, URL, tmp_path / "v.mp4", rep)
     assert not part.exists()

@@ -52,8 +52,8 @@ def bus() -> EventBus:
 
 
 @pytest.fixture
-def lifecycle(session_factory, bus) -> MediaLifecycle:
-    return MediaLifecycle(session_factory, bus)
+def lifecycle(session_factory, bus, settings) -> MediaLifecycle:
+    return MediaLifecycle(session_factory, bus, settings)
 
 
 @pytest.fixture
