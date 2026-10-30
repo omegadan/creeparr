@@ -7,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import ANY
+from unittest.mock import ANY, patch
 
 import pytest
 from sqlalchemy import select
@@ -24,7 +24,7 @@ from creeparr.core.lifecycle import (
     MediaLifecycle,
     derive_post_status,
 )
-from creeparr.core.state import get_state
+from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import EventType, JobStatus, MediaKind, MediaStatus, PostStatus
 from creeparr.db.models import Creator, DownloadJob, History, MediaItem, Post
@@ -491,9 +491,9 @@ def test_a_rescan_marks_links_fresh_only_when_it_resyncs_the_media(session_facto
         creator = new_creator(s)
         post = lifecycle.sync_post(s, creator, listing, resolve_media).post
         assert post.urls_fetched_at is not None
+        post.media_items[0].status = S.COMPLETED
         post.urls_fetched_at = LONG_AGO
-        # Unchanged: the media rows keep their old links, so the links stay stale and the
-        # download renews them instead of trying an expired one.
+        # Unchanged, with nothing waiting: the media rows keep their old links.
         assert not lifecycle.sync_post(s, creator, listing, resolve_media).changed
         assert post.urls_fetched_at == LONG_AGO
         # Edited: the media are re-synced from the new data, so the links are fresh.
@@ -503,6 +503,21 @@ def test_a_rescan_marks_links_fresh_only_when_it_resyncs_the_media(session_facto
         post.urls_fetched_at = LONG_AGO
         lifecycle.sync_post(s, creator, edited, resolve_media, refresh=True)
         assert post.urls_fetched_at > LONG_AGO
+
+
+@pytest.mark.parametrize("status", [S.QUEUED, S.FAILED, S.FAILED_PERMANENT, S.MISSING])
+def test_a_rescan_renews_the_links_of_media_queued_or_failed(session_factory, lifecycle, status):
+    listing = resource(fx.native_video_post("p1"))
+    with session_scope(session_factory) as s:
+        creator = new_creator(s)
+        post = lifecycle.sync_post(s, creator, listing, resolve_media).post
+        post.media_items[0].status = status
+        post.media_items[0].source_url = "https://expired.example/v.mp4"
+        post.urls_fetched_at = LONG_AGO
+        # The post didn't change, so an incremental scan still counts it as known.
+        assert not lifecycle.sync_post(s, creator, listing, resolve_media).changed
+        assert post.urls_fetched_at > LONG_AGO
+        assert post.media_items[0].source_url != "https://expired.example/v.mp4"
 
 
 def test_a_scan_reapplying_preferences_cancels_queued_downloads(session_factory, lifecycle):
@@ -767,7 +782,7 @@ def test_reconcile_brings_old_rows_under_the_current_rules_once(session_factory,
         load(s, skipped_with_video).status = PostStatus.SKIPPED
         load(s, all_cancelled).status = PostStatus.PENDING
 
-    assert lifecycle.reconcile() == {"posts": 2, "jobs": 1, "drm": 0}
+    assert lifecycle.reconcile() == {"posts": 2, "jobs": 1, "drm": 0, "covers": 0}
     with session_scope(session_factory) as s:
         assert load(s, skipped_with_video).status == PostStatus.COMPLETED
         assert load(s, all_cancelled).status == PostStatus.SKIPPED
@@ -794,6 +809,36 @@ def test_reconcile_moves_yt_dlp_drm_failures_to_unsupported(session_factory, lif
         assert post.status == PostStatus.UNSUPPORTED
         assert load(s, private).media_items[0].status == S.FAILED_PERMANENT
         assert load(s, in_a_word).media_items[0].status == S.FAILED_PERMANENT
+
+
+def _embedded_video(factory, *, provider: str, cover: str | None) -> int:
+    post_id = seed(factory, [M(S.COMPLETED)], provider=provider)
+    with session_scope(factory) as s:
+        post = load(s, post_id)
+        post.thumbnail_url = cover
+        post.media_items[0].metadata_embedded = True
+    return post_id
+
+
+def test_reconcile_v3_marks_youtube_videos_with_a_cover_not_embedded(session_factory, lifecycle):
+    # YouTube's stream refused every cover, so its videos were embedded without one.
+    with_cover = _embedded_video(session_factory, provider="youtube", cover="https://i.ytimg/x")
+    no_cover = _embedded_video(session_factory, provider="youtube", cover=None)
+    patreon = _embedded_video(session_factory, provider="patreon", cover="https://c10/x.jpg")
+
+    assert lifecycle.reconcile()["covers"] == 1
+
+    def embedded(s: Session, post_id: int) -> bool:
+        return load(s, post_id).media_items[0].metadata_embedded
+
+    with session_scope(session_factory) as s:
+        assert not embedded(s, with_cover)
+        assert embedded(s, no_cover) and embedded(s, patreon)
+        load(s, with_cover).media_items[0].metadata_embedded = True
+        set_state(s, RULES_KEY, 3)
+    # A later rules version doesn't mark them again.
+    with patch("creeparr.core.lifecycle.RULES_VERSION", 4):
+        assert lifecycle.reconcile()["covers"] == 0
 
 
 def test_a_failed_announcement_does_not_undo_the_change(session_factory, settings, workers):

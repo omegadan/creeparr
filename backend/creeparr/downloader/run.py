@@ -1,9 +1,9 @@
 """The download run: turns a claimed download into an outcome.
 
-It renews the post's links when they may have expired, checks for DRM, has a handler bring
-the file to disk, files it in the library and finishes it: embedded metadata, dedupe, NFO
-and the post's date on the file. It changes no statuses; the worker hands the outcome to the
-media lifecycle.
+It renews the post's links when they may have expired, asks the provider about DRM, works
+out whose session fetches the file and has a handler bring it to disk. It then files it in
+the library and finishes it: embedded metadata, dedupe, NFO and the post's date on the
+file. It changes no statuses; the worker hands the outcome to the media lifecycle.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -27,7 +28,7 @@ from creeparr.core.downloads import (
     Outcome,
 )
 from creeparr.core.lifecycle import MediaLifecycle
-from creeparr.core.settings_service import SettingsService
+from creeparr.core.settings_service import AppSettings, SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import EMBED_SOURCES, MediaKind, MediaSource, MediaStatus
 from creeparr.db.models import Creator, MediaItem, Post
@@ -36,6 +37,7 @@ from creeparr.downloader.fs import set_times, sha256_file, try_hardlink
 from creeparr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadFailed,
+    FetchPlan,
     Handler,
     MediaSnapshot,
     ProgressReporter,
@@ -43,7 +45,6 @@ from creeparr.downloader.handlers.base import (
 from creeparr.downloader.longwork import LongWork
 from creeparr.downloader.placement import PostPlacement, Reservations, sweep_scratch
 from creeparr.downloader.sidecars import write_nfo
-from creeparr.patreon.drm import probe_hls_drm
 from creeparr.providers.base import ProviderService
 from creeparr.providers.errors import (
     AuthError,
@@ -114,21 +115,17 @@ class DownloadRun:
         provider = self.providers.get(media.provider)
         log.info("%s starting %s %s", media.label, media.source, media.post_title)
 
-        # 1. Renew the post's signed links when they may have expired (native media only).
-        if media.source not in EMBED_SOURCES:
-            max_age = timedelta(minutes=settings.downloads.url_max_age_minutes)
-            stale = media.urls_fetched_at is None or (
-                datetime.now(UTC) - media.urls_fetched_at > max_age
-            )
-            if stale or claim.attempt > 1 or not media.url:
-                renewed = await self._renew_links(claim, media, provider)
-                if not isinstance(renewed, MediaSnapshot):
-                    return renewed
-                media = renewed
-            if not media.can_view:
-                return Failed(FailureKind.NO_ACCESS, "post not accessible", "no_access")
+        # 1. Renew the post's links when they may have expired and the provider can.
+        if provider.renews_links(media) and _links_may_have_expired(media, settings):
+            renewed = await self._renew_links(claim, media, provider)
+            if not isinstance(renewed, MediaSnapshot):
+                return renewed
+            media = renewed
+        if media.source not in EMBED_SOURCES and not media.can_view:
+            return Failed(FailureKind.NO_ACCESS, "post not accessible", "no_access")
         if not media.url:
             return Failed(FailureKind.RETRYABLE, "no download URL", "no_url")
+        plan = self._plan(media, provider, settings)
 
         # 2. The post's folder and sidecars. A handler that learns an undated post's date
         # (yt-dlp) has them made once it knows, so the folder is named after that date.
@@ -145,20 +142,17 @@ class DownloadRun:
         if not place.date_pending:
             await asyncio.to_thread(place.commit_folder)
 
-        # 3. DRM: flagged by the provider up front, or probed from the HLS playlist.
-        if media.remote_metadata.get("drm"):
+        # 3. DRM: the provider knows, from what it stored or by checking the stream.
+        try:
+            drm = await provider.drm_protected(media)
+        except ProviderError as exc:
+            return Failed(FailureKind.RETRYABLE, f"DRM check failed: {exc}", "drm_check")
+        if drm:
             return Failed(FailureKind.DRM, "DRM-protected media", "drm")
-        if media.source == MediaSource.NATIVE_HLS:
-            try:
-                drm = await probe_hls_drm(provider.fetch_text, media.url)
-            except ProviderError as exc:
-                return Failed(FailureKind.RETRYABLE, f"HLS probe failed: {exc}", "hls_probe")
-            if drm:
-                return Failed(FailureKind.DRM, "DRM-protected stream", "drm")
 
         # 4. Download, then file a scratch download in the post's folder.
         try:
-            fetched = await handler.fetch(media, place, progress)
+            fetched = await handler.fetch(media, plan, place, progress)
             path = fetched.path
             if not fetched.placed:
                 progress.set_stage("verifying")
@@ -169,7 +163,10 @@ class DownloadRun:
         except DownloadFailed as exc:
             if not exc.kind.retried:
                 place.remove_scratch()  # a retry would resume from it
-            return Failed(exc.kind, str(exc), exc.label)
+            message = str(exc)
+            if exc.label == "expired_url" and not provider.renews_links(media):
+                message += "; a full scan of the creator fetches a fresh link, then retry"
+            return Failed(exc.kind, message, exc.label)
         media = place.media  # with the date it learned
         sha = fetched.sha256
         if sha is None and settings.downloads.compute_sha256:
@@ -192,7 +189,9 @@ class DownloadRun:
         """Fetch the post again and sync it, for fresh signed links. Returns the media as it
         is now, or the outcome when that failed or the media item is gone."""
         try:
-            pr = await provider.get_post(media.campaign_id, media.post_ext_id)
+            pr = await provider.get_post(
+                media.campaign_id, media.post_ext_id, post_type=media.post_type
+            )
         except (AuthError, CloudflareChallengeError) as exc:
             provider.mark_auth_invalid(exc)
             return Failed(FailureKind.AUTH, f"auth: {exc}", "auth")
@@ -214,6 +213,28 @@ class DownloadRun:
 
         renewed = await asyncio.to_thread(_apply)
         return renewed if renewed is not None else Cancelled()
+
+    def _plan(
+        self, media: MediaSnapshot, provider: ProviderService, settings: AppSettings
+    ) -> FetchPlan:
+        """Whose session fetches the file (the provider hosting its source, else the
+        poster), and the container the creator's provider means by "auto"."""
+        hosted_by = self.providers.hosting(media.source)
+        via = hosted_by or provider
+        choice = settings.downloads.container
+        container = choice if choice in ("mp4", "mkv") else provider.video_container
+        if hosted_by is not None or media.source not in EMBED_SOURCES:
+            message = (
+                f"{via.label} requires a signed-in session for this video. "
+                f"{via.sign_in_help}, then retry."
+            )
+        else:
+            site = (urlparse(media.url or "").hostname or "").removeprefix("www.")
+            message = (
+                f"{site or 'The video site'} requires a signed-in session for this video, "
+                "which Creeparr can't provide."
+            )
+        return FetchPlan(via.media_session(), container, message)
 
     def _load(self, claim: Claim) -> MediaSnapshot | None:
         with session_scope(self._factory) as s:
@@ -260,6 +281,15 @@ class DownloadRun:
                     write_nfo(path.parent, post, creator, path.name)
                 except OSError as exc:
                     log.debug("nfo write failed: %s", exc)
+
+
+def _links_may_have_expired(media: MediaSnapshot, settings: AppSettings) -> bool:
+    """No link, a retry (the link may be what failed), never fetched, or older than the
+    links' max age."""
+    if not media.url or media.attempt > 1 or media.urls_fetched_at is None:
+        return True
+    max_age = timedelta(minutes=settings.downloads.url_max_age_minutes)
+    return datetime.now(UTC) - media.urls_fetched_at > max_age
 
 
 def _snapshot(session: Session, claim: Claim) -> MediaSnapshot | None:

@@ -85,8 +85,8 @@ def build_services(env: EnvConfig) -> Services:
         settings,
         providers,
         lifecycle,
-        direct=DirectHandler(settings, providers, ffmpeg, long_work),
-        ytdlp=YtDlpHandler(settings, providers, ffmpeg, long_work),
+        direct=DirectHandler(settings, ffmpeg, long_work),
+        ytdlp=YtDlpHandler(settings, ffmpeg, long_work),
         embedder=embedder,
         long_work=long_work,
     )

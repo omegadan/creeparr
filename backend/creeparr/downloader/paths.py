@@ -71,13 +71,6 @@ def file_name(naming: NamingSettings, facts: NamingFacts, ext: str) -> str:
     return str(rendered) if len(rendered.parts) == 1 else sanitize_component(filename)
 
 
-def container_ext(choice: str, provider: str) -> str:
-    """A video's target container, per the container setting."""
-    if choice in ("mp4", "mkv"):
-        return choice
-    return "mkv" if provider == "youtube" else "mp4"
-
-
 def guess_ext(
     remote_file_name: str | None, url: str | None, mimetype: str | None, kind: str
 ) -> str:

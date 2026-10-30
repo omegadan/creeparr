@@ -19,6 +19,9 @@ One thing a creator published, holding zero or more media.
 One downloadable item of a post: a video, image, audio file or attachment.
 _Avoid_: asset, file (the file is what a download produces)
 
+**Embed**:
+A video hosted elsewhere (YouTube, Vimeo, ...) and shown in a post.
+
 **Scan**:
 Reading a creator's posts from its provider to record new and changed posts and their media.
 
@@ -38,6 +41,9 @@ _Avoid_: rate limit, cap
 **Pacing**:
 Spreading a provider's download starts at random intervals across the hour, under its hourly limit.
 _Avoid_: spacing out, throttling
+
+**Link renewal**:
+Fetching a post again for fresh download links when the stored ones may have expired.
 
 ## Media lifecycle
 

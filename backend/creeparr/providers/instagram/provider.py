@@ -13,10 +13,10 @@ from creeparr.db.enums import MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import CookieSet, write_cookiefile
 from creeparr.providers.errors import NotConfigured, NotFoundError
-from creeparr.providers.http import HttpxTransport, TransportResponse, with_range
 from creeparr.providers.instagram.client import (
     BASE,
     DEFAULT_UA,
+    POST_TYPES,
     SOURCE_URLS,
     InstagramClient,
     InstagramCredentials,
@@ -24,6 +24,7 @@ from creeparr.providers.instagram.client import (
     group_into_posts,
     media_resource,
 )
+from creeparr.providers.media import MediaRef, MediaSession
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -37,16 +38,16 @@ log = logging.getLogger("creeparr.instagram")
 
 VIDEO_EXT = {"mp4", "mov", "webm"}
 
+# Where each stored post type was listed: how a post is fetched again by itself.
+_SOURCES = {post_type: source for source, post_type in POST_TYPES.items()}
+# Stories and highlights can only be listed; there's no page that serves one alone.
+_LISTED_ONLY = {POST_TYPES["stories"], POST_TYPES["highlights"]}
+
 
 class InstagramProvider(ProviderService):
     name: ClassVar[str] = "instagram"
     label: ClassVar[str] = "Instagram"
     credential_fields: ClassVar[tuple[str, ...]] = ("sessionid", "cookies_txt")
-    supports_embeds: ClassVar[bool] = False
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._transport = HttpxTransport()
 
     # ---- credentials / config ------------------------------------------------------
 
@@ -80,7 +81,7 @@ class InstagramProvider(ProviderService):
         self.write_cookie_file()
 
     async def aclose(self) -> None:
-        await self._transport.aclose()
+        return None
 
     def write_cookie_file(self) -> None:
         s = self.settings.get().instagram
@@ -178,10 +179,13 @@ class InstagramProvider(ProviderService):
     def iter_sources(self, external_id: str) -> list[tuple[str, AsyncIterator[PostPage]]]:
         return [(src, self._iter_source(external_id, src)) for src in self._enabled_sources()]
 
-    async def get_post(self, external_id: str, post_id: str) -> PostResource:
+    async def get_post(
+        self, external_id: str, post_id: str, *, post_type: str | None = None
+    ) -> PostResource:
         client = self._client()
         items = await asyncio.to_thread(client.extract, f"{BASE}/p/{post_id}/")
-        posts = group_into_posts(items, "posts", external_id)
+        # A reel or tagged post keeps its type (and caption-less title) when fetched alone.
+        posts = group_into_posts(items, _SOURCES.get(post_type or "", "posts"), external_id)
         if not posts:
             raise NotFoundError(f"post {post_id} not found")
         return posts[0]
@@ -235,13 +239,12 @@ class InstagramProvider(ProviderService):
         )
         return pr
 
-    def media_headers(self) -> dict[str, str]:
-        return {"User-Agent": self._creds().user_agent, "Referer": f"{BASE}/"}
+    def media_session(self) -> MediaSession:
+        # Public CDNs: no cookies.
+        return MediaSession(
+            headers={"User-Agent": self._creds().user_agent, "Referer": f"{BASE}/"},
+            cookie_file=self.written_cookie_file,
+        )
 
-    async def fetch_text(self, url: str) -> str:
-        resp = await self._transport.request("GET", url, headers=self.media_headers())
-        return resp.text
-
-    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        headers = with_range(self.media_headers(), range_start)  # public CDNs: no cookies
-        return await self._transport.request("GET", url, headers=headers, stream=True)
+    def renews_links(self, media: MediaRef) -> bool:
+        return super().renews_links(media) and media.post_type not in _LISTED_ONLY

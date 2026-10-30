@@ -23,6 +23,7 @@ from creeparr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadFailed,
     Fetched,
+    FetchPlan,
     Learned,
     MediaSnapshot,
     Placement,
@@ -30,8 +31,6 @@ from creeparr.downloader.handlers.base import (
 )
 from creeparr.downloader.longwork import LongWork
 from creeparr.downloader.metadata import Ffmpeg
-from creeparr.downloader.paths import container_ext
-from creeparr.providers.registry import ProviderRegistry
 
 log = logging.getLogger("creeparr.ytdlp")
 
@@ -67,6 +66,8 @@ class YtDlpOptions:
     fragment_concurrency: int
     impersonate: bool = False
     remote_components: bool = True
+    #: The message a failure asking for a signed-in session carries.
+    sign_in_message: str = "This video requires a signed-in session."
 
 
 class _LoggerAdapter:
@@ -118,18 +119,13 @@ def normalise_vimeo_url(url: str) -> str:
     return f"{player}?h={h}" if h else player
 
 
-def classify_ytdlp_error(exc: Exception) -> DownloadFailed:
+def classify_ytdlp_error(exc: Exception, sign_in_message: str) -> DownloadFailed:
     if isinstance(exc, UnsupportedError):
         return DownloadFailed(FailureKind.UNSUPPORTED, f"unsupported URL: {exc}", "unsupported")
     msg = str(exc)
     low = msg.lower()
     if "sign in" in low or "use --cookies" in low or "cookies" in low or "confirm your age" in low:
-        return DownloadFailed(
-            FailureKind.NEEDS_COOKIES,
-            "YouTube requires a signed-in session for this video. Add YouTube cookies in "
-            "Settings -> Accounts -> YouTube, then retry.",
-            "needs_cookies",
-        )
+        return DownloadFailed(FailureKind.NEEDS_COOKIES, sign_in_message, "needs_cookies")
     if mentions_drm(msg):
         return DownloadFailed(FailureKind.DRM, msg, "drm")
     if any(p in low for p in _PERMANENT_PATTERNS):
@@ -212,7 +208,7 @@ def run_ytdlp(
     except YtDlpCancelled as exc:
         raise DownloadCancelled() from exc
     except (DownloadError, UnsupportedError) as exc:
-        raise classify_ytdlp_error(exc) from exc
+        raise classify_ytdlp_error(exc, opts.sign_in_message) from exc
     except Exception as exc:  # noqa: BLE001
         raise DownloadFailed(
             FailureKind.RETRYABLE, f"{exc.__class__.__name__}: {exc}", "ytdlp"
@@ -273,35 +269,38 @@ class YtDlpHandler:
     def __init__(
         self,
         settings: SettingsService,
-        providers: ProviderRegistry,
         ffmpeg: Ffmpeg,
         long_work: LongWork,
         *,
         engine: YtDlpEngine = run_ytdlp,
     ) -> None:
         self._settings = settings
-        self._providers = providers
         self._ffmpeg = ffmpeg
         self._long = long_work
         self._engine = engine
 
     async def fetch(
-        self, media: MediaSnapshot, place: Placement, progress: ProgressReporter
+        self,
+        media: MediaSnapshot,
+        plan: FetchPlan,
+        place: Placement,
+        progress: ProgressReporter,
     ) -> Fetched:
         d = self._settings.get().downloads
-        provider = self._providers.get(media.provider)
         url = media.url or ""
         if media.source == MediaSource.EMBED_VIMEO:
             url = normalise_vimeo_url(url)
+        session = plan.session
         opts = YtDlpOptions(
-            headers=provider.media_headers(),
-            cookiefile=str(provider.cookie_file) if provider.cookie_file.exists() else None,
+            headers=dict(session.headers),
+            cookiefile=str(session.cookie_file) if session.cookie_file else None,
             video_format=d.video_format,
-            container=container_ext(d.container, media.provider),
+            container=plan.container,
             ffmpeg_location=self._ffmpeg.location,
             fragment_concurrency=d.hls_fragment_concurrency,
-            impersonate=provider.ytdlp_impersonate,
+            impersonate=session.impersonate is not None,
             remote_components=d.ytdlp_remote_components,
+            sign_in_message=plan.sign_in_message,
         )
         progress.set_stage("downloading")
         produced, meta = await self._long.run(

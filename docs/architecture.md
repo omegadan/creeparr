@@ -23,8 +23,10 @@ FastAPI (uvicorn)
    `resolve_campaign_id`, search API then page scrape) → row in `creators` → full scan requested.
 2. **Scan** (`scanner/scanner.py`) iterates the provider's post pages. Each
    page is processed in one DB transaction, each post through `MediaLifecycle.sync_post`
-   (`core/lifecycle.py`): upsert the post row; for a new or changed post, re-sync its media
-   rows from `resolve_media` (post JSON → `MediaSpec` list) and mark its links fresh; apply
+   (`core/lifecycle.py`): upsert the post row; for a new or changed post, or one with media
+   queued or failed, re-sync its media rows from `resolve_media` (post JSON → `MediaSpec`
+   list) and mark its links fresh (so a scan renews links that can't be renewed one post at a
+   time, without counting the post as changed); apply
    the creator's preferences; queue wanted media if the creator auto-downloads; derive the
    post status. Incremental scans stop after `scan.overlap_posts` consecutive already-known,
    unchanged posts.
@@ -34,10 +36,18 @@ FastAPI (uvicorn)
    starving behind ones that can't start, and `MediaLifecycle.start_download` marks the
    winner running. `DownloadRun` (`run.py`) turns the claim into an outcome without
    touching any status:
-   - If the post's signed URLs are stale (too old, or marked stale by a user retry) or the
-     job is a retry attempt, it renews them first (`sync_post` with `refresh=True`).
-   - It writes sidecars, checks for DRM (the provider's flag, or a probe of the HLS
-     playlist), and hands off to a handler at the seam in `handlers/base.py`:
+   - **Link renewal**: if the provider says renewal applies to the item (`renews_links`: not
+     an embed, an OnlyFans message, an Instagram story or highlight, or anything on Reddit)
+     and its links may have expired (too old, marked stale by a user retry, or a retry
+     attempt), it fetches the post again (`get_post`, given the stored post type) and syncs
+     it (`sync_post` with `refresh=True`). Otherwise it downloads with the stored link.
+   - It writes sidecars, asks the provider whether the item is DRM-protected
+     (`drm_protected`: the flag stored when read, or Patreon's check of its Mux playlists),
+     and builds a `FetchPlan`: the media session of whoever hosts the file
+     (`ProviderRegistry.hosting`: YouTube for YouTube videos, whoever posted them; else the
+     posting provider), the container (the setting, or the creator's provider's
+     `video_container` for "auto") and the sign-in message. It hands both to a handler at
+     the seam in `handlers/base.py`:
      `handlers/direct.py` (httpx streaming, resuming a `.part` file at the final name) or
      `handlers/ytdlp.py` (yt-dlp as a library for Mux HLS, YouTube, Vimeo and Reddit video).
      yt-dlp works in a scratch folder, because an undated post (YouTube's back catalogue)
@@ -112,12 +122,22 @@ continue), shows a banner, and records history. A daily `session_check` and a su
 
 Anything provider-specific lives behind `creeparr/providers/base.py:ProviderService`: fetch the
 logged-in user, resolve a creator from a URL/handle, list subscriptions, iterate posts, turn a
-post into `MediaSpec`s, and stream media. `PatreonProvider` wraps the original Patreon client;
+post into `MediaSpec`s, fetch a post again, and fetch its media. `PatreonProvider` wraps the
+original Patreon client;
 `OnlyFansProvider` implements OnlyFans' signed private API (rules fetched at runtime);
 `YouTubeProvider` lists channels with yt-dlp; `InstagramProvider` uses gallery-dl;
 `RedditProvider` reads the public JSON listings. The
 `ProviderRegistry` maps `creators.provider` to the right service; the scanner, downloader, API
 and scheduler are provider-neutral and go through it. Auth status is tracked per provider.
+
+Fetching media (`providers/media.py`): each provider builds a `MediaSession` from its current
+settings: headers, the session cookie and the one domain it may go to, the cookies.txt for
+yt-dlp, the curl_cffi impersonation target and, for Patreon, the API's rate limiter.
+`MediaSession.stream` is the only media stream, used for files and covers: it scopes the
+cookie, sends the Range header, retries a dropped connection once and opens a connection per
+call, closed with the response, so a settings change never closes one in use. Each provider
+also answers `renews_links(media)` and `drm_protected(media)`, and declares the embeds it
+`hosts` (YouTube: YouTube videos) and its `video_container` (YouTube: MKV).
 
 Adding a provider: implement `ProviderService`, register it in `services.py`, add a settings
 group, and it appears in the UI automatically (Add-creator picker, its Settings tab, badges).

@@ -16,7 +16,7 @@ from creeparr.core.history import record_event
 from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
-from creeparr.db.enums import AuthState, EventType
+from creeparr.db.enums import EMBED_SOURCES, AuthState, EventType, MediaSource
 from creeparr.providers.errors import (
     AuthError,
     CloudflareChallengeError,
@@ -24,7 +24,7 @@ from creeparr.providers.errors import (
     ProviderError,
     TransportFailure,
 )
-from creeparr.providers.http import TransportResponse
+from creeparr.providers.media import MediaRef, MediaSession
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -44,8 +44,10 @@ class ProviderService(ABC):
     label: ClassVar[str] = "Base"
     #: Secret settings keys (group == provider name) accepted by the auth endpoints.
     credential_fields: ClassVar[tuple[str, ...]] = ()
-    #: Whether creators need the provider's session to download their native media.
-    supports_embeds: ClassVar[bool] = False
+    #: The container the "auto" setting means for this provider's creators' videos.
+    video_container: ClassVar[str] = "mp4"
+    #: Embeds this provider fetches with its own session, whoever posted them.
+    hosts: ClassVar[frozenset[MediaSource]] = frozenset()
 
     def __init__(
         self,
@@ -79,8 +81,14 @@ class ProviderService(ABC):
         return self.env.cookies_dir / f"{self.name}.txt"
 
     @property
-    def ytdlp_impersonate(self) -> bool:
-        return False
+    def written_cookie_file(self) -> Path | None:
+        """The cookie file, if one is written (for yt-dlp)."""
+        return self.cookie_file if self.cookie_file.exists() else None
+
+    @property
+    def sign_in_help(self) -> str:
+        """What to do when one of this provider's videos asks for a signed-in session."""
+        return f"Check the {self.label} session in Settings -> Accounts -> {self.label}"
 
     # ---- lifecycle -----------------------------------------------------------------
 
@@ -118,7 +126,11 @@ class ProviderService(ABC):
         return [("posts", self.iter_posts(external_id))]
 
     @abstractmethod
-    async def get_post(self, external_id: str, post_id: str) -> PostResource: ...
+    async def get_post(
+        self, external_id: str, post_id: str, *, post_type: str | None = None
+    ) -> PostResource:
+        """Fetch one post again. `post_type` is the stored post's, for a provider that can
+        only tell some kinds apart by where they were listed."""
 
     @abstractmethod
     def resolve_media(self, post: PostResource) -> list[MediaSpec]: ...
@@ -127,14 +139,21 @@ class ProviderService(ABC):
     def post_from_raw(self, raw_json: dict[str, Any]) -> PostResource | None:
         """Rebuild a PostResource from what we stored in `posts.raw_json`."""
 
-    @abstractmethod
-    def media_headers(self) -> dict[str, str]: ...
+    # ---- fetching media --------------------------------------------------------------
 
     @abstractmethod
-    async def fetch_text(self, url: str) -> str: ...
+    def media_session(self) -> MediaSession:
+        """How this provider fetches files, from its settings as they are now. No I/O."""
 
-    @abstractmethod
-    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse: ...
+    def renews_links(self, media: MediaRef) -> bool:
+        """Whether link renewal applies to this item: its links expire, and fetching its post
+        again brings fresh ones. Embeds have no links of the provider's to renew."""
+        return media.source not in EMBED_SOURCES
+
+    async def drm_protected(self, media: MediaRef) -> bool:
+        """Whether the item is DRM-protected and can't be archived. Raises ProviderError when
+        that can't be told now."""
+        return bool(media.remote_metadata.get("drm"))
 
     # ---- auth status (shared) ------------------------------------------------------
 
