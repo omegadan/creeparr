@@ -14,6 +14,7 @@ import logging
 import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -29,7 +30,14 @@ from creeparr.core.downloads import (
     mentions_drm,
 )
 from creeparr.core.events import EventBus
-from creeparr.core.history import added_payload, record_event
+from creeparr.core.history import added_event, record_event
+from creeparr.core.server_events import (
+    HistoryAddedEvent,
+    JobFinishedEvent,
+    JobStartedEvent,
+    PostChangedEvent,
+    QueueChangedEvent,
+)
 from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
@@ -130,10 +138,10 @@ class _Effects:
     """What one session's changes need announced once it commits."""
 
     dirty: set[int] = field(default_factory=set)  # posts whose media changed
-    posts: dict[int, dict[str, Any]] = field(default_factory=dict)  # post.changed payloads
-    history: list[dict[str, Any]] = field(default_factory=list)  # history.added payloads
-    started: list[dict[str, Any]] = field(default_factory=list)  # job.started payloads
-    finished: list[dict[str, Any]] = field(default_factory=list)  # job.finished payloads
+    posts: dict[int, PostChangedEvent] = field(default_factory=dict)
+    history: list[HistoryAddedEvent] = field(default_factory=list)
+    started: list[JobStartedEvent] = field(default_factory=list)
+    finished: list[JobFinishedEvent] = field(default_factory=list)
     queue_changed: bool = False
     wake: bool = False
     cancel: set[int] = field(default_factory=set)  # running jobs to stop
@@ -357,7 +365,7 @@ class MediaLifecycle:
         item = job.media_item
         self._set(session, item, status=MediaStatus.DOWNLOADING)
         self._effects(session).started.append(
-            {"id": job.id, "media_item_id": item.id, "post_id": item.post_id}
+            JobStartedEvent(id=job.id, media_item_id=item.id, post_id=item.post_id)
         )
         session.flush()
         return Claim(job.id, item.id, item.post_id, job.attempt)
@@ -378,11 +386,8 @@ class MediaLifecycle:
             )
             .where(MediaItem.id == claim.media_id)
         ).scalar_one_or_none()
-        finished: dict[str, Any] = {
-            "id": claim.job_id,
-            "media_item_id": claim.media_id,
-            "post_id": claim.post_id,
-        }
+        status = JobStatus.CANCELLED
+        error: str | None = None
         if item is None:
             log.info(
                 "[job %s] media item %s no longer exists; dropping job",
@@ -391,19 +396,21 @@ class MediaLifecycle:
             )
             if job is not None:
                 _end_job(job, JobStatus.CANCELLED)
-            finished["status"] = JobStatus.CANCELLED
         elif isinstance(outcome, Completed):
             self._completed(session, claim, item, job, outcome)
-            finished["status"] = JobStatus.COMPLETED
+            status = JobStatus.COMPLETED
         elif isinstance(outcome, Failed):
             self._failed(session, claim, item, job, outcome)
-            finished["status"] = JobStatus.FAILED
-            finished["error"] = outcome.message
+            status, error = JobStatus.FAILED, outcome.message
         else:
             self._cancelled(session, item, job)
-            finished["status"] = JobStatus.CANCELLED
         if item is not None:
             self._recompute(session, item.post)
+        finished = JobFinishedEvent(
+            id=claim.job_id, media_item_id=claim.media_id, post_id=claim.post_id, status=status
+        )
+        if error is not None:
+            finished.error = error
         self._effects(session).finished.append(finished)
         session.flush()
 
@@ -758,7 +765,7 @@ class MediaLifecycle:
             media_item_id=item.id,
             data=data,
         )
-        self._effects(session).history.append(added_payload(row))
+        self._effects(session).history.append(added_event(row))
 
     def _skip(self, session: Session, item: MediaItem, reason: str) -> None:
         if item.status == MediaStatus.COMPLETED:
@@ -874,11 +881,9 @@ class MediaLifecycle:
         post.status = derive_post_status(post)
         fx = self._effects(session)
         if post.status != before or post.id in fx.dirty:
-            fx.posts[post.id] = {
-                "id": post.id,
-                "creator_id": post.creator_id,
-                "status": post.status,
-            }
+            fx.posts[post.id] = PostChangedEvent(
+                id=post.id, creator_id=post.creator_id, status=post.status
+            )
 
     def _effects(self, session: Session) -> _Effects:
         fx = session.info.get(self._key)
@@ -895,16 +900,10 @@ class MediaLifecycle:
             return
         # The change is already committed; a failure here must not look like it wasn't.
         try:
-            for payload in fx.history:
-                self.bus.publish("history.added", payload)
-            for payload in fx.posts.values():
-                self.bus.publish("post.changed", payload)
-            for payload in fx.started:
-                self.bus.publish("job.started", payload)
-            for payload in fx.finished:
-                self.bus.publish("job.finished", payload)
+            for announced in (*fx.history, *fx.posts.values(), *fx.started, *fx.finished):
+                self.bus.publish(announced)
             if fx.queue_changed:
-                self.bus.publish("queue.changed", {})
+                self.bus.publish(QueueChangedEvent())
             if self.workers is not None:
                 for job_id in fx.cancel:
                     self.workers.cancel_job(job_id)
@@ -928,6 +927,53 @@ def _kind_wanted(creator: Creator, kind: str) -> bool:
     if kind == MediaKind.AUDIO:
         return creator.include_audio
     return creator.include_attachments
+
+
+class ItemAction(StrEnum):
+    RETRY = "retry"
+    REDOWNLOAD = "redownload"
+    SKIP = "skip"
+    UNSKIP = "unskip"
+
+
+class PostAction(StrEnum):
+    DOWNLOAD = "download"
+    FORCE_DOWNLOAD = "force_download"
+    SKIP = "skip"
+    UNSKIP = "unskip"
+
+
+# Offered a retry: queued and downloading items are already on their way, and an item the
+# post's access hides can't be fetched (`_requeue` refuses both).
+_RETRYABLE = {
+    MediaStatus.DISCOVERED,
+    MediaStatus.FAILED,
+    MediaStatus.FAILED_PERMANENT,
+    *_STOPPED,
+    *_UNSUPPORTED,
+}
+
+
+def item_actions(status: MediaStatus, wanted: bool) -> list[ItemAction]:
+    """The item-level actions offered for an item, in the order the UI shows them."""
+    actions: list[ItemAction] = []
+    if status in _RETRYABLE:
+        actions.append(ItemAction.RETRY)
+    elif status in (MediaStatus.COMPLETED, MediaStatus.MISSING):
+        actions.append(ItemAction.REDOWNLOAD)  # a retry, forced
+    if status == MediaStatus.SKIPPED or not wanted:
+        actions.append(ItemAction.UNSKIP)
+    elif status != MediaStatus.COMPLETED:
+        actions.append(ItemAction.SKIP)  # skipping never touches what is archived
+    return actions
+
+
+def post_actions(status: PostStatus) -> list[PostAction]:
+    """The post-level actions offered for a post: one download and one skip or unskip. A
+    completed post's download is forced, re-downloading what's archived."""
+    download = PostAction.FORCE_DOWNLOAD if status == PostStatus.COMPLETED else PostAction.DOWNLOAD
+    skip = PostAction.UNSKIP if status == PostStatus.SKIPPED else PostAction.SKIP
+    return [download, skip]
 
 
 def _user_skipped(item: MediaItem) -> bool:

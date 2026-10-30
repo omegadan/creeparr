@@ -423,3 +423,42 @@ def test_the_providers_endpoint_serves_the_description(api):
     assert reddit["credentials"][0]["optional"] is True
     assert reddit["download_dir_variable"] == "CREEPARR_REDDIT_DOWNLOAD_DIR"
     assert providers["instagram"]["post_types"]["instagram_story"] == "Story"
+
+
+def test_the_newly_declared_responses_keep_their_shape(app, api):
+    # These routes sent bare dicts before their responses were declared; the declarations
+    # must accept what they send and keep sending it.
+    async def noop() -> None:
+        return None
+
+    app.state.services.scheduler._register("noop", "Does nothing", None, noop)
+    assert api.get("/api/v1/system/tasks").json() == [
+        {
+            "name": "noop",
+            "description": "Does nothing",
+            "interval_seconds": None,
+            "next_run_at": None,
+            "last_run_at": None,
+            "last_status": None,
+            "last_error": None,
+            "running": False,
+        }
+    ]
+    health = api.get("/api/v1/system/health").json()
+    assert health["status"] in ("ok", "degraded") and "version" in health
+    preview = api.post(
+        "/api/v1/settings/naming-preview",
+        json={"post_folder_template": "{creator}/{title}", "file_template": "{filename}"},
+    ).json()
+    assert preview["full_path"] == f"{preview['post_folder']}/{preview['file']}"
+    # Only what applies is sent, as before.
+    assert api.post("/api/v1/settings/notifications/test").json() == {
+        "ok": False,
+        "detail": "no notification targets configured",
+    }
+    settings = api.get("/api/v1/settings").json()
+    assert settings["youtube"]["has_cookies_txt"] is False
+    assert settings["env"]["patreon_download_dir"] is None
+    status = api.get("/api/v1/system/status").json()
+    assert status["scan"] == {"running": None, "pending": []}
+    assert status["paths"]["download_dir"] == settings["env"]["download_dir"]

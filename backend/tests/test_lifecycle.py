@@ -24,6 +24,7 @@ from creeparr.core.lifecycle import (
     MediaLifecycle,
     derive_post_status,
 )
+from creeparr.core.server_events import ServerEvent
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import EventType, JobStatus, MediaKind, MediaStatus, PostStatus
@@ -40,8 +41,8 @@ class RecordingBus:
     def __init__(self) -> None:
         self.events: list[tuple[str, dict[str, Any]]] = []
 
-    def publish(self, event: str, data: dict[str, Any] | None = None) -> None:
-        self.events.append((event, data or {}))
+    def publish(self, event: ServerEvent) -> None:
+        self.events.append((event.event, event.payload()))
 
 
 class FakeWorkers:
@@ -842,7 +843,7 @@ def test_reconcile_v3_marks_youtube_videos_with_a_cover_not_embedded(session_fac
 
 def test_a_failed_announcement_does_not_undo_the_change(session_factory, settings, workers):
     class BrokenBus:
-        def publish(self, event, data=None):
+        def publish(self, event):
             raise RuntimeError("subscriber went away")
 
     lifecycle = MediaLifecycle(session_factory, BrokenBus(), settings, workers)

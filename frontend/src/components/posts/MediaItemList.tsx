@@ -1,6 +1,6 @@
 import { ExternalLink, FileText, Image, Music, RotateCcw, SkipForward, Undo2, Video } from "lucide-react";
 import { usePost, useRetryMedia, useSkipMedia, useUnskipMedia } from "../../api/hooks/usePosts";
-import type { MediaItem } from "../../api/types";
+import type { ItemAction, MediaItem } from "../../api/types";
 import { mediaStatus, sourceLabel } from "../../lib/status";
 import { formatBytes, formatDate, timeAgo } from "../../lib/format";
 import { StatusBadge } from "../ui/Badge";
@@ -41,7 +41,7 @@ export function MediaItemList({ postId }: { postId: number }) {
           <tbody>
             {items.map((m: MediaItem) => {
               const Icon = KIND_ICON[m.kind] ?? FileText;
-              const canRetry = ["failed", "failed_permanent", "cancelled", "unsupported", "unsupported_drm", "skipped", "discovered", "completed", "missing"].includes(m.status);
+              const offers = (action: ItemAction) => m.actions.includes(action);
               return (
                 <tr key={m.id}>
                   <td className="text-fg-dim"><Icon className="h-4 w-4" /></td>
@@ -66,14 +66,14 @@ export function MediaItemList({ postId }: { postId: number }) {
                   </td>
                   <td className="text-right">
                     <div className="flex justify-end gap-0.5">
-                      {canRetry && (
-                        <IconButton title={m.status === "completed" || m.status === "missing" ? "Re-download" : "Retry now"} onClick={() => retry.mutate(m.id, { onError: (e) => error(e) })}>
+                      {(offers("retry") || offers("redownload")) && (
+                        <IconButton title={offers("redownload") ? "Re-download" : "Retry now"} onClick={() => retry.mutate(m.id, { onError: (e) => error(e) })}>
                           <RotateCcw className="h-3.5 w-3.5" />
                         </IconButton>
                       )}
-                      {m.status === "skipped" || !m.wanted ? (
+                      {offers("unskip") ? (
                         <IconButton title="Unskip" onClick={() => unskip.mutate(m.id, { onError: (e) => error(e) })}><Undo2 className="h-3.5 w-3.5" /></IconButton>
-                      ) : m.status !== "completed" ? (
+                      ) : offers("skip") ? (
                         <IconButton title="Skip" onClick={() => skip.mutate(m.id, { onError: (e) => error(e) })}><SkipForward className="h-3.5 w-3.5" /></IconButton>
                       ) : null}
                     </div>

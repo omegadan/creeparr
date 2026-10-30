@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from creeparr.core.errors import Conflict, NotFound
 from creeparr.core.events import EventBus
+from creeparr.core.server_events import ScanQueuedEvent
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import ScanMode
 from creeparr.db.models import Creator
@@ -96,7 +97,7 @@ class ScanManager:
         req = ScanRequest(creator_id, mode, trigger, datetime.now(UTC), provider_name)
         self._pending[creator_id] = req
         self._queue.put_nowait(req)
-        self.bus.publish("scan.queued", {"creator_id": creator_id, "mode": mode})
+        self.bus.publish(ScanQueuedEvent(creator_id=creator_id, mode=mode))
         return True
 
     def request_scan_all(self, mode: ScanMode = ScanMode.AUTO, trigger: str = "manual") -> int:

@@ -8,9 +8,19 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends
 
 from creeparr.api.deps import get_services
-from creeparr.api.schemas import AuthBody, NamingPreviewBody
+from creeparr.api.schemas import (
+    AuthBody,
+    AuthTestResultOut,
+    NamingPreviewBody,
+    NamingPreviewOut,
+    NotificationTestOut,
+    OkOut,
+    SetAuthOut,
+    SettingsOut,
+)
 from creeparr.core.errors import ValidationFailed
 from creeparr.core.naming import render_template
+from creeparr.core.server_events import SettingsChangedEvent
 from creeparr.services import Services
 
 router = APIRouter(tags=["settings"])
@@ -24,10 +34,10 @@ async def _apply_side_effects(services: Services, groups: set[str]) -> None:
         services.downloads.apply_settings()
     if groups & {"scan", "downloads"}:
         services.scheduler.apply_settings()
-    services.bus.publish("settings.changed", {"groups": sorted(groups)})
+    services.bus.publish(SettingsChangedEvent(groups=sorted(groups)))
 
 
-@router.get("/settings")
+@router.get("/settings", response_model=SettingsOut)
 def get_settings(services: Services = Depends(get_services)) -> dict[str, Any]:
     data = services.settings.masked()
     data["env"] = {
@@ -39,10 +49,10 @@ def get_settings(services: Services = Depends(get_services)) -> dict[str, Any]:
     return data
 
 
-@router.put("/settings")
+@router.put("/settings", response_model=SettingsOut)
 async def update_settings(
     patch: dict[str, Any] = Body(...), services: Services = Depends(get_services)
-) -> dict[str, Any]:
+):
     patch.pop("env", None)
     for group in patch.values():
         if isinstance(group, dict):
@@ -65,7 +75,9 @@ def _credentials(provider, body: AuthBody | None) -> dict[str, str]:  # noqa: AN
     return {k: (v.strip() if k != "cookies_txt" else v) for k, v in fields.items()}
 
 
-@router.put("/settings/auth/{provider_name}")
+@router.put(
+    "/settings/auth/{provider_name}", response_model=SetAuthOut, response_model_exclude_unset=True
+)
 async def set_auth(provider_name: str, body: AuthBody, services: Services = Depends(get_services)):
     provider = services.providers.get(provider_name)
     fields = _credentials(provider, body)
@@ -77,7 +89,11 @@ async def set_auth(provider_name: str, body: AuthBody, services: Services = Depe
     return {**result, "settings": services.settings.masked()[provider.name]}
 
 
-@router.post("/settings/auth/{provider_name}/test")
+@router.post(
+    "/settings/auth/{provider_name}/test",
+    response_model=AuthTestResultOut,
+    response_model_exclude_unset=True,
+)
 async def test_auth(
     provider_name: str, body: AuthBody | None = None, services: Services = Depends(get_services)
 ):
@@ -86,7 +102,7 @@ async def test_auth(
     return await provider.test_connection(creds or None)
 
 
-@router.delete("/settings/auth/{provider_name}")
+@router.delete("/settings/auth/{provider_name}", response_model=OkOut)
 async def clear_auth(provider_name: str, services: Services = Depends(get_services)):
     provider = services.providers.get(provider_name)
     services.settings.update(
@@ -97,12 +113,16 @@ async def clear_auth(provider_name: str, services: Services = Depends(get_servic
     return {"ok": True}
 
 
-@router.post("/settings/notifications/test")
+@router.post(
+    "/settings/notifications/test",
+    response_model=NotificationTestOut,
+    response_model_exclude_unset=True,
+)
 async def test_notifications(services: Services = Depends(get_services)):
     return await services.notifications.test()
 
 
-@router.post("/settings/naming-preview")
+@router.post("/settings/naming-preview", response_model=NamingPreviewOut)
 def naming_preview(body: NamingPreviewBody, services: Services = Depends(get_services)):
     max_len = services.settings.get().naming.max_component_length
     sample = {

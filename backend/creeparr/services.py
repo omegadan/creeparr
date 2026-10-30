@@ -24,12 +24,8 @@ from creeparr.downloader.manager import DownloadManager
 from creeparr.downloader.metadata import SystemFfmpeg
 from creeparr.downloader.progress import JobProgress
 from creeparr.downloader.run import DownloadRun
-from creeparr.providers.instagram.provider import InstagramProvider
-from creeparr.providers.onlyfans.provider import OnlyFansProvider
-from creeparr.providers.patreon import PatreonProvider
-from creeparr.providers.reddit.provider import RedditProvider
+from creeparr.providers.catalog import PROVIDER_TYPES
 from creeparr.providers.registry import ProviderRegistry
-from creeparr.providers.youtube import YouTubeProvider
 from creeparr.scanner.scan_manager import ScanManager
 from creeparr.scanner.scanner import Scanner
 from creeparr.scheduler import SchedulerService
@@ -63,15 +59,7 @@ def build_services(env: EnvConfig) -> Services:
     factory = make_session_factory(engine)
     settings = SettingsService(factory)
     bus = EventBus()
-    providers = ProviderRegistry(
-        [
-            PatreonProvider(env, settings, factory, bus),
-            OnlyFansProvider(env, settings, factory, bus),
-            YouTubeProvider(env, settings, factory, bus),
-            InstagramProvider(env, settings, factory, bus),
-            RedditProvider(env, settings, factory, bus),
-        ]
-    )
+    providers = ProviderRegistry([cls(env, settings, factory, bus) for cls in PROVIDER_TYPES])
     lifecycle = MediaLifecycle(factory, bus, settings)
     scanner = Scanner(factory, settings, bus, providers, lifecycle)
     scan_manager = ScanManager(scanner, factory, providers, bus)

@@ -17,6 +17,7 @@ from creeparr.core.downloads import INTERNAL_ERROR, Claim, Outcome
 from creeparr.core.events import EventBus
 from creeparr.core.history import record_event
 from creeparr.core.lifecycle import MediaLifecycle
+from creeparr.core.server_events import QueuePausedEvent, QueueResumedEvent
 from creeparr.core.settings_service import SettingsService
 from creeparr.core.state import get_state, set_state
 from creeparr.db.engine import SessionFactory, session_scope
@@ -127,13 +128,13 @@ class DownloadManager:
             with session_scope(self._factory) as s:
                 set_state(s, PAUSED_KEY, True)
                 record_event(s, self.bus, EventType.QUEUE_PAUSED, "Download queue paused")
-        self.bus.publish("queue.paused", {"reason": reason})
+        self.bus.publish(QueuePausedEvent(reason=reason))
 
     def resume(self) -> None:
         self.paused_reason = None
         with session_scope(self._factory) as s:
             set_state(s, PAUSED_KEY, False)
-        self.bus.publish("queue.resumed", {})
+        self.bus.publish(QueueResumedEvent())
         self.notify()
 
     def cancel_job(self, job_id: int) -> bool:

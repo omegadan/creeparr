@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from "react-router";
-import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, Search, Settings, Users } from "lucide-react";
+import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, RefreshCw, Search, Settings, Users } from "lucide-react";
 import { useServerEvents } from "../../api/events";
 import { useSystemStatus } from "../../api/hooks/useSystem";
 import { cx } from "../../lib/format";
@@ -19,7 +19,7 @@ const NAV = [
 ] as const;
 
 export function AppShell() {
-  useServerEvents();
+  const { serverUpdated } = useServerEvents();
   const status = useSystemStatus();
   const queued = (status.data?.counts.queued ?? 0) + (status.data?.counts.running ?? 0);
   const providers = status.data?.providers ?? [];
@@ -77,6 +77,12 @@ export function AppShell() {
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
+        {serverUpdated && (
+          <button type="button" onClick={() => window.location.reload()} className="flex items-center gap-2 border-b border-accent/30 bg-accent/10 px-5 py-2 text-left text-sm text-accent">
+            <RefreshCw className="h-4 w-4" />
+            Creeparr was updated. Reload to use the new version.
+          </button>
+        )}
         {authBad && (
           <Link to={fixTab} className="flex items-center gap-2 border-b border-danger/30 bg-danger/10 px-5 py-2 text-sm text-danger">
             <AlertTriangle className="h-4 w-4" />

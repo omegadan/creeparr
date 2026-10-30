@@ -13,6 +13,12 @@ from sqlalchemy import select
 from creeparr.core.events import EventBus
 from creeparr.core.history import record_event
 from creeparr.core.lifecycle import MediaLifecycle, PostSource
+from creeparr.core.server_events import (
+    CreatorChangedEvent,
+    ScanFinishedEvent,
+    ScanProgressEvent,
+    ScanStartedEvent,
+)
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import EventType, ScanMode, ScanStatus
@@ -186,10 +192,9 @@ class Scanner:
                     data={"scan_run_id": run_id},
                 )
         self.bus.publish(
-            "scan.finished",
-            {"scan_run_id": run_id, "creator_id": creator_id, "status": status, "error": error},
+            ScanFinishedEvent(scan_run_id=run_id, creator_id=creator_id, status=status, error=error)
         )
-        self.bus.publish("creator.changed", {"id": creator_id})
+        self.bus.publish(CreatorChangedEvent(id=creator_id))
 
     async def scan_creator(
         self,
@@ -203,8 +208,7 @@ class Scanner:
         with session_scope(self._factory) as s:
             effective_mode = ScanMode(s.get(ScanRun, run_id).mode)
         self.bus.publish(
-            "scan.started",
-            {"scan_run_id": run_id, "creator_id": creator_id, "mode": effective_mode},
+            ScanStartedEvent(scan_run_id=run_id, creator_id=creator_id, mode=effective_mode)
         )
         overlap = self.settings.get().scan.overlap_posts
         provider = self.providers.for_creator(creator)
@@ -225,13 +229,12 @@ class Scanner:
                         provider,
                     )
                     self.bus.publish(
-                        "scan.progress",
-                        {
-                            "scan_run_id": run_id,
-                            "creator_id": creator_id,
-                            "seen": stats.seen,
-                            "new": stats.new,
-                        },
+                        ScanProgressEvent(
+                            scan_run_id=run_id,
+                            creator_id=creator_id,
+                            seen=stats.seen,
+                            new=stats.new,
+                        )
                     )
                     if stats.new == 0 and stats.updated == 0:
                         consecutive_known += stats.seen

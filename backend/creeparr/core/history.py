@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from creeparr.core.events import EventBus
+from creeparr.core.server_events import HistoryAddedEvent
 from creeparr.db.enums import EventType
 from creeparr.db.models import History
 
@@ -35,17 +36,17 @@ def record_event(
     session.add(row)
     session.flush()
     if bus is not None:
-        bus.publish("history.added", added_payload(row))
+        bus.publish(added_event(row))
     return row
 
 
-def added_payload(row: History) -> dict[str, Any]:
+def added_event(row: History) -> HistoryAddedEvent:
     """The `history.added` event for a new row."""
-    return {
-        "id": row.id,
-        "event_type": row.event_type,
-        "level": row.level,
-        "message": row.message,
-        "creator_id": row.creator_id,
-        "post_id": row.post_id,
-    }
+    return HistoryAddedEvent(
+        id=row.id,
+        event_type=row.event_type,
+        level=row.level,
+        message=row.message,
+        creator_id=row.creator_id,
+        post_id=row.post_id,
+    )

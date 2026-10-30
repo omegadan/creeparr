@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, post, put } from "../client";
+import type { NamingPreviewOut, NotificationTestOut, OkOut, SetAuthOut } from "../schema";
 import type { AuthTestResult, Settings, SettingsPatch } from "../types";
 
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => get<Settings>("/settings") });
@@ -20,7 +21,7 @@ type Creds = Record<string, string>;
 export function useSetAuth(provider: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Creds) => put<AuthTestResult & { settings: Record<string, unknown> }>(`/settings/auth/${provider}`, body),
+    mutationFn: (body: Creds) => put<SetAuthOut>(`/settings/auth/${provider}`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["system"] });
@@ -35,7 +36,7 @@ export const useTestAuth = (provider: string) =>
 export function useClearAuth(provider: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => del<{ ok: boolean }>(`/settings/auth/${provider}`),
+    mutationFn: () => del<OkOut>(`/settings/auth/${provider}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["system"] });
@@ -45,10 +46,10 @@ export function useClearAuth(provider: string) {
 }
 
 export const useTestNotifications = () =>
-  useMutation({ mutationFn: () => post<{ ok: boolean; detail?: string; targets?: string[] }>("/settings/notifications/test") });
+  useMutation({ mutationFn: () => post<NotificationTestOut>("/settings/notifications/test") });
 
 export const useNamingPreview = () =>
   useMutation({
     mutationFn: (body: { post_folder_template: string; file_template: string }) =>
-      post<{ post_folder: string; file: string; full_path: string }>("/settings/naming-preview", body),
+      post<NamingPreviewOut>("/settings/naming-preview", body),
   });

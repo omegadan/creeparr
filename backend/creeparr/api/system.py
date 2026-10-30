@@ -17,7 +17,9 @@ from sse_starlette.sse import EventSourceResponse
 
 from creeparr import __version__
 from creeparr.api.deps import get_services
+from creeparr.api.schemas import HealthOut, LogsOut, SystemStatusOut, TaskInfoOut, TaskStartedOut
 from creeparr.core.errors import NotFound
+from creeparr.core.server_events import HelloEvent
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import FAILED_MEDIA_STATUSES, JobStatus, MediaStatus
 from creeparr.db.models import Creator, DownloadJob, MediaItem, Post
@@ -61,7 +63,7 @@ def health_payload(services: Services) -> tuple[dict[str, Any], int]:
     return payload, (200 if db_ok else 503)
 
 
-@router.get("/system/health")
+@router.get("/system/health", response_model=HealthOut)
 def system_health(request: Request, services: Services = Depends(get_services)):
     from fastapi.responses import JSONResponse
 
@@ -69,8 +71,8 @@ def system_health(request: Request, services: Services = Depends(get_services)):
     return JSONResponse(payload, status_code=code)
 
 
-@router.get("/system/status")
-def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
+@router.get("/system/status", response_model=SystemStatusOut)
+def system_status(services: Services = Depends(get_services)):
     import yt_dlp.version
 
     with session_scope(services.session_factory) as s:
@@ -150,26 +152,33 @@ def system_status(services: Services = Depends(get_services)) -> dict[str, Any]:
     }
 
 
-@router.get("/system/logs")
+@router.get("/system/logs", response_model=LogsOut)
 def system_logs(
     lines: int = Query(default=500, ge=1, le=5000),
     level: str | None = None,
     search: str | None = None,
-) -> dict[str, Any]:
+):
     return {"lines": ring_buffer.tail(lines, level, search)}
 
 
-@router.get("/system/tasks")
-def system_tasks(services: Services = Depends(get_services)) -> list[dict[str, Any]]:
+@router.get("/system/tasks", response_model=list[TaskInfoOut])
+def system_tasks(services: Services = Depends(get_services)):
     return services.scheduler.list_tasks()
 
 
-@router.post("/system/tasks/{name}/run", status_code=202)
+@router.post("/system/tasks/{name}/run", status_code=202, response_model=TaskStartedOut)
 async def run_task(name: str, services: Services = Depends(get_services)):
     if name not in services.scheduler.tasks:
         raise NotFound(f"task {name} not found")
     asyncio.create_task(services.scheduler.run_task(name))
     return {"started": True}
+
+
+def hello(services: Services) -> HelloEvent:
+    return HelloEvent(
+        version=__version__,
+        providers={p.name: p.get_auth_status() for p in services.providers},
+    )
 
 
 @router.get("/events")
@@ -180,9 +189,7 @@ async def events(request: Request, services: Services = Depends(get_services)):
         try:
             yield {
                 "event": "hello",
-                "data": json.dumps(
-                    {"providers": {p.name: p.get_auth_status() for p in services.providers}}
-                ),
+                "data": json.dumps(hello(services).payload()),
             }
             while True:
                 if await request.is_disconnected():
