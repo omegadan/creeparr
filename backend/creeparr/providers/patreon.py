@@ -6,13 +6,16 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
+from creeparr.db.enums import MediaSource
 from creeparr.patreon.client import PatreonClient
+from creeparr.patreon.drm import probe_hls_drm
 from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import CookieSet
 from creeparr.providers.errors import ForbiddenError, NotConfigured, TransportUnavailable
-from creeparr.providers.http import RateLimiter, TransportResponse, build_transport
+from creeparr.providers.http import RateLimiter, build_transport
+from creeparr.providers.media import MediaRef, MediaSession
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -29,7 +32,6 @@ class PatreonProvider(ProviderService):
     name: ClassVar[str] = "patreon"
     label: ClassVar[str] = "Patreon"
     credential_fields: ClassVar[tuple[str, ...]] = ("session_id", "cookies_txt")
-    supports_embeds: ClassVar[bool] = True
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -64,10 +66,6 @@ class PatreonProvider(ProviderService):
     @property
     def is_configured(self) -> bool:
         return bool(self.settings.get().patreon.session_id)
-
-    @property
-    def ytdlp_impersonate(self) -> bool:
-        return self.settings.get().patreon.http_backend == "curl_cffi"
 
     async def rebuild(self) -> None:
         async with self._lock:
@@ -118,7 +116,9 @@ class PatreonProvider(ProviderService):
     def iter_posts(self, external_id: str) -> AsyncIterator[PostPage]:
         return self.client.iter_posts(external_id)
 
-    async def get_post(self, external_id: str, post_id: str) -> PostResource:
+    async def get_post(
+        self, external_id: str, post_id: str, *, post_type: str | None = None
+    ) -> PostResource:
         return await self.client.get_post(post_id)
 
     def resolve_media(self, post: PostResource) -> list[MediaSpec]:
@@ -130,15 +130,24 @@ class PatreonProvider(ProviderService):
             return None
         return post_from_resource(data, IncludedIndex({"included": raw_json.get("included") or []}))
 
-    def media_headers(self) -> dict[str, str]:
-        return self.client.media_headers()
+    def media_session(self) -> MediaSession:
+        s = self.settings.get().patreon
+        client = self.client
+        return MediaSession(
+            headers=client.media_headers(),
+            cookie=client.cookies.header(),
+            cookie_domain="patreon.com",
+            cookie_file=self.written_cookie_file,
+            impersonate=s.impersonate_target if s.http_backend == "curl_cffi" else None,
+            limiter=client.limiter,
+        )
 
-    async def fetch_text(self, url: str) -> str:
-        return await self.client.fetch_text(url)
-
-    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        return await self.client.stream(
-            url, range_start=range_start, headers=self.client.media_headers()
+    async def drm_protected(self, media: MediaRef) -> bool:
+        if await super().drm_protected(media):
+            return True
+        # Mux streams: the playlist says whether it's encrypted with a DRM key system.
+        return media.source == MediaSource.NATIVE_HLS and await probe_hls_drm(
+            self.client.fetch_text, media.url or ""
         )
 
 

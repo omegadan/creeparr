@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from creeparr.core.downloads import FailureKind
+from creeparr.providers.media import MediaSession
 
 
 class DownloadCancelled(Exception):
@@ -68,6 +69,18 @@ class MediaSnapshot:
 
 
 @dataclass(frozen=True)
+class FetchPlan:
+    """How a download fetches its file, worked out by the run when it starts."""
+
+    #: The session of whoever hosts the file: YouTube for its videos, else the poster.
+    session: MediaSession
+    #: The video container to end up in: the setting, or what "auto" means for the creator.
+    container: str
+    #: The failure message when the file's site asks for a signed-in session.
+    sign_in_message: str
+
+
+@dataclass(frozen=True)
 class Learned:
     """What a download found out about its post: yt-dlp knows an undated video's date."""
 
@@ -102,9 +115,14 @@ class Handler(Protocol):
     learns_date: bool
 
     async def fetch(
-        self, media: MediaSnapshot, place: Placement, progress: ProgressReporter
+        self,
+        media: MediaSnapshot,
+        plan: FetchPlan,
+        place: Placement,
+        progress: ProgressReporter,
     ) -> Fetched:
-        """Bring the media's file to disk. Raises DownloadFailed or DownloadCancelled.
+        """Bring the media's file to disk, as `plan` says. Raises DownloadFailed or
+        DownloadCancelled.
 
         Partial files it makes outside the scratch folder are kept after a failure that will
         be retried, and removed after any other failure or a cancel. Blocking work runs in

@@ -205,20 +205,6 @@ async def test_get_pledges(client, respx_mock):
 
 
 @pytest.mark.asyncio
-async def test_stream_does_not_send_cookies_to_cdn(client, respx_mock):
-    route = respx_mock.get("https://c10.patreonusercontent.com/file.mp4").mock(
-        return_value=httpx.Response(200, content=b"abc")
-    )
-    resp = await client.stream("https://c10.patreonusercontent.com/file.mp4", range_start=1)
-    assert resp.status == 200
-    req = route.calls[0].request
-    assert "cookie" not in req.headers
-    assert req.headers["range"] == "bytes=1-"
-    assert req.headers["referer"] == "https://www.patreon.com/"
-    await resp.aclose()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("url", "sends_cookie"),
     [
@@ -233,8 +219,6 @@ async def test_stream_does_not_send_cookies_to_cdn(client, respx_mock):
 async def test_session_cookie_only_goes_to_patreon_hosts(client, respx_mock, url, sends_cookie):
     fetch = respx_mock.get(url).mock(return_value=httpx.Response(200, text="#EXTM3U"))
     await client.fetch_text(url)
-    resp = await client.stream(url)
-    await resp.aclose()
     for call in fetch.calls:
         assert ("cookie" in call.request.headers) is sends_cookie, call.request.url
 

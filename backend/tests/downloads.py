@@ -19,6 +19,7 @@ from creeparr.downloader.claims import Claims
 from creeparr.downloader.embed import Embedder
 from creeparr.downloader.handlers.base import (
     Fetched,
+    FetchPlan,
     Handler,
     Learned,
     MediaSnapshot,
@@ -91,11 +92,17 @@ class FakeHandler:
         self.error = error
         self.before = before
         self.calls: list[MediaSnapshot] = []
+        self.plans: list[FetchPlan] = []
 
     async def fetch(
-        self, media: MediaSnapshot, place: Placement, progress: ProgressReporter
+        self,
+        media: MediaSnapshot,
+        plan: FetchPlan,
+        place: Placement,
+        progress: ProgressReporter,
     ) -> Fetched:
         self.calls.append(media)
+        self.plans.append(plan)
         if self.before is not None:
             await self.before(media, place, progress)
         if self.error is not None:
@@ -162,14 +169,14 @@ def build(
     )
     if ytdlp is None:
         extra = {"engine": engine} if engine else {}
-        ytdlp = YtDlpHandler(settings, providers, ffmpeg, long_work, **extra)
+        ytdlp = YtDlpHandler(settings, ffmpeg, long_work, **extra)
     run = DownloadRun(
         env,
         session_factory,
         settings,
         providers,
         lifecycle,
-        direct=direct or DirectHandler(settings, providers, ffmpeg, long_work),
+        direct=direct or DirectHandler(settings, ffmpeg, long_work),
         ytdlp=ytdlp,
         embedder=embedder,
         long_work=long_work,

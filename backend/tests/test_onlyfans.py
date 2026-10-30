@@ -177,6 +177,6 @@ async def test_stream_cookie_only_goes_to_onlyfans_hosts(
     )
     prov = OnlyFansProvider(env, settings, session_factory, bus)
     route = respx_mock.get(url).mock(return_value=httpx.Response(200, content=b"x"))
-    resp = await prov.stream(url)
+    resp = await prov.media_session().stream(url)
     await resp.aclose()
     assert ("cookie" in route.calls[0].request.headers) is sends_cookie

@@ -57,7 +57,8 @@ log = logging.getLogger(__name__)
 # Rows written under older rules are brought up to date once per version (see reconcile).
 #   1: post statuses re-derived; queued downloads of unwanted media cancelled
 #   2: yt-dlp's DRM failures moved from failed permanently to unsupported (DRM)
-RULES_VERSION = 2
+#   3: YouTube-channel videos with a cover marked not embedded (their covers never fetched)
+RULES_VERSION = 3
 RULES_KEY = "media_lifecycle_rules"
 
 KIND_DISABLED_REASON = "kind disabled for creator"
@@ -74,6 +75,13 @@ _STOPPED = {MediaStatus.SKIPPED, MediaStatus.CANCELLED}
 _UNSUPPORTED = {MediaStatus.UNSUPPORTED, MediaStatus.UNSUPPORTED_DRM}
 # Only a forced download queues these again.
 _FINISHED = {MediaStatus.COMPLETED, *_UNSUPPORTED}
+# Media still to download, or failed: a scan that sees its post again renews its links.
+_AWAITING_LINKS = {
+    MediaStatus.QUEUED,
+    MediaStatus.FAILED,
+    MediaStatus.FAILED_PERMANENT,
+    MediaStatus.MISSING,
+}
 # Posts per transaction when reconcile re-derives every post's status.
 _RECONCILE_BATCH = 500
 
@@ -273,14 +281,17 @@ class MediaLifecycle:
     ) -> SyncResult:
         """Record what a provider reports about a post and bring its media in line.
 
-        A scan re-syncs the media rows only for a new or changed post; `refresh` (the
-        post's Refresh button, or a download renewing its links) always does. Links are
-        marked fresh only then. Wanted media is queued when the creator auto-downloads.
+        A scan re-syncs the media rows for a new or changed post, and for one with media
+        queued or failed, whose links it renews (the post doesn't count as changed);
+        `refresh` (the post's Refresh button, or a download renewing its links) always does.
+        Links are marked fresh only then. Wanted media is queued when the creator
+        auto-downloads.
         """
         post, is_new, changed = _upsert_post(session, creator, pr)
         if is_new or changed:
             self._effects(session).dirty.add(post.id)
-        if is_new or changed or refresh:
+        awaiting = any(item.status in _AWAITING_LINKS for item in post.media_items)
+        if is_new or changed or refresh or awaiting:
             self._sync_media(session, creator, post, resolver(pr))
             post.urls_fetched_at = datetime.now(UTC)
         queued = self._auto_queue(session, creator, post)
@@ -484,11 +495,31 @@ class MediaLifecycle:
 
         Moves media that yt-dlp failed permanently over DRM to unsupported (DRM), cancels
         queued downloads of media that is no longer wanted and re-derives every post's
-        status. Returns what changed, or None when the rows were already current.
+        status. Coming from below v3, it marks YouTube-channel videos with a cover not
+        embedded, so the embed backlog adds their covers. Returns what changed, or None when
+        the rows were already current.
         """
         with session_scope(self._factory) as s:
-            if get_state(s, RULES_KEY, 0) >= RULES_VERSION:
+            applied = get_state(s, RULES_KEY, 0)
+            if applied >= RULES_VERSION:
                 return None
+            covers = 0
+            if applied < 3:
+                covers = s.execute(
+                    update(MediaItem)
+                    .where(
+                        MediaItem.status == MediaStatus.COMPLETED,
+                        MediaItem.kind == MediaKind.VIDEO,
+                        MediaItem.metadata_embedded.is_(True),
+                        MediaItem.post_id.in_(
+                            select(Post.id)
+                            .join(Creator, Creator.id == Post.creator_id)
+                            .where(Creator.provider == "youtube", Post.thumbnail_url != "")
+                        ),
+                    )
+                    .values(metadata_embedded=False)
+                    .execution_options(synchronize_session=False)
+                ).rowcount
             drm = [
                 item
                 for item in s.execute(
@@ -538,13 +569,15 @@ class MediaLifecycle:
             set_state(s, RULES_KEY, RULES_VERSION)
         log.info(
             "media lifecycle rules v%d: %d post statuses updated, %d queued downloads of "
-            "unwanted media cancelled, %d DRM failures marked unsupported",
+            "unwanted media cancelled, %d DRM failures marked unsupported, %d YouTube videos "
+            "marked not embedded",
             RULES_VERSION,
             posts_changed,
             len(jobs),
             len(drm),
+            covers,
         )
-        return {"posts": posts_changed, "jobs": len(jobs), "drm": len(drm)}
+        return {"posts": posts_changed, "jobs": len(jobs), "drm": len(drm), "covers": covers}
 
     # ---- rules ---------------------------------------------------------------------
 

@@ -9,8 +9,14 @@ import pytest
 from creeparr.core.downloads import FailureKind
 from creeparr.downloader.handlers.base import DownloadFailed, ProgressReporter
 from creeparr.downloader.handlers.direct import download_direct
+from creeparr.providers.media import MediaSession
 
 URL = "https://c10.patreonusercontent.com/video.mp4?token=x"
+
+
+@pytest.fixture
+def session() -> MediaSession:
+    return MediaSession(headers={"User-Agent": "test"})
 
 
 def reporter() -> tuple[ProgressReporter, list]:
@@ -19,14 +25,14 @@ def reporter() -> tuple[ProgressReporter, list]:
 
 
 @pytest.mark.asyncio
-async def test_full_download(client, respx_mock, tmp_path: Path):
+async def test_full_download(session, respx_mock, tmp_path: Path):
     body = b"x" * 200_000
     respx_mock.get(URL).mock(
         return_value=httpx.Response(200, content=body, headers={"content-length": str(len(body))})
     )
     rep, events = reporter()
     dest = tmp_path / "video.mp4"
-    res = await download_direct(client, URL, dest, rep)
+    res = await download_direct(session, URL, dest, rep)
     assert res.path == dest and dest.read_bytes() == body
     assert res.size == len(body) and res.sha256 == hashlib.sha256(body).hexdigest()
     assert not dest.with_name("video.mp4.part").exists()
@@ -34,7 +40,7 @@ async def test_full_download(client, respx_mock, tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_resume_with_206(client, respx_mock, tmp_path: Path):
+async def test_resume_with_206(session, respx_mock, tmp_path: Path):
     body = b"0123456789" * 1000
     dest = tmp_path / "v.mp4"
     part = tmp_path / "v.mp4.part"
@@ -50,30 +56,30 @@ async def test_resume_with_206(client, respx_mock, tmp_path: Path):
 
     respx_mock.get(URL).mock(side_effect=handler)
     rep, _ = reporter()
-    res = await download_direct(client, URL, dest, rep)
+    res = await download_direct(session, URL, dest, rep)
     assert dest.read_bytes() == body
     assert res.sha256 == hashlib.sha256(body).hexdigest()
 
 
 @pytest.mark.asyncio
-async def test_server_ignores_range_restarts(client, respx_mock, tmp_path: Path):
+async def test_server_ignores_range_restarts(session, respx_mock, tmp_path: Path):
     body = b"abcdef" * 100
     dest = tmp_path / "v.bin"
     dest.with_name("v.bin.part").write_bytes(b"garbage")
     respx_mock.get(URL).mock(return_value=httpx.Response(200, content=body))
     rep, _ = reporter()
-    await download_direct(client, URL, dest, rep)
+    await download_direct(session, URL, dest, rep)
     assert dest.read_bytes() == body
 
 
 @pytest.mark.asyncio
-async def test_truncated_is_retryable(client, respx_mock, tmp_path: Path):
+async def test_truncated_is_retryable(session, respx_mock, tmp_path: Path):
     respx_mock.get(URL).mock(
         return_value=httpx.Response(200, content=b"abc", headers={"content-length": "10"})
     )
     rep, _ = reporter()
     with pytest.raises(DownloadFailed) as ei:
-        await download_direct(client, URL, tmp_path / "v.bin", rep)
+        await download_direct(session, URL, tmp_path / "v.bin", rep)
     assert (ei.value.kind, ei.value.label) == (FailureKind.RETRYABLE, "truncated")
 
 
@@ -86,16 +92,16 @@ async def test_truncated_is_retryable(client, respx_mock, tmp_path: Path):
         (503, FailureKind.RETRYABLE, "server"),
     ],
 )
-async def test_status_classification(client, respx_mock, tmp_path: Path, status, kind, label):
+async def test_status_classification(session, respx_mock, tmp_path: Path, status, kind, label):
     respx_mock.get(URL).mock(return_value=httpx.Response(status, content=b""))
     rep, _ = reporter()
     with pytest.raises(DownloadFailed) as ei:
-        await download_direct(client, URL, tmp_path / "v.bin", rep)
+        await download_direct(session, URL, tmp_path / "v.bin", rep)
     assert (ei.value.kind, ei.value.label) == (kind, label)
 
 
 @pytest.mark.asyncio
-async def test_cancel_mid_stream(client, respx_mock, tmp_path: Path):
+async def test_cancel_mid_stream(session, respx_mock, tmp_path: Path):
     from creeparr.downloader.handlers.base import DownloadCancelled
 
     async def stream():
@@ -106,7 +112,7 @@ async def test_cancel_mid_stream(client, respx_mock, tmp_path: Path):
     rep, _ = reporter()
     rep.cancel_event.set()
     with pytest.raises(DownloadCancelled):
-        await download_direct(client, URL, tmp_path / "v.bin", rep)
+        await download_direct(session, URL, tmp_path / "v.bin", rep)
 
 
 def test_try_hardlink_dedupe(tmp_path):
@@ -188,7 +194,7 @@ def test_failed_remux_leaves_no_partial_output(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_416_with_a_mismatched_size_restarts(client, respx_mock, tmp_path: Path):
+async def test_416_with_a_mismatched_size_restarts(session, respx_mock, tmp_path: Path):
     # 416 used to mean "the .part is complete" unconditionally, so a .part from a file
     # that has since changed (or was cut short) became the finished download.
     part = tmp_path / "v.mp4.part"
@@ -198,24 +204,24 @@ async def test_416_with_a_mismatched_size_restarts(client, respx_mock, tmp_path:
     )
     rep, _ = reporter()
     with pytest.raises(DownloadFailed):
-        await download_direct(client, URL, tmp_path / "v.mp4", rep)
+        await download_direct(session, URL, tmp_path / "v.mp4", rep)
     assert not part.exists() and not (tmp_path / "v.mp4").exists()
 
 
 @pytest.mark.asyncio
-async def test_416_with_matching_size_completes(client, respx_mock, tmp_path: Path):
+async def test_416_with_matching_size_completes(session, respx_mock, tmp_path: Path):
     part = tmp_path / "v.mp4.part"
     part.write_bytes(b"x" * 2000)
     respx_mock.get(URL).mock(
         return_value=httpx.Response(416, headers={"content-range": "bytes */2000"})
     )
     rep, _ = reporter()
-    res = await download_direct(client, URL, tmp_path / "v.mp4", rep)
+    res = await download_direct(session, URL, tmp_path / "v.mp4", rep)
     assert res.size == 2000 and (tmp_path / "v.mp4").exists()
 
 
 @pytest.mark.asyncio
-async def test_206_from_the_wrong_offset_restarts(client, respx_mock, tmp_path: Path):
+async def test_206_from_the_wrong_offset_restarts(session, respx_mock, tmp_path: Path):
     part = tmp_path / "v.mp4.part"
     part.write_bytes(b"a" * 4000)
     respx_mock.get(URL).mock(
@@ -225,5 +231,5 @@ async def test_206_from_the_wrong_offset_restarts(client, respx_mock, tmp_path: 
     )
     rep, _ = reporter()
     with pytest.raises(DownloadFailed):
-        await download_direct(client, URL, tmp_path / "v.mp4", rep)
+        await download_direct(session, URL, tmp_path / "v.mp4", rep)
     assert not part.exists()

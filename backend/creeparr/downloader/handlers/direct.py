@@ -18,16 +18,16 @@ from creeparr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadFailed,
     Fetched,
+    FetchPlan,
     MediaSnapshot,
     Placement,
     ProgressReporter,
 )
 from creeparr.downloader.longwork import LongWork
 from creeparr.downloader.metadata import Ffmpeg
-from creeparr.downloader.paths import container_ext, guess_ext
+from creeparr.downloader.paths import guess_ext
 from creeparr.providers.errors import TransportFailure
 from creeparr.providers.http import TransportResponse
-from creeparr.providers.registry import ProviderRegistry
 
 log = logging.getLogger(__name__)
 
@@ -51,34 +51,28 @@ class DirectHandler:
 
     learns_date = False
 
-    def __init__(
-        self,
-        settings: SettingsService,
-        providers: ProviderRegistry,
-        ffmpeg: Ffmpeg,
-        long_work: LongWork,
-    ) -> None:
+    def __init__(self, settings: SettingsService, ffmpeg: Ffmpeg, long_work: LongWork) -> None:
         self._settings = settings
-        self._providers = providers
         self._ffmpeg = ffmpeg
         self._long = long_work
 
     async def fetch(
-        self, media: MediaSnapshot, place: Placement, progress: ProgressReporter
+        self,
+        media: MediaSnapshot,
+        plan: FetchPlan,
+        place: Placement,
+        progress: ProgressReporter,
     ) -> Fetched:
         d = self._settings.get().downloads
-        provider = self._providers.get(media.provider)
         native = guess_ext(media.remote_file_name, media.url, media.mimetype, media.kind)
-        target = native
-        if media.kind == MediaKind.VIDEO:
-            target = container_ext(d.container, media.provider)
+        target = plan.container if media.kind == MediaKind.VIDEO else native
         dest = place.reserve(target)
         parts = [_part(dest)]  # kept only for a retry's resume
         progress.set_stage("downloading")
         try:
             if native == target:
                 res = await download_direct(
-                    provider,
+                    plan.session,
                     media.url or "",
                     dest,
                     progress,
@@ -90,7 +84,7 @@ class DirectHandler:
             src = dest.with_name(dest.stem + f".src.{native}")
             parts.append(_part(src))
             res = await download_direct(
-                provider,
+                plan.session,
                 media.url or "",
                 src,
                 progress,

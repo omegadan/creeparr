@@ -96,11 +96,9 @@ def test_secret_key_file_is_private_from_creation(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_onlyfans_stream_closes_its_one_off_client(
-    env, settings, session_factory, bus, respx_mock, monkeypatch
-):
+async def test_a_media_stream_closes_its_one_off_client(respx_mock, monkeypatch):
+    import creeparr.providers.media as media
     from creeparr.providers.http import HttpxTransport
-    from creeparr.providers.onlyfans.provider import OnlyFansProvider
 
     closed: list[bool] = []
 
@@ -109,12 +107,11 @@ async def test_onlyfans_stream_closes_its_one_off_client(
             closed.append(True)
             await super().aclose()
 
-    prov = OnlyFansProvider(env, settings, session_factory, bus)
-    monkeypatch.setattr(prov, "_transport", lambda: Tracking(http2=False))
+    monkeypatch.setattr(media, "_transport", lambda impersonate: Tracking(http2=False))
     respx_mock.get("https://cdn2.onlyfans.com/v.mp4").mock(
         return_value=httpx.Response(200, content=b"x")
     )
-    resp = await prov.stream("https://cdn2.onlyfans.com/v.mp4")
+    resp = await media.MediaSession().stream("https://cdn2.onlyfans.com/v.mp4")
     assert not closed
     await resp.aclose()
     assert closed == [True]  # used to leak one HTTP client per downloaded file

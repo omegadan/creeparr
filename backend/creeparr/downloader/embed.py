@@ -20,7 +20,7 @@ from creeparr.downloader.fs import sha256_file
 from creeparr.downloader.handlers.base import ProgressReporter
 from creeparr.downloader.longwork import LongWork
 from creeparr.downloader.metadata import Ffmpeg, html_to_text
-from creeparr.providers.base import ProviderService
+from creeparr.providers.media import MediaSession
 from creeparr.providers.registry import ProviderRegistry
 
 log = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ class Embedder:
         cover: Path | None = None
         if tags.cover_url:
             cover = await _fetch_cover(
-                self._providers.get(tags.provider),
+                self._providers.get(tags.provider).media_session(),
                 tags.cover_url,
                 video.with_name(f".creeparr-cover-{media_id}.jpg"),
             )
@@ -122,9 +122,9 @@ class Embedder:
             )
 
 
-async def _fetch_cover(provider: ProviderService, url: str, dest: Path) -> Path | None:
+async def _fetch_cover(session: MediaSession, url: str, dest: Path) -> Path | None:
     try:
-        resp = await provider.stream(url)
+        resp = await session.stream(url)
         data = bytearray()
         async for chunk in resp.aiter_bytes(1 << 16):
             data.extend(chunk)
