@@ -52,8 +52,11 @@ FastAPI (uvicorn)
      `handlers/ytdlp.py` (yt-dlp as a library for Mux HLS, YouTube, Vimeo and Reddit video).
      yt-dlp works in a scratch folder, because an undated post (YouTube's back catalogue)
      learns its date, and so its folder, from the download.
-   - Files land at names rendered from the naming templates (`paths.py`), reserved against
-     the other running downloads (`placement.py`). Videos get their post's metadata and
+   - Files land at names rendered from the naming templates by the path rules (`paths.py`),
+     reserved against the other running downloads (`placement.py`). The settings page's
+     naming preview runs the same rules on sample posts (`paths.SAMPLES`), and saving
+     refuses a template they can't render; a stored setting that no longer validates is
+     reset alone, once, with a warning in the history. Videos get their post's metadata and
      cover embedded (`embed.py`, shared with the embed backlog), then dedupe, the NFO and
      the post's date on the file follow.
 

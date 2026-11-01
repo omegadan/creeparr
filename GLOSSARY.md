@@ -31,6 +31,13 @@ Reading a creator's posts from its provider to record new and changed posts and 
 **Library**:
 The folders and files Creeparr archives media into.
 
+**Path rules**:
+How a media file's place in the library follows from its post: the post's folder from the post folder template, the file's name from the file name template. Both templates are filled with tokens such as `{creator}` and `{title}`.
+_Avoid_: naming scheme
+
+**Naming preview**:
+Where the path rules would put a few sample posts' files under the templates being edited, shown before they're saved.
+
 ## Downloads
 
 **Download**:

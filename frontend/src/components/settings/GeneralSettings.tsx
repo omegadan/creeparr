@@ -1,4 +1,5 @@
-import { Fragment, useEffect } from "react";
+import { Fragment, useEffect, useState } from "react";
+import type { NamingPreviewOut, NamingTokenOut } from "../../api/schema";
 import type { Settings } from "../../api/types";
 import { useNamingPreview } from "../../api/hooks/useSettings";
 import { useProviders } from "../../api/hooks/useCreators";
@@ -8,19 +9,22 @@ import { Button } from "../ui/Button";
 import { Toggle } from "../ui/Toggle";
 import { num, useSettingsForm } from "./useSettingsForm";
 
-const TOKENS = ["creator", "creator_vanity", "campaign_id", "title", "post_id", "published:%Y-%m-%d", "post_type", "filename", "ext", "media_kind", "media_index", "embed_provider"];
-
 export function GeneralSettings({ settings }: { settings: Settings }) {
   const naming = useSettingsForm(settings, "naming");
   const history = useSettingsForm(settings, "history");
   const preview = useNamingPreview();
+  // The tokens come with each preview; keep the last ones while a template is broken.
+  const [tokens, setTokens] = useState<NamingTokenOut[]>([]);
   const providers = useProviders().data ?? [];
-  const { post_folder_template, file_template } = naming.form;
+  const { post_folder_template, file_template, max_component_length } = naming.form;
   useEffect(() => {
-    const t = window.setTimeout(() => preview.mutate({ post_folder_template, file_template }), 300);
+    const t = window.setTimeout(
+      () => preview.mutate({ post_folder_template, file_template, max_component_length }, { onSuccess: (d) => setTokens(d.tokens) }),
+      300,
+    );
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post_folder_template, file_template]);
+  }, [post_folder_template, file_template, max_component_length]);
 
   return (
     <div className="grid gap-5">
@@ -28,15 +32,14 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
         <Field label="Post folder template">
           <input className="input font-mono" value={naming.form.post_folder_template} onChange={(e) => naming.set("post_folder_template", e.target.value)} />
         </Field>
-        <Field label="File name template" hint="{filename} is the original name, or the post title for streams and embeds.">
+        <Field label="File name template" hint="{filename} is the original name, or the post title for streams and embeds. Applies to new downloads; existing files aren't moved.">
           <input className="input font-mono" value={naming.form.file_template} onChange={(e) => naming.set("file_template", e.target.value)} />
         </Field>
-        <div className="rounded-md border border-line bg-bg-0 px-3 py-2 font-mono text-xs">
-          <span className="text-fg-dim">preview: </span>
-          {preview.data ? preview.data.full_path : preview.isError ? <span className="text-danger">invalid template</span> : "…"}
-        </div>
+        <NamingPreview preview={preview.data} error={preview.error} />
         <div className="flex flex-wrap gap-1">
-          {TOKENS.map((t) => <code key={t} className="rounded bg-bg-3 px-1.5 py-0.5 text-[11px] text-fg-muted">{`{${t}}`}</code>)}
+          {tokens.map((t) => (
+            <code key={t.name} title={`${t.description}. e.g. ${t.example}`} className="cursor-help rounded bg-bg-3 px-1.5 py-0.5 text-[11px] text-fg-muted">{`{${t.name}}`}</code>
+          ))}
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Max path component length (bytes)"><input type="number" min="20" max="240" className="input" value={naming.form.max_component_length} onChange={(e) => naming.set("max_component_length", num(e.target.value, 150))} /></Field>
@@ -69,6 +72,32 @@ export function GeneralSettings({ settings }: { settings: Settings }) {
           <dt className="text-fg-dim">ffmpeg</dt><dd>{settings.env.ffmpeg ?? <span className="text-danger">not found</span>}</dd>
         </dl>
       </Section>
+    </div>
+  );
+}
+
+/** Where each sample post's file would land under the templates being edited. */
+function NamingPreview({ preview, error }: { preview?: NamingPreviewOut; error: Error | null }) {
+  const reason = error && ((error as { detail?: string | null }).detail ?? error.message);
+  return (
+    <div className="grid gap-1 rounded-md border border-line bg-bg-0 px-3 py-2 font-mono text-xs">
+      {reason ? (
+        <span className="text-danger">{reason}</span>
+      ) : preview ? (
+        <>
+          {preview.samples.map((s) => (
+            <div key={s.label} className="grid gap-x-3 sm:grid-cols-[7rem_1fr]">
+              <span className="font-sans text-fg-dim">{s.label}</span>
+              <span className="break-all">{s.full_path}</span>
+            </div>
+          ))}
+          {preview.unknown.map((name) => (
+            <span key={name} className="text-warn">{`{${name}}`} isn't a token here; it renders as nothing.</span>
+          ))}
+        </>
+      ) : (
+        "…"
+      )}
     </div>
   );
 }

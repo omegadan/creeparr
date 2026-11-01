@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends
+from pydantic import ValidationError
 
 from creeparr.api.deps import get_services
 from creeparr.api.schemas import (
@@ -13,14 +13,17 @@ from creeparr.api.schemas import (
     AuthTestResultOut,
     NamingPreviewBody,
     NamingPreviewOut,
+    NamingTokenOut,
     NotificationTestOut,
     OkOut,
+    SamplePathOut,
     SetAuthOut,
     SettingsOut,
 )
 from creeparr.core.errors import ValidationFailed
-from creeparr.core.naming import render_template
 from creeparr.core.server_events import SettingsChangedEvent
+from creeparr.core.settings_service import NamingSettings, reasons
+from creeparr.downloader import paths
 from creeparr.services import Services
 
 router = APIRouter(tags=["settings"])
@@ -124,21 +127,20 @@ async def test_notifications(services: Services = Depends(get_services)):
 
 @router.post("/settings/naming-preview", response_model=NamingPreviewOut)
 def naming_preview(body: NamingPreviewBody, services: Services = Depends(get_services)):
-    max_len = services.settings.get().naming.max_component_length
-    sample = {
-        "creator": "Example Creator",
-        "creator_vanity": "examplecreator",
-        "campaign_id": "1234567",
-        "title": "Episode 12: Behind the scenes / Q&A",
-        "post_id": "98765432",
-        "published": datetime(2026, 3, 14, 15, 9, tzinfo=UTC),
-        "post_type": "video_external_file",
-        "media_kind": "video",
-        "media_index": 1,
-        "embed_provider": "",
-        "filename": "episode-12.mp4",
-        "ext": "mp4",
-    }
-    folder = render_template(body.post_folder_template, sample, max_len)
-    file = render_template(body.file_template, sample, max_len)
-    return {"post_folder": str(folder), "file": str(file), "full_path": str(folder / file)}
+    edited = {k: v for k, v in body.model_dump().items() if v is not None}
+    try:
+        naming = NamingSettings.model_validate(
+            {**services.settings.get().naming.model_dump(), **edited}
+        )
+        samples = paths.preview(naming)
+    except (ValidationError, ValueError) as exc:
+        reason = reasons(exc) if isinstance(exc, ValidationError) else str(exc)
+        raise ValidationFailed("invalid template", detail=reason) from exc
+    return NamingPreviewOut(
+        samples=[SamplePathOut(**vars(sample)) for sample in samples],
+        unknown=paths.unknown_tokens(naming),
+        tokens=[
+            NamingTokenOut(name=t.name, description=t.description, example=example)
+            for t, example in paths.token_examples()
+        ],
+    )

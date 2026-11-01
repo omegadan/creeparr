@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { del, get, post, put } from "../client";
-import type { NamingPreviewOut, NotificationTestOut, OkOut, SetAuthOut } from "../schema";
+import type { NamingPreviewBody, NamingPreviewOut, NotificationTestOut, OkOut, SetAuthOut } from "../schema";
 import type { AuthTestResult, Settings, SettingsPatch } from "../types";
 
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => get<Settings>("/settings") });
@@ -50,6 +50,5 @@ export const useTestNotifications = () =>
 
 export const useNamingPreview = () =>
   useMutation({
-    mutationFn: (body: { post_folder_template: string; file_template: string }) =>
-      post<NamingPreviewOut>("/settings/naming-preview", body),
+    mutationFn: (body: NamingPreviewBody) => post<NamingPreviewOut>("/settings/naming-preview", body),
   });

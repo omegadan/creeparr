@@ -403,15 +403,17 @@ export interface MediaSummary {
   skipped: number;
 }
 
+/** The naming settings being edited; whatever isn't sent is as saved. */
 export interface NamingPreviewBody {
-  post_folder_template: string;
-  file_template?: string;
+  post_folder_template?: string | null;
+  file_template?: string | null;
+  max_component_length?: number | null;
 }
 
 export interface NamingPreviewOut {
-  post_folder: string;
-  file: string;
-  full_path: string;
+  samples: SamplePathOut[];
+  unknown: string[];
+  tokens: NamingTokenOut[];
 }
 
 export interface NamingSettingsOut {
@@ -421,6 +423,12 @@ export interface NamingSettingsOut {
   write_sidecars: boolean;
   write_nfo: boolean;
   embed_metadata: boolean;
+}
+
+export interface NamingTokenOut {
+  name: string;
+  description: string;
+  example: string;
 }
 
 export interface NotificationSettingsOut {
@@ -623,6 +631,14 @@ export interface RedditSettingsOut {
 
 export interface RequeuedOut {
   requeued: number;
+}
+
+/** Where a sample post's file would land, relative to the download folder. */
+export interface SamplePathOut {
+  label: string;
+  post_folder: string;
+  file: string;
+  full_path: string;
 }
 
 export interface ScanFinishedEvent {
