@@ -700,6 +700,17 @@ export interface ScanSettingsOut {
   default_include_attachments: boolean;
 }
 
+/**
+ * A scan that didn't run: refused when the worker came to start it, or the first scan
+ * of a creator just added.
+ */
+export interface ScanSkippedEvent {
+  creator_id: number;
+  creator_name: string;
+  code: string;
+  message: string;
+}
+
 export interface ScanSlotOut {
   creator_id: number;
   mode: ScanMode;
@@ -829,6 +840,7 @@ export interface ServerEvents {
   "hello": HelloEvent;
   "auth.status": AuthStatusEvent;
   "scan.queued": ScanQueuedEvent;
+  "scan.skipped": ScanSkippedEvent;
   "scan.started": ScanStartedEvent;
   "scan.progress": ScanProgressEvent;
   "scan.finished": ScanFinishedEvent;

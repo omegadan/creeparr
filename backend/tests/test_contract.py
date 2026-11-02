@@ -45,7 +45,7 @@ def test_every_json_route_declares_its_response():
 def test_every_event_is_in_the_contract():
     spec = openapi()
     assert spec["x-server-events"].keys() == EVENTS.keys()
-    assert len(EVENTS) == 16
+    assert len(EVENTS) == 17
     for ref in spec["x-server-events"].values():
         assert ref.removeprefix("#/components/schemas/") in spec["components"]["schemas"]
 

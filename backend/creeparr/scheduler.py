@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import delete, select
+from sqlalchemy import delete
 
 from creeparr.core.errors import Conflict
 from creeparr.db.engine import session_scope
-from creeparr.db.enums import JobStatus, ScanMode
-from creeparr.db.models import Creator, DownloadJob, History
+from creeparr.db.enums import JobStatus, ScanMode, ScanTrigger
+from creeparr.db.models import DownloadJob, History
 
 if TYPE_CHECKING:
     from creeparr.services import Services
@@ -188,61 +188,30 @@ class SchedulerService:
     async def _scan_monitored(self) -> dict[str, int]:
         global_interval = self.services.settings.get().scan.interval_minutes
         now = datetime.now(UTC)
-        disabled = self.services.providers.disabled_names()
+        scans = self.services.scan_manager
         due: list[int] = []
-        with session_scope(self.services.session_factory) as s:
-            for cid, provider, last_scan, override in s.execute(
-                select(
-                    Creator.id,
-                    Creator.provider,
-                    Creator.last_scan_at,
-                    Creator.scan_interval_minutes,
-                ).where(Creator.monitored.is_(True), Creator.enabled.is_(True))
-            ).all():
-                if provider in disabled:
-                    continue
-                interval = override if override is not None else global_interval
-                if not interval or interval <= 0:
-                    continue
-                if last_scan is None or (now - last_scan) >= timedelta(minutes=interval):
-                    due.append(cid)
-        return {"queued": self._request_scans(due, ScanMode.AUTO)}
+        for c in await asyncio.to_thread(scans.admission.candidates, ScanTrigger.SCHEDULE):
+            interval = (
+                c.scan_interval_minutes if c.scan_interval_minutes is not None else global_interval
+            )
+            if not interval or interval <= 0:
+                continue
+            if c.last_scan_at is None or (now - c.last_scan_at) >= timedelta(minutes=interval):
+                due.append(c.creator_id)
+        return {"queued": scans.request_scans(due, ScanMode.AUTO, ScanTrigger.SCHEDULE)}
 
     async def _full_rescan(self) -> dict[str, int]:
         days = self.services.settings.get().scan.full_rescan_days
         if not days:
             return {"queued": 0}
         cutoff = datetime.now(UTC) - timedelta(days=days)
-        disabled = self.services.providers.disabled_names()
-        with session_scope(self.services.session_factory) as s:
-            ids = [
-                cid
-                for cid, provider in s.execute(
-                    select(Creator.id, Creator.provider).where(
-                        Creator.monitored.is_(True),
-                        Creator.enabled.is_(True),
-                        (Creator.last_full_scan_at.is_(None))
-                        | (Creator.last_full_scan_at < cutoff),
-                    )
-                ).all()
-                if provider not in disabled
-            ]
-        return {"queued": self._request_scans(ids, ScanMode.FULL)}
-
-    def _request_scans(self, creator_ids: list[int], mode: ScanMode) -> int:
-        """Queue scheduled scans, skipping creators that can't scan right now.
-
-        request_scan raises Conflict for e.g. a provider whose session expired; that
-        must only skip that creator, not abort the pass for every creator after it.
-        """
-        n = 0
-        for cid in creator_ids:
-            try:
-                if self.services.scan_manager.request_scan(cid, mode, trigger="schedule"):
-                    n += 1
-            except Conflict as exc:
-                log.debug("scheduled scan of creator %s skipped: %s", cid, exc)
-        return n
+        scans = self.services.scan_manager
+        due = [
+            c.creator_id
+            for c in await asyncio.to_thread(scans.admission.candidates, ScanTrigger.SCHEDULE)
+            if c.last_full_scan_at is None or c.last_full_scan_at < cutoff
+        ]
+        return {"queued": scans.request_scans(due, ScanMode.FULL, ScanTrigger.SCHEDULE)}
 
     async def _requeue_failed(self) -> dict[str, int]:
         n = await asyncio.to_thread(self.services.lifecycle.retry_due)

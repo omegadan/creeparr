@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { serverVersionWatcher } from "../lib/version";
+import { useToast } from "../components/ui/Toast";
+import { skippedScansMessage } from "../lib/scans";
 import type { Queue, ServerEvents } from "./types";
 
 /** A handler for each event the UI reacts to, given that event's payload. */
@@ -12,6 +14,7 @@ export function useServerEvents(): { serverUpdated: boolean } {
   const qc = useQueryClient();
   const timers = useRef<Record<string, number>>({});
   const [serverUpdated, setServerUpdated] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     const pending = timers.current; // one object for the effect's lifetime
@@ -20,10 +23,20 @@ export function useServerEvents(): { serverUpdated: boolean } {
       pending[key] = window.setTimeout(fn, ms);
     };
     const invalidate = (keys: unknown[][]) => () => keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
+    // Skipped scans arrive in bursts (a session expiring skips the rest of a scheduled pass),
+    // so they're collected for a moment and shown as one toast.
+    let skipped: ServerEvents["scan.skipped"][] = [];
 
     const handlers: Handlers = {
       "auth.status": () => debounced("status", invalidate([["system", "status"], ["providers"]])),
       "scan.started": () => debounced("creators", invalidate([["creators"], ["system", "status"]])),
+      "scan.skipped": (d) => {
+        skipped.push(d);
+        debounced("skipped", () => {
+          toast(skippedScansMessage(skipped), "warning");
+          skipped = [];
+        }, 1000);
+      },
       "scan.queued": () => debounced("creators", invalidate([["creators"], ["system", "status"]])),
       "scan.progress": () => debounced("posts", invalidate([["posts"]]), 800),
       "scan.finished": (d) => {
@@ -98,6 +111,6 @@ export function useServerEvents(): { serverUpdated: boolean } {
       es?.close();
       Object.values(pending).forEach((t) => window.clearTimeout(t));
     };
-  }, [qc]);
+  }, [qc, toast]);
   return { serverUpdated };
 }

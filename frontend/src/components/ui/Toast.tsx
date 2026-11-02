@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
 import { cx } from "../../lib/format";
 
-type Kind = "info" | "success" | "error";
+type Kind = "info" | "success" | "warning" | "error";
 interface Toast { id: number; kind: Kind; message: string }
 interface Ctx { toast: (message: string, kind?: Kind) => void; error: (e: unknown, fallback?: string) => void }
 
@@ -14,7 +14,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((message: string, kind: Kind = "info") => {
     const id = Date.now() + Math.random();
     setItems((s) => [...s, { id, kind, message }]);
-    window.setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), kind === "error" ? 8000 : 4000);
+    window.setTimeout(() => setItems((s) => s.filter((t) => t.id !== id)), kind === "error" || kind === "warning" ? 8000 : 4000);
   }, []);
   const error = useCallback(
     (e: unknown, fallback = "Something went wrong") => {
@@ -25,7 +25,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [toast],
   );
   const value = useMemo(() => ({ toast, error }), [toast, error]);
-  const icons = { info: <Info className="h-4 w-4 text-info" />, success: <CheckCircle2 className="h-4 w-4 text-ok" />, error: <AlertTriangle className="h-4 w-4 text-danger" /> };
+  const icons = { info: <Info className="h-4 w-4 text-info" />, success: <CheckCircle2 className="h-4 w-4 text-ok" />, warning: <AlertTriangle className="h-4 w-4 text-warn" />, error: <AlertTriangle className="h-4 w-4 text-danger" /> };
   return (
     <ToastCtx.Provider value={value}>
       {children}

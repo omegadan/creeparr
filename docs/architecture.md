@@ -6,7 +6,8 @@ Single container, single process:
 FastAPI (uvicorn)
 ├── /api/v1/*         REST + SSE (/api/v1/events)
 ├── /                 built React SPA (backend/creeparr/static)
-├── ScanManager       one worker; walks posts via each provider, hands each to MediaLifecycle
+├── ScanManager       one worker; ScanAdmission decides which scans may run; walks posts via
+│                     each provider, hands each to MediaLifecycle
 ├── DownloadManager   N asyncio workers: Claims picks the next download, DownloadRun runs it,
 │                     MediaLifecycle records how it ended
 ├── MediaLifecycle    every media status change: user actions, post syncs, download
@@ -20,8 +21,18 @@ FastAPI (uvicorn)
 ## Data flow
 
 1. **Add creator** → the provider resolves a URL/handle to a creator (Patreon:
-   `resolve_campaign_id`, search API then page scrape) → row in `creators` → full scan requested.
-2. **Scan** (`scanner/scanner.py`) iterates the provider's post pages. Each
+   `resolve_campaign_id`, search API then page scrape) → row in `creators` → full scan requested
+   (a refused first scan is reported as `scan.skipped`; the creator stays added).
+2. **Scan admission** (`scanner/admission.py`): every scan, whatever asked for it (`ScanTrigger`:
+   `manual`, `scan_all`, `schedule`, `add`), goes through `ScanAdmission.check` when
+   `ScanManager` queues it and again when the worker starts it, so a scan queued before its
+   creator or provider was switched off, or its session expired, is skipped (`scan.skipped`).
+   A refusal names the first rule that applies: provider not in this version, provider off,
+   creator off, not monitored (Scan all and scheduled scans only), session invalid.
+   `ScanAdmission.candidates` lists the creators an automatic scan may cover, by the same
+   rules; the scheduler decides which of them are due (interval, full-rescan age) and
+   `ScanManager` skips one already queued or running.
+3. **Scan** (`scanner/scanner.py`) iterates the provider's post pages. Each
    page is processed in one DB transaction, each post through `MediaLifecycle.sync_post`
    (`core/lifecycle.py`): upsert the post row; for a new or changed post, or one with media
    queued or failed, re-sync its media rows from `resolve_media` (post JSON → `MediaSpec`
@@ -30,7 +41,7 @@ FastAPI (uvicorn)
    the creator's preferences; queue wanted media if the creator auto-downloads; derive the
    post status. Incremental scans stop after `scan.overlap_posts` consecutive already-known,
    unchanged posts.
-3. **Download** (`downloader/`): a worker (`manager.py`) asks `Claims` (`claims.py`) for the
+4. **Download** (`downloader/`): a worker (`manager.py`) asks `Claims` (`claims.py`) for the
    next download. The claim query applies every skip rule itself (disabled or throttled
    provider, pacing, creator at its cap), so the queue can be any length without jobs
    starving behind ones that can't start, and `MediaLifecycle.start_download` marks the
@@ -62,7 +73,7 @@ FastAPI (uvicorn)
 
    The worker hands the outcome to `MediaLifecycle.record_outcome`, whose failure table
    decides the media's status and its retries (see the status model below).
-4. **Events**: every state change publishes on an in-process `EventBus`; the SSE endpoint
+5. **Events**: every state change publishes on an in-process `EventBus`; the SSE endpoint
    streams them and the UI invalidates TanStack Query caches accordingly. `MediaLifecycle`
    publishes `post.changed` for each post it changed, `queue.changed` when jobs changed,
    `job.started` and `job.finished` (with the post's id) and the history entries it wrote,
@@ -135,7 +146,8 @@ the stored rows once, at the next startup.
 
 API traffic goes through each provider's client; session cookies are only sent to that
 provider's own hosts (never CDNs). Any `AuthError`/`CloudflareChallengeError` marks that
-provider's auth status invalid, which pauses its scans, holds its native downloads (embeds
+provider's auth status invalid, which pauses its scans (admission refuses them, including
+those already queued), holds its native downloads (embeds
 continue), shows a banner, and records history. A daily `session_check` and a successful
 **Test connection** clear it.
 
