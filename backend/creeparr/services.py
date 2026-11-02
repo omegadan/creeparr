@@ -14,10 +14,8 @@ from creeparr.core.security import get_secret_key
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import SessionFactory, make_engine, make_session_factory
 from creeparr.downloader.manager import DownloadManager
-from creeparr.providers.instagram.provider import InstagramProvider
 from creeparr.providers.onlyfans.provider import OnlyFansProvider
 from creeparr.providers.patreon import PatreonProvider
-from creeparr.providers.reddit.provider import RedditProvider
 from creeparr.providers.registry import ProviderRegistry
 from creeparr.providers.youtube import YouTubeProvider
 from creeparr.scanner.scan_manager import ScanManager
@@ -55,8 +53,8 @@ def build_services(env: EnvConfig) -> Services:
             PatreonProvider(env, settings, factory, bus),
             OnlyFansProvider(env, settings, factory, bus),
             YouTubeProvider(env, settings, factory, bus),
-            InstagramProvider(env, settings, factory, bus),
-            RedditProvider(env, settings, factory, bus),
+            # Instagram and Reddit are off for now: their bot protection blocks scans too
+            # aggressively to be usable. Their code stays; register them here to bring them back.
         ]
     )
     scanner = Scanner(factory, settings, bus, providers)
