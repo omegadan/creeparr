@@ -28,6 +28,17 @@ A video hosted elsewhere (YouTube, Vimeo, ...) and shown in a post.
 **Scan**:
 Reading a creator's posts from its provider to record new and changed posts and their media.
 
+**Scan admission**:
+Whether a creator may be scanned now. Asked when a scan is queued and again when it starts,
+for every trigger: the Scan button, Scan all, the scheduled passes, and a creator just added.
+Not whether a scan is due (the scheduler's call) or already queued.
+
+**Refusal**:
+Scan admission's "no", with the first reason that applies: the provider isn't in this version
+(`provider_unavailable`), is switched off (`provider_disabled`), the creator is switched off
+(`creator_disabled`), isn't monitored and nobody asked for it by name (`not_monitored`, Scan
+all and scheduled scans only), or the provider's session is invalid (`auth_invalid`).
+
 **Library**:
 The folders and files Creeparr archives media into.
 

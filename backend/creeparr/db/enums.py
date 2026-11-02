@@ -89,6 +89,20 @@ class ScanMode(StrEnum):
     INCREMENTAL = "incremental"
 
 
+class ScanTrigger(StrEnum):
+    """What asked for a scan; stored on the scan run."""
+
+    MANUAL = "manual"  # the Scan button on one creator
+    SCAN_ALL = "scan_all"  # Scan all
+    SCHEDULE = "schedule"  # the scheduled and full-rescan passes
+    ADD = "add"  # the first scan of a creator just added
+
+    @property
+    def automatic(self) -> bool:
+        """Scans nobody asked for by name; these only cover monitored creators."""
+        return self in (ScanTrigger.SCAN_ALL, ScanTrigger.SCHEDULE)
+
+
 class ScanStatus(StrEnum):
     RUNNING = "running"
     OK = "ok"

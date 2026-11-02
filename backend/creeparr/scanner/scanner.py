@@ -21,7 +21,7 @@ from creeparr.core.server_events import (
 )
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
-from creeparr.db.enums import EventType, ScanMode, ScanStatus
+from creeparr.db.enums import EventType, ScanMode, ScanStatus, ScanTrigger
 from creeparr.db.models import Creator, ScanRun
 from creeparr.providers.errors import (
     AuthError,
@@ -69,7 +69,9 @@ class Scanner:
         self.providers = providers
         self.lifecycle = lifecycle
 
-    def _start_run(self, creator_id: int, mode: ScanMode, trigger: str) -> tuple[int, Creator]:
+    def _start_run(
+        self, creator_id: int, mode: ScanMode, trigger: ScanTrigger
+    ) -> tuple[int, Creator]:
         with session_scope(self._factory) as s:
             creator = s.get(Creator, creator_id)
             if creator is None:
@@ -200,7 +202,7 @@ class Scanner:
         self,
         creator_id: int,
         mode: ScanMode = ScanMode.AUTO,
-        trigger: str = "manual",
+        trigger: ScanTrigger = ScanTrigger.MANUAL,
         cancel: asyncio.Event | None = None,
     ) -> int:
         """Run a scan. Returns the scan_run id. Raises PatreonError for auth-class failures."""

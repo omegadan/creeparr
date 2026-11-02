@@ -1,4 +1,8 @@
-"""Serialises scans behind a single worker so the Patreon rate limit is respected."""
+"""Serialises scans behind a single worker so the Patreon rate limit is respected.
+
+Scan admission is asked twice: when a scan is queued and when the worker starts it, so a scan
+queued before its creator or provider was switched off, or its session expired, is skipped.
+"""
 
 from __future__ import annotations
 
@@ -9,16 +13,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
-
 from creeparr.core.errors import Conflict, NotFound
 from creeparr.core.events import EventBus
-from creeparr.core.server_events import ScanQueuedEvent
-from creeparr.db.engine import SessionFactory, session_scope
-from creeparr.db.enums import ScanMode
-from creeparr.db.models import Creator
+from creeparr.core.server_events import ScanQueuedEvent, ScanSkippedEvent
+from creeparr.db.engine import SessionFactory
+from creeparr.db.enums import ScanMode, ScanTrigger
 from creeparr.providers.errors import AuthError, CloudflareChallengeError
 from creeparr.providers.registry import ProviderRegistry
+from creeparr.scanner.admission import Refusal, ScanAdmission
 from creeparr.scanner.scanner import Scanner
 
 log = logging.getLogger(__name__)
@@ -28,9 +30,8 @@ log = logging.getLogger(__name__)
 class ScanRequest:
     creator_id: int
     mode: ScanMode
-    trigger: str
+    trigger: ScanTrigger
     requested_at: datetime
-    provider: str
 
 
 class ScanManager:
@@ -42,9 +43,8 @@ class ScanManager:
         bus: EventBus,
     ) -> None:
         self.scanner = scanner
-        self._factory = session_factory
-        self.providers = providers
         self.bus = bus
+        self.admission = ScanAdmission(session_factory, providers)
         self._queue: asyncio.Queue[ScanRequest] = asyncio.Queue()
         self._pending: dict[int, ScanRequest] = {}
         self._current: ScanRequest | None = None
@@ -69,24 +69,18 @@ class ScanManager:
     # ---- API -----------------------------------------------------------------------
 
     def request_scan(
-        self, creator_id: int, mode: ScanMode = ScanMode.AUTO, trigger: str = "manual"
+        self,
+        creator_id: int,
+        mode: ScanMode = ScanMode.AUTO,
+        trigger: ScanTrigger = ScanTrigger.MANUAL,
     ) -> bool:
-        """Enqueue a scan; returns False if one is already pending/running for this creator."""
-        with session_scope(self._factory) as s:
-            creator = s.get(Creator, creator_id)
-            if creator is None:
-                raise NotFound("creator not found")
-            provider_name, creator_enabled = creator.provider, creator.enabled
-        provider = self.providers.get(provider_name)
-        if not provider.enabled:
-            raise Conflict(f"{provider.label} is disabled in Settings", code="provider_disabled")
-        if not creator_enabled:
-            raise Conflict("this creator is disabled", code="creator_disabled")
-        if provider.auth_blocked:
-            raise Conflict(
-                f"{provider.label} session is not valid; fix it in Settings before scanning",
-                code="auth_invalid",
-            )
+        """Enqueue a scan; returns False if one is already pending/running for this creator.
+
+        Raises NotFound for a creator that doesn't exist and Conflict if admission refuses.
+        """
+        refusal = self.admission.check(creator_id, trigger)
+        if refusal is not None:
+            raise refusal.as_conflict()
         if creator_id in self._pending:
             existing = self._pending[creator_id]
             if mode == ScanMode.FULL and existing.mode != ScanMode.FULL:
@@ -94,30 +88,44 @@ class ScanManager:
             return False
         if self._current is not None and self._current.creator_id == creator_id:
             return False
-        req = ScanRequest(creator_id, mode, trigger, datetime.now(UTC), provider_name)
+        req = ScanRequest(creator_id, mode, trigger, datetime.now(UTC))
         self._pending[creator_id] = req
         self._queue.put_nowait(req)
         self.bus.publish(ScanQueuedEvent(creator_id=creator_id, mode=mode))
         return True
 
-    def request_scan_all(self, mode: ScanMode = ScanMode.AUTO, trigger: str = "manual") -> int:
-        disabled = self.providers.disabled_names()
-        with session_scope(self._factory) as s:
-            rows = s.execute(
-                select(Creator.id, Creator.provider).where(
-                    Creator.monitored.is_(True), Creator.enabled.is_(True)
-                )
-            ).all()
+    def request_scan_all(
+        self, mode: ScanMode = ScanMode.AUTO, trigger: ScanTrigger = ScanTrigger.SCAN_ALL
+    ) -> int:
+        return self.request_scans(
+            [c.creator_id for c in self.admission.candidates(trigger)], mode, trigger
+        )
+
+    def request_scans(self, creator_ids: list[int], mode: ScanMode, trigger: ScanTrigger) -> int:
+        """Queue scans of many creators, skipping any that can't scan right now.
+
+        A creator refused or deleted since its id was read only skips that creator, never
+        the rest. Returns how many were queued.
+        """
         n = 0
-        for cid, provider in rows:
-            if provider in disabled:
-                continue
+        for cid in creator_ids:
             try:
                 if self.request_scan(cid, mode, trigger):
                     n += 1
-            except Conflict:
-                continue
+            except (Conflict, NotFound) as exc:
+                log.debug("%s scan of creator %s skipped: %s", trigger, cid, exc)
         return n
+
+    def scan_new_creator(self, creator_id: int) -> bool:
+        """Queue the first, full scan of a creator just added. A refusal is reported (logged
+        and sent to the UI) rather than raised: the creator was added either way."""
+        try:
+            return self.request_scan(creator_id, ScanMode.FULL, ScanTrigger.ADD)
+        except Conflict:
+            refusal = self.admission.check(creator_id, ScanTrigger.ADD)
+            if refusal is not None:
+                self._report_skipped(refusal)
+            return False
 
     def cancel_current(self) -> bool:
         if self._current is None:
@@ -149,36 +157,40 @@ class ScanManager:
         while not self._stop:
             req = await self._queue.get()
             self._pending.pop(req.creator_id, None)
-            self._current = req
-            self._cancel.clear()
             try:
+                if not await asyncio.to_thread(self._still_admitted, req):
+                    continue
+                self._current = req
+                self._cancel.clear()
                 await self.scanner.scan_creator(req.creator_id, req.mode, req.trigger, self._cancel)
             except (AuthError, CloudflareChallengeError):
-                dropped = self._drain(req.provider)
-                log.error(
-                    "%s auth failure during scan; dropped %d pending scans", req.provider, dropped
-                )
+                # The scan marked the provider's session invalid, so admission refuses its
+                # other queued scans when the worker reaches them.
+                log.error("auth failure while scanning creator %s", req.creator_id)
             except Exception:  # noqa: BLE001
                 log.exception("scan worker error for creator %s", req.creator_id)
             finally:
                 self._current = None
                 self._queue.task_done()
 
-    def _drain(self, provider: str) -> int:
-        """Drop pending scans for one provider; keep the others queued."""
-        keep: list[ScanRequest] = []
-        dropped = 0
-        while not self._queue.empty():
-            try:
-                req = self._queue.get_nowait()
-            except asyncio.QueueEmpty:
-                break
-            self._queue.task_done()
-            if req.provider == provider:
-                self._pending.pop(req.creator_id, None)
-                dropped += 1
-            else:
-                keep.append(req)
-        for req in keep:
-            self._queue.put_nowait(req)
-        return dropped
+    def _still_admitted(self, req: ScanRequest) -> bool:
+        try:
+            refusal = self.admission.check(req.creator_id, req.trigger)
+        except NotFound:
+            log.info("queued scan of creator %s dropped: creator was deleted", req.creator_id)
+            return False
+        if refusal is not None:
+            self._report_skipped(refusal)
+            return False
+        return True
+
+    def _report_skipped(self, refusal: Refusal) -> None:
+        log.info("scan of %s skipped: %s", refusal.creator_name, refusal.message)
+        self.bus.publish(
+            ScanSkippedEvent(
+                creator_id=refusal.creator_id,
+                creator_name=refusal.creator_name,
+                code=refusal.code,
+                message=refusal.message,
+            )
+        )

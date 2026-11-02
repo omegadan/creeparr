@@ -32,7 +32,7 @@ from creeparr.core.errors import Conflict, NotFound, UpstreamError, ValidationFa
 from creeparr.core.history import record_event
 from creeparr.core.server_events import CreatorChangedEvent
 from creeparr.db.engine import session_scope
-from creeparr.db.enums import EventType, JobStatus, MediaStatus, PostStatus, ScanMode
+from creeparr.db.enums import EventType, JobStatus, MediaStatus, PostStatus, ScanMode, ScanTrigger
 from creeparr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
 from creeparr.downloader.fs import remove_tree
 from creeparr.providers.base import ProviderService
@@ -257,10 +257,7 @@ async def add_creator(body: CreatorCreate, services: Services = Depends(get_serv
     creator_id = await asyncio.to_thread(
         _create_creator, services, provider, info, _defaults(services, body)
     )
-    try:
-        services.scan_manager.request_scan(creator_id, ScanMode.FULL, trigger="add")
-    except Conflict:
-        log.warning("creator added but scan not started: auth invalid")
+    services.scan_manager.scan_new_creator(creator_id)
     return await asyncio.to_thread(_get_out, services, creator_id)
 
 
@@ -315,10 +312,7 @@ async def import_subscriptions(
         except Conflict:
             continue
     for creator_id in created:
-        try:
-            services.scan_manager.request_scan(creator_id, ScanMode.FULL, trigger="add")
-        except Conflict:
-            break
+        services.scan_manager.scan_new_creator(creator_id)
     return [await asyncio.to_thread(_get_out, services, cid) for cid in created]
 
 
@@ -422,13 +416,13 @@ def scan_creator(
         mode = ScanMode(mode_str)
     except ValueError as exc:
         raise ValidationFailed(f"invalid scan mode '{mode_str}'") from exc
-    queued = services.scan_manager.request_scan(creator_id, mode, trigger="manual")
+    queued = services.scan_manager.request_scan(creator_id, mode, ScanTrigger.MANUAL)
     return {"queued": queued, "status": services.scan_manager.status()}
 
 
 @router.post("/creators/scan-all", status_code=202, response_model=ScansQueuedOut)
 def scan_all(services: Services = Depends(get_services)):
-    n = services.scan_manager.request_scan_all(ScanMode.AUTO, trigger="manual")
+    n = services.scan_manager.request_scan_all(ScanMode.AUTO)
     return {"queued": n}
 
 

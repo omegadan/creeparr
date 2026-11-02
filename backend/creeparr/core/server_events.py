@@ -61,6 +61,17 @@ class ScanQueuedEvent(ServerEvent):
     mode: ScanMode
 
 
+class ScanSkippedEvent(ServerEvent):
+    """A scan that didn't run: refused when the worker came to start it, or the first scan
+    of a creator just added."""
+
+    event = "scan.skipped"
+    creator_id: int
+    creator_name: str
+    code: str
+    message: str
+
+
 class ScanStartedEvent(ServerEvent):
     event = "scan.started"
     scan_run_id: int
