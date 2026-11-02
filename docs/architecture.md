@@ -42,8 +42,8 @@ FastAPI (uvicorn)
    post status. Incremental scans stop after `scan.overlap_posts` consecutive already-known,
    unchanged posts.
 4. **Download** (`downloader/`): a worker (`manager.py`) asks `Claims` (`claims.py`) for the
-   next download. The claim query applies every skip rule itself (disabled or throttled
-   provider, pacing, creator at its cap), so the queue can be any length without jobs
+   next download. The claim query applies every skip rule itself (unavailable, disabled or
+   throttled provider, pacing, creator at its cap), so the queue can be any length without jobs
    starving behind ones that can't start, and `MediaLifecycle.start_download` marks the
    winner running. `DownloadRun` (`run.py`) turns the claim into an outcome without
    touching any status:
@@ -160,7 +160,9 @@ original Patreon client;
 `OnlyFansProvider` implements OnlyFans' signed private API (rules fetched at runtime);
 `YouTubeProvider` lists channels with yt-dlp; `InstagramProvider` uses gallery-dl;
 `RedditProvider` reads the public JSON listings. The
-`ProviderRegistry` maps `creators.provider` to the right service; the scanner, downloader, API
+`ProviderRegistry` maps `creators.provider` to the right service (`serving(name)` refuses a
+provider this version doesn't register as a 409 `provider_unavailable`; scans, claims,
+re-resolving and the embed backlog skip its rows rather than fail); the scanner, downloader, API
 and scheduler are provider-neutral and go through it. Auth status is tracked per provider.
 
 Fetching media (`providers/media.py`): each provider builds a `MediaSession` from its current

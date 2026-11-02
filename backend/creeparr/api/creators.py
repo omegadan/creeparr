@@ -452,7 +452,7 @@ async def refresh_metadata(creator_id: int, services: Services = Depends(get_ser
             return c.provider, c.campaign_id
 
     provider_name, external_id = await asyncio.to_thread(_ids)
-    provider = services.providers.get(provider_name)
+    provider = services.providers.serving(provider_name)
     try:
         info = await provider.get_creator(external_id)
     except ProviderError as exc:

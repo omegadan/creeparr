@@ -18,7 +18,7 @@ from creeparr.core.errors import Conflict, NotFound
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import ScanTrigger
 from creeparr.db.models import Creator
-from creeparr.providers.registry import ProviderRegistry
+from creeparr.providers.registry import ProviderRegistry, unavailable_message
 
 
 class RefusalCode(StrEnum):
@@ -85,10 +85,7 @@ class ScanAdmission:
             return Refusal(creator.id, creator.name, code, message)
 
         if not self._providers.has(creator.provider):
-            return refuse(
-                RefusalCode.PROVIDER_UNAVAILABLE,
-                f"'{creator.provider}' isn't available in this version of Creeparr",
-            )
+            return refuse(RefusalCode.PROVIDER_UNAVAILABLE, unavailable_message(creator.provider))
         provider = self._providers.get(creator.provider)
         if not provider.enabled:
             return refuse(

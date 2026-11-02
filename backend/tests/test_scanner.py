@@ -89,6 +89,9 @@ class FakeRegistry:
     def get(self, name):
         return self.provider
 
+    def has(self, name):
+        return True
+
     def __iter__(self):
         return iter([self.provider])
 

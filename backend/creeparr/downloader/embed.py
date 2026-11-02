@@ -78,7 +78,9 @@ class Embedder:
         if tags is None:
             return None
         cover: Path | None = None
-        if tags.cover_url:
+        # The cover is fetched with the provider's session; without the provider (one this
+        # version doesn't have), the metadata is still embedded.
+        if tags.cover_url and self._providers.has(tags.provider):
             cover = await _fetch_cover(
                 self._providers.get(tags.provider).media_session(),
                 tags.cover_url,
