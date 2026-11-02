@@ -14,6 +14,14 @@ DEFAULT_PROVIDER = "patreon"
 class ProviderRegistry:
     def __init__(self, services: list[ProviderService]) -> None:
         self._by_name: dict[str, ProviderService] = {s.name: s for s in services}
+        self._hosts: dict[str, ProviderService] = {}
+        for service in services:
+            for source in service.hosts:
+                if source in self._hosts:
+                    raise ValueError(
+                        f"{source} is hosted by both {self._hosts[source].name} and {service.name}"
+                    )
+                self._hosts[source] = service
 
     def __iter__(self) -> Iterator[ProviderService]:
         return iter(self._by_name.values())
@@ -33,6 +41,11 @@ class ProviderRegistry:
 
     def for_creator(self, creator: Creator) -> ProviderService:
         return self.get(creator.provider)
+
+    def hosting(self, source: str) -> ProviderService | None:
+        """The provider whose session fetches embeds of `source`, whoever posted them
+        (YouTube for YouTube videos)."""
+        return self._hosts.get(source)
 
     def blocked_names(self) -> set[str]:
         """Providers whose session is invalid/unconfigured (native downloads must wait)."""

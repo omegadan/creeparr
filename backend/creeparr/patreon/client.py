@@ -38,7 +38,6 @@ from creeparr.providers.http import (
     Transport,
     TransportResponse,
     parse_retry_after,
-    with_range,
 )
 from creeparr.providers.models import (
     CreatorInfo,
@@ -183,6 +182,11 @@ class PatreonClient:
         """Headers to hand to yt-dlp / direct downloads."""
         return {"User-Agent": self.user_agent, "Referer": f"{BASE_URL}/"}
 
+    @property
+    def limiter(self) -> RateLimiter:
+        """Paces every request: the API's, and media fetched with the Patreon session."""
+        return self._limiter
+
     async def _request(
         self,
         method: str,
@@ -190,11 +194,9 @@ class PatreonClient:
         *,
         params: dict[str, str] | None = None,
         headers: dict[str, str] | None = None,
-        stream: bool = False,
         expect_json: bool = True,
         api: bool = True,
         max_attempts: int = 3,
-        classify: bool = True,
         with_cookies: bool = True,
     ) -> TransportResponse:
         attempt = 0
@@ -207,7 +209,6 @@ class PatreonClient:
                     url,
                     headers=self.headers(headers, api=api, with_cookies=with_cookies),
                     params=params,
-                    stream=stream,
                 )
             except TransportFailure as exc:
                 if attempt >= max_attempts:
@@ -216,10 +217,8 @@ class PatreonClient:
                 log.warning("%s %s failed (%s); retrying in %.0fs", method, url, exc, delay)
                 await asyncio.sleep(delay)
                 continue
-            if not classify:
-                return resp
             try:
-                classify_response(resp, expect_json=expect_json and not stream)
+                classify_response(resp, expect_json=expect_json)
             except RateLimitedError as exc:
                 await resp.aclose()
                 if attempt >= max_attempts:
@@ -272,26 +271,6 @@ class PatreonClient:
             with_cookies=is_patreon_url(url),
         )
         return resp.text
-
-    async def stream(
-        self, url: str, *, range_start: int = 0, headers: dict[str, str] | None = None
-    ) -> TransportResponse:
-        """Open a streaming GET for a media URL. Status codes are NOT classified here.
-
-        Session cookies are only sent to patreon.com hosts, never to CDNs.
-        """
-        extra = with_range(headers or {}, range_start)
-        return await self._request(
-            "GET",
-            url,
-            headers=extra,
-            stream=True,
-            expect_json=False,
-            api=False,
-            max_attempts=2,
-            classify=False,
-            with_cookies=is_patreon_url(url),
-        )
 
     async def aclose(self) -> None:
         await self._transport.aclose()

@@ -13,14 +13,9 @@ from urllib.parse import urlparse
 from creeparr.db.enums import MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import CookieSet
-from creeparr.providers.errors import NotConfigured, ProviderError, TransportFailure
-from creeparr.providers.http import (
-    RateLimiter,
-    TransportResponse,
-    build_transport,
-    host_matches,
-    with_range,
-)
+from creeparr.providers.errors import NotConfigured, ProviderError
+from creeparr.providers.http import RateLimiter, build_transport
+from creeparr.providers.media import MediaRef, MediaSession
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -31,6 +26,7 @@ from creeparr.providers.models import (
 )
 from creeparr.providers.onlyfans.client import (
     DEFAULT_UA,
+    MESSAGE_POST_TYPE,
     OnlyFansClient,
     OnlyFansCredentials,
     rebuild_post,
@@ -60,7 +56,6 @@ class OnlyFansProvider(ProviderService):
     name: ClassVar[str] = "onlyfans"
     label: ClassVar[str] = "OnlyFans"
     credential_fields: ClassVar[tuple[str, ...]] = ("sess", "auth_id", "x_bc", "cookies_txt")
-    supports_embeds: ClassVar[bool] = False
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -84,10 +79,6 @@ class OnlyFansProvider(ProviderService):
     @property
     def is_configured(self) -> bool:
         return self._creds().is_configured
-
-    @property
-    def ytdlp_impersonate(self) -> bool:
-        return self.settings.get().onlyfans.http_backend == "curl_cffi"
 
     def _transport(self):  # noqa: ANN202
         s = self.settings.get().onlyfans
@@ -208,7 +199,9 @@ class OnlyFansProvider(ProviderService):
             sources.append(("messages", self._iter_messages(external_id)))
         return sources
 
-    async def get_post(self, external_id: str, post_id: str) -> PostResource:
+    async def get_post(
+        self, external_id: str, post_id: str, *, post_type: str | None = None
+    ) -> PostResource:
         return await (await self._client_for_use()).get_post(external_id, post_id)
 
     def resolve_media(self, post: PostResource) -> list[MediaSpec]:
@@ -244,28 +237,16 @@ class OnlyFansProvider(ProviderService):
     def post_from_raw(self, raw_json: dict[str, Any]) -> PostResource | None:
         return rebuild_post(raw_json)
 
-    def media_headers(self) -> dict[str, str]:
-        creds = self._creds()
-        return {"User-Agent": creds.user_agent, "Referer": "https://onlyfans.com/"}
+    def media_session(self) -> MediaSession:
+        creds, s = self._creds(), self.settings.get().onlyfans
+        return MediaSession(
+            headers={"User-Agent": creds.user_agent, "Referer": "https://onlyfans.com/"},
+            # CDN links are pre-signed; the session cookie goes to onlyfans.com hosts only.
+            cookie=creds.cookie_header(),
+            cookie_domain="onlyfans.com",
+            cookie_file=self.written_cookie_file,
+            impersonate=s.impersonate_target if s.http_backend == "curl_cffi" else None,
+        )
 
-    async def fetch_text(self, url: str) -> str:
-        transport = self._transport()
-        try:
-            resp = await transport.request("GET", url, headers=self.media_headers())
-            return resp.text
-        finally:
-            await transport.aclose()
-
-    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        headers = with_range(self.media_headers(), range_start)
-        # OnlyFans CDN URLs are pre-signed; only send cookies to onlyfans.com itself.
-        if host_matches(url, "onlyfans.com"):
-            headers["Cookie"] = self._creds().cookie_header()
-        transport = self._transport()
-        try:
-            resp = await transport.request("GET", url, headers=headers, stream=True)
-        except TransportFailure:
-            await transport.aclose()
-            raise
-        resp.also_close(transport.aclose)  # this one-off client goes with the response
-        return resp
+    def renews_links(self, media: MediaRef) -> bool:
+        return super().renews_links(media) and media.post_type != MESSAGE_POST_TYPE

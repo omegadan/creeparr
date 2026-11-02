@@ -24,7 +24,7 @@ from creeparr.db.enums import AuthState, MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import write_cookiefile
 from creeparr.providers.errors import NotFoundError, ProviderError
-from creeparr.providers.http import TransportResponse
+from creeparr.providers.media import MediaSession
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -69,7 +69,10 @@ class YouTubeProvider(ProviderService):
     name: ClassVar[str] = "youtube"
     label: ClassVar[str] = "YouTube"
     credential_fields: ClassVar[tuple[str, ...]] = ("cookies_txt",)
-    supports_embeds: ClassVar[bool] = True
+    #: Keeps YouTube's VP9/AV1/Opus streams without re-encoding.
+    video_container: ClassVar[str] = "mkv"
+    #: YouTube videos embedded in any creator's posts use the YouTube cookies.
+    hosts: ClassVar[frozenset[MediaSource]] = frozenset({MediaSource.EMBED_YOUTUBE})
 
     # ---- settings / auth -----------------------------------------------------------
 
@@ -129,6 +132,10 @@ class YouTubeProvider(ProviderService):
     @property
     def auth_blocked(self) -> bool:
         return False
+
+    @property
+    def sign_in_help(self) -> str:
+        return "Add YouTube cookies in Settings -> Accounts -> YouTube"
 
     # ---- yt-dlp helpers ------------------------------------------------------------
 
@@ -264,7 +271,9 @@ class YouTubeProvider(ProviderService):
             more = i + PAGE_SIZE < len(entries)
             yield PostPage(posts=posts, next_url="more" if more else None, source="videos")
 
-    async def get_post(self, external_id: str, post_id: str) -> PostResource:
+    async def get_post(
+        self, external_id: str, post_id: str, *, post_type: str | None = None
+    ) -> PostResource:
         info = await asyncio.to_thread(self._extract, f"{WATCH}{post_id}")
         published = None
         if info.get("timestamp"):
@@ -311,13 +320,6 @@ class YouTubeProvider(ProviderService):
             return None
         return self._post_from_entry(data, str(data.get("channel_id") or ""))
 
-    def media_headers(self) -> dict[str, str]:
-        return {}
-
-    async def fetch_text(self, url: str) -> str:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url)
-            return resp.text
-
-    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        raise ProviderError("YouTube media is downloaded via yt-dlp, not streamed directly")
+    def media_session(self) -> MediaSession:
+        # yt-dlp brings its own headers; covers come from public thumbnail hosts.
+        return MediaSession(cookie_file=self.written_cookie_file)

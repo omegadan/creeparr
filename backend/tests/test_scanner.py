@@ -117,7 +117,7 @@ async def test_full_scan_creates_posts_media_and_jobs(session_factory, settings,
         settings,
         bus,
         FakeRegistry(FakeProvider(fake)),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     run_id = await scanner.scan_creator(cid, ScanMode.AUTO)
     posts, media, jobs = counts(session_factory)
@@ -153,7 +153,7 @@ async def test_incremental_scan_stops_after_overlap(session_factory, settings, b
         settings,
         bus,
         FakeRegistry(FakeProvider(FakeClient([known[:2], known[2:]]))),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     await scanner.scan_creator(cid, ScanMode.FULL)
     # Second run: new post on page 1, then all-known pages; must stop before page 3.
@@ -163,7 +163,7 @@ async def test_incremental_scan_stops_after_overlap(session_factory, settings, b
         settings,
         bus,
         FakeRegistry(FakeProvider(fake)),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     await scanner.scan_creator(cid, ScanMode.AUTO)
     assert fake.calls == 2
@@ -180,7 +180,7 @@ async def test_access_flip_and_edit_resync(session_factory, settings, bus):
         settings,
         bus,
         FakeRegistry(FakeProvider(FakeClient([[locked]]))),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     await scanner.scan_creator(cid, ScanMode.FULL)
     with session_scope(session_factory) as s:
@@ -192,7 +192,7 @@ async def test_access_flip_and_edit_resync(session_factory, settings, bus):
         settings,
         bus,
         FakeRegistry(FakeProvider(FakeClient([[unlocked]]))),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     await scanner.scan_creator(cid, ScanMode.INCREMENTAL)
     with session_scope(session_factory) as s:
@@ -213,7 +213,7 @@ async def test_download_since_and_auto_download_off(session_factory, settings, b
         settings,
         bus,
         FakeRegistry(FakeProvider(FakeClient([posts]))),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     await scanner.scan_creator(cid, ScanMode.FULL)
     _, media, jobs = counts(session_factory)
@@ -227,7 +227,11 @@ async def test_auth_error_marks_invalid_and_raises(session_factory, settings, bu
     cid = make_creator(session_factory)
     provider = FakeProvider(FakeClient([], raise_auth=True))
     scanner = Scanner(
-        session_factory, settings, bus, FakeRegistry(provider), MediaLifecycle(session_factory, bus)
+        session_factory,
+        settings,
+        bus,
+        FakeRegistry(provider),
+        MediaLifecycle(session_factory, bus, settings),
     )
     with pytest.raises(AuthError):
         await scanner.scan_creator(cid, ScanMode.FULL)
@@ -251,7 +255,7 @@ async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory,
         settings,
         bus,
         FakeRegistry(FakeProvider(FakeClient([[bad_embed]]))),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     await scanner.scan_creator(cid, ScanMode.FULL)
     # Simulate a row produced by an older resolver version.
@@ -267,7 +271,7 @@ async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory,
                 status=MediaStatus.FAILED_PERMANENT,
             )
         )
-    lifecycle = MediaLifecycle(session_factory, bus)
+    lifecycle = MediaLifecycle(session_factory, bus, settings)
     result = lifecycle.reresolve_all(FakeRegistry(FakeProvider(None)))
     assert result["posts"] == 1
     with session_scope(session_factory) as s:
@@ -275,7 +279,7 @@ async def test_stale_media_rows_are_removed_and_reresolve_works(session_factory,
         assert s.execute(select(Post)).scalar_one().status == PostStatus.NO_MEDIA
 
 
-def test_rescan_keeps_backfilled_date_and_description(session_factory, bus):
+def test_rescan_keeps_backfilled_date_and_description(session_factory, settings, bus):
     # YouTube listings carry no description and (past the RSS window) no date; the
     # download backfills both from the video's metadata. A later scan must not wipe them.
     from dataclasses import replace
@@ -287,7 +291,7 @@ def test_rescan_keeps_backfilled_date_and_description(session_factory, bus):
         content=None,
     )
     backfilled = datetime(2019, 5, 4, tzinfo=UTC)
-    lifecycle = MediaLifecycle(session_factory, bus)
+    lifecycle = MediaLifecycle(session_factory, bus, settings)
     with session_scope(session_factory) as s:
         creator = Creator(campaign_id=fx.CAMPAIGN_ID, name="C")
         s.add(creator)
@@ -327,7 +331,7 @@ async def test_scan_interrupted_by_shutdown_is_closed(session_factory, settings,
         settings,
         bus,
         FakeRegistry(FakeProvider(client)),
-        MediaLifecycle(session_factory, bus),
+        MediaLifecycle(session_factory, bus, settings),
     )
     task = asyncio.create_task(scanner.scan_creator(cid, ScanMode.AUTO))
     await asyncio.wait_for(client.first_page_done.wait(), 5)
@@ -345,7 +349,11 @@ def test_runs_left_running_by_a_crash_are_closed_on_startup(session_factory, set
         s.add(ScanRun(creator_id=cid, mode=ScanMode.FULL, status=ScanStatus.RUNNING))
         s.add(ScanRun(creator_id=cid, mode=ScanMode.FULL, status=ScanStatus.OK))
     scanner = Scanner(
-        session_factory, settings, bus, FakeRegistry(None), MediaLifecycle(session_factory, bus)
+        session_factory,
+        settings,
+        bus,
+        FakeRegistry(None),
+        MediaLifecycle(session_factory, bus, settings),
     )
     assert scanner.close_interrupted_runs() == 1
     with session_scope(session_factory) as s:

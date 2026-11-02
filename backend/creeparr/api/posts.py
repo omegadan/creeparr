@@ -192,15 +192,16 @@ def unskip_post(
 
 @router.post("/posts/{post_id}/refresh", response_model=PostDetailOut)
 async def refresh_post(post_id: int, services: Services = Depends(get_services)):
-    def _ext_id() -> tuple[str, int, str, str]:
+    def _ext_id() -> tuple[str, str | None, int, str, str]:
         with session_scope(services.session_factory) as s:
             post = load_post(s, post_id)
-            return post.post_id, post.creator_id, post.creator.provider, post.creator.campaign_id
+            c = post.creator
+            return post.post_id, post.post_type, post.creator_id, c.provider, c.campaign_id
 
-    ext_id, creator_id, provider_name, external_id = await asyncio.to_thread(_ext_id)
+    ext_id, post_type, creator_id, provider_name, external_id = await asyncio.to_thread(_ext_id)
     provider = services.providers.get(provider_name)
     try:
-        pr = await provider.get_post(external_id, ext_id)
+        pr = await provider.get_post(external_id, ext_id, post_type=post_type)
     except ProviderError as exc:
         raise UpstreamError(f"{provider.label} request failed: {exc}", code=exc.code) from exc
 

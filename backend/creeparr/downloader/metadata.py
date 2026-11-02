@@ -1,4 +1,4 @@
-"""Embed post metadata and a cover thumbnail into a downloaded video via ffmpeg."""
+"""ffmpeg: embed post metadata and a cover into a video, and remux into another container."""
 
 from __future__ import annotations
 
@@ -6,8 +6,45 @@ import logging
 import re
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from creeparr.config import EnvConfig
 
 log = logging.getLogger(__name__)
+
+
+class Ffmpeg(Protocol):
+    """ffmpeg as downloads use it. Tests swap in a fake for the real program."""
+
+    @property
+    def location(self) -> str | None:
+        """The program's path, or None when it isn't installed."""
+        ...
+
+    def remux(self, src: Path, dst: Path) -> bool: ...
+
+    def embed(self, video: Path, metadata: dict[str, str], cover: Path | None) -> bool: ...
+
+
+class SystemFfmpeg:
+    """The ffmpeg program at the configured path, or else the one on the PATH."""
+
+    def __init__(self, env: EnvConfig) -> None:
+        self._env = env
+
+    @property
+    def location(self) -> str | None:
+        return self._env.resolve_ffmpeg()
+
+    def remux(self, src: Path, dst: Path) -> bool:
+        ffmpeg = self.location
+        return ffmpeg is not None and remux_container(ffmpeg, src, dst)
+
+    def embed(self, video: Path, metadata: dict[str, str], cover: Path | None) -> bool:
+        ffmpeg = self.location
+        return ffmpeg is not None and embed_metadata(ffmpeg, video, metadata, cover)
+
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")

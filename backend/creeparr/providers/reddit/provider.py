@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from creeparr.db.enums import AuthState, MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.errors import NotFoundError
-from creeparr.providers.http import HttpxTransport, TransportResponse, with_range
+from creeparr.providers.media import MediaRef, MediaSession
 from creeparr.providers.models import (
     CreatorInfo,
     MediaSpec,
@@ -35,11 +35,6 @@ class RedditProvider(ProviderService):
     name: ClassVar[str] = "reddit"
     label: ClassVar[str] = "Reddit"
     credential_fields: ClassVar[tuple[str, ...]] = ("client_id", "client_secret")
-    supports_embeds: ClassVar[bool] = True
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self._transport = HttpxTransport()
 
     # ---- config --------------------------------------------------------------------
 
@@ -75,7 +70,7 @@ class RedditProvider(ProviderService):
         return None
 
     async def aclose(self) -> None:
-        await self._transport.aclose()
+        return None
 
     async def fetch_user(self, credentials: dict[str, str] | None = None) -> UserInfo:
         return UserInfo(id="reddit", full_name="Reddit (public, no login required)")
@@ -150,9 +145,11 @@ class RedditProvider(ProviderService):
                 posts=posts[i : i + page], next_url="more" if more else None, source="posts"
             )
 
-    async def get_post(self, external_id: str, post_id: str) -> PostResource:
-        # Reddit media URLs are stable enough that a targeted refetch is rarely needed;
-        # re-list and find the post, else report gone.
+    async def get_post(
+        self, external_id: str, post_id: str, *, post_type: str | None = None
+    ) -> PostResource:
+        # Only the post's Refresh button asks (links never need renewing): re-list and find
+        # the post, else report gone.
         posts = await self._client().fetch_posts(external_id, 0)
         for p in posts:
             if p.id == post_id:
@@ -212,13 +209,12 @@ class RedditProvider(ProviderService):
             raw=data,
         )
 
-    def media_headers(self) -> dict[str, str]:
-        return {"User-Agent": self.settings.get().reddit.user_agent or DEFAULT_UA}
+    def media_session(self) -> MediaSession:
+        # Public CDNs: no cookies.
+        return MediaSession(
+            headers={"User-Agent": self.settings.get().reddit.user_agent or DEFAULT_UA},
+            cookie_file=self.written_cookie_file,
+        )
 
-    async def fetch_text(self, url: str) -> str:
-        resp = await self._transport.request("GET", url, headers=self.media_headers())
-        return resp.text
-
-    async def stream(self, url: str, *, range_start: int = 0) -> TransportResponse:
-        headers = with_range(self.media_headers(), range_start)  # public CDNs: no cookies
-        return await self._transport.request("GET", url, headers=headers, stream=True)
+    def renews_links(self, media: MediaRef) -> bool:
+        return False  # Reddit's links don't expire; a file that's gone fails as gone

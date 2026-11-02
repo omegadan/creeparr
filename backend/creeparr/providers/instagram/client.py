@@ -33,6 +33,15 @@ SOURCE_URLS = {
     "stories": f"{BASE}/stories/{{u}}/",
 }
 
+# Source name -> the post type its posts are stored with.
+POST_TYPES = {
+    "posts": "instagram_post",
+    "reels": "instagram_reel",
+    "tagged": "instagram_tagged",
+    "highlights": "instagram_highlight",
+    "stories": "instagram_story",
+}
+
 
 @dataclass
 class InstagramCredentials:
@@ -167,9 +176,7 @@ def group_into_posts(
             posts[shortcode] = PostResource(
                 id=shortcode,
                 title=caption[:200] or f"{source} {shortcode}",
-                post_type=f"instagram_{source.rstrip('s')}"
-                if source != "posts"
-                else "instagram_post",
+                post_type=POST_TYPES[source],
                 content=caption or None,
                 url=f"{BASE}/p/{shortcode}/",
                 published_at=_dt(meta.get("date")),

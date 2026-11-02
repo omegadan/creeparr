@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -14,12 +16,21 @@ import yt_dlp
 from yt_dlp.utils import DownloadCancelled as YtDlpCancelled
 from yt_dlp.utils import DownloadError, UnsupportedError
 
+from creeparr.core.downloads import FailureKind, mentions_drm
+from creeparr.core.settings_service import SettingsService
+from creeparr.db.enums import MediaSource
 from creeparr.downloader.handlers.base import (
     DownloadCancelled,
-    PermanentDownloadError,
+    DownloadFailed,
+    Fetched,
+    FetchPlan,
+    Learned,
+    MediaSnapshot,
+    Placement,
     ProgressReporter,
-    RetryableDownloadError,
 )
+from creeparr.downloader.longwork import LongWork
+from creeparr.downloader.metadata import Ffmpeg
 
 log = logging.getLogger("creeparr.ytdlp")
 
@@ -42,7 +53,6 @@ _PERMANENT_PATTERNS = (
     "this video is private",
     "video has been deleted",
     "account associated with this video has been terminated",
-    "drm",
 )
 
 
@@ -56,6 +66,8 @@ class YtDlpOptions:
     fragment_concurrency: int
     impersonate: bool = False
     remote_components: bool = True
+    #: The message a failure asking for a signed-in session carries.
+    sign_in_message: str = "This video requires a signed-in session."
 
 
 class _LoggerAdapter:
@@ -107,20 +119,18 @@ def normalise_vimeo_url(url: str) -> str:
     return f"{player}?h={h}" if h else player
 
 
-def classify_ytdlp_error(exc: Exception) -> Exception:
+def classify_ytdlp_error(exc: Exception, sign_in_message: str) -> DownloadFailed:
     if isinstance(exc, UnsupportedError):
-        return PermanentDownloadError(f"unsupported URL: {exc}", "unsupported")
+        return DownloadFailed(FailureKind.UNSUPPORTED, f"unsupported URL: {exc}", "unsupported")
     msg = str(exc)
     low = msg.lower()
     if "sign in" in low or "use --cookies" in low or "cookies" in low or "confirm your age" in low:
-        return PermanentDownloadError(
-            "YouTube requires a signed-in session for this video. Add YouTube cookies in "
-            "Settings -> Accounts -> YouTube, then retry.",
-            "needs_cookies",
-        )
+        return DownloadFailed(FailureKind.NEEDS_COOKIES, sign_in_message, "needs_cookies")
+    if mentions_drm(msg):
+        return DownloadFailed(FailureKind.DRM, msg, "drm")
     if any(p in low for p in _PERMANENT_PATTERNS):
-        return PermanentDownloadError(msg, "unavailable")
-    return RetryableDownloadError(msg, "ytdlp")
+        return DownloadFailed(FailureKind.UNAVAILABLE, msg, "unavailable")
+    return DownloadFailed(FailureKind.RETRYABLE, msg, "ytdlp")
 
 
 def run_ytdlp(
@@ -198,13 +208,17 @@ def run_ytdlp(
     except YtDlpCancelled as exc:
         raise DownloadCancelled() from exc
     except (DownloadError, UnsupportedError) as exc:
-        raise classify_ytdlp_error(exc) from exc
+        raise classify_ytdlp_error(exc, opts.sign_in_message) from exc
     except Exception as exc:  # noqa: BLE001
-        raise RetryableDownloadError(f"{exc.__class__.__name__}: {exc}", "ytdlp") from exc
+        raise DownloadFailed(
+            FailureKind.RETRYABLE, f"{exc.__class__.__name__}: {exc}", "ytdlp"
+        ) from exc
 
     produced = _find_output(info, tmp_dir)
     if produced is None:
-        raise RetryableDownloadError("yt-dlp finished but no output file was found", "ytdlp")
+        raise DownloadFailed(
+            FailureKind.RETRYABLE, "yt-dlp finished but no output file was found", "ytdlp"
+        )
     entry = info
     if info and info.get("_type") == "playlist" and info.get("entries"):
         entry = next((e for e in info["entries"] if e), info)
@@ -238,3 +252,71 @@ def _find_output(info: dict[str, Any] | None, tmp_dir: Path) -> Path | None:
     if not candidates:
         return None
     return max(candidates, key=lambda p: p.stat().st_size)
+
+
+# run_ytdlp's signature; tests pass a fake.
+YtDlpEngine = Callable[
+    [str, Path, YtDlpOptions, ProgressReporter, str], tuple[Path, dict[str, Any]]
+]
+
+
+class YtDlpHandler:
+    """Streams (HLS) and embedded videos (YouTube, Vimeo, ...), downloaded by yt-dlp into
+    the scratch folder. yt-dlp reports an undated post's date, so the run files the result."""
+
+    learns_date = True
+
+    def __init__(
+        self,
+        settings: SettingsService,
+        ffmpeg: Ffmpeg,
+        long_work: LongWork,
+        *,
+        engine: YtDlpEngine = run_ytdlp,
+    ) -> None:
+        self._settings = settings
+        self._ffmpeg = ffmpeg
+        self._long = long_work
+        self._engine = engine
+
+    async def fetch(
+        self,
+        media: MediaSnapshot,
+        plan: FetchPlan,
+        place: Placement,
+        progress: ProgressReporter,
+    ) -> Fetched:
+        d = self._settings.get().downloads
+        url = media.url or ""
+        if media.source == MediaSource.EMBED_VIMEO:
+            url = normalise_vimeo_url(url)
+        session = plan.session
+        opts = YtDlpOptions(
+            headers=dict(session.headers),
+            cookiefile=str(session.cookie_file) if session.cookie_file else None,
+            video_format=d.video_format,
+            container=plan.container,
+            ffmpeg_location=self._ffmpeg.location,
+            fragment_concurrency=d.hls_fragment_concurrency,
+            impersonate=session.impersonate is not None,
+            remote_components=d.ytdlp_remote_components,
+            sign_in_message=plan.sign_in_message,
+        )
+        progress.set_stage("downloading")
+        produced, meta = await self._long.run(
+            self._engine, url, place.scratch(), opts, progress, media.label
+        )
+        return Fetched(produced, placed=False, learned=learned_from(meta))
+
+
+def learned_from(meta: dict[str, Any]) -> Learned:
+    """What yt-dlp's metadata says about the post: its date (YouTube has none until now)."""
+    published = None
+    if meta.get("timestamp"):
+        published = datetime.fromtimestamp(meta["timestamp"], tz=UTC)
+    elif meta.get("upload_date"):
+        try:
+            published = datetime.strptime(meta["upload_date"], "%Y%m%d").replace(tzinfo=UTC)
+        except ValueError:
+            published = None
+    return Learned(published, meta.get("description") or None)
