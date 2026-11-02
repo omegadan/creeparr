@@ -24,10 +24,8 @@ from creeparr.downloader.manager import DownloadManager
 from creeparr.downloader.metadata import SystemFfmpeg
 from creeparr.downloader.progress import JobProgress
 from creeparr.downloader.run import DownloadRun
-from creeparr.providers.instagram.provider import InstagramProvider
 from creeparr.providers.onlyfans.provider import OnlyFansProvider
 from creeparr.providers.patreon import PatreonProvider
-from creeparr.providers.reddit.provider import RedditProvider
 from creeparr.providers.registry import ProviderRegistry
 from creeparr.providers.youtube import YouTubeProvider
 from creeparr.scanner.scan_manager import ScanManager
@@ -68,8 +66,8 @@ def build_services(env: EnvConfig) -> Services:
             PatreonProvider(env, settings, factory, bus),
             OnlyFansProvider(env, settings, factory, bus),
             YouTubeProvider(env, settings, factory, bus),
-            InstagramProvider(env, settings, factory, bus),
-            RedditProvider(env, settings, factory, bus),
+            # Instagram and Reddit are off for now: their bot protection blocks scans too
+            # aggressively to be usable. Their code stays; register them here to bring them back.
         ]
     )
     lifecycle = MediaLifecycle(factory, bus, settings)
