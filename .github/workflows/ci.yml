@@ -1,16 +1,23 @@
 name: CI
 
-# Pushes to main and v* tags run this through publish.yml, which only publishes the
+# Pushes to main and releases run this through publish.yml, which only publishes the
 # image once every job here has passed.
 on:
   pull_request:
   workflow_call:
+    inputs:
+      ref:
+        description: The commit or tag to check (default the triggering commit)
+        type: string
+        default: ""
 
 jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
       - uses: astral-sh/setup-uv@v7
       - name: Install
         run: cd backend && uv sync --all-extras
@@ -23,6 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -38,6 +47,8 @@ jobs:
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
       - uses: docker/setup-buildx-action@v4
       - name: Build image
         uses: docker/build-push-action@v7

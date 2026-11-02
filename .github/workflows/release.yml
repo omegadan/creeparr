@@ -1,0 +1,77 @@
+name: Release
+
+# Run from the Actions tab. It:
+#   1. bumps the version in backend/creeparr/__init__.py,
+#   2. dates CHANGELOG.md's "Unreleased" section as that version,
+#   3. commits that to main and tags vX.Y.Z,
+#   4. publishes the image as X.Y.Z, X.Y and latest (publish.yml, after CI),
+#   5. creates the GitHub Release with that changelog section as its notes.
+# If step 4 or 5 fails, re-run the failed jobs: the tag is already there.
+# update-downloaders.yml also starts it, for a patch release, when a yt-dlp/gallery-dl
+# update is the only unreleased change.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version goes up
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          version=$(python3 .github/scripts/release.py bump "$BUMP")
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $version"
+          git tag -a "v$version" -m "Release $version"
+          git push origin HEAD:main "v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: prepare
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      contents: read
+      packages: write
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+
+  github-release:
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: v${{ needs.prepare.outputs.version }}
+      - run: |
+          {
+            python3 .github/scripts/release.py notes "$VERSION"
+            printf '\n\nImage: `ghcr.io/%s:%s` (also `latest`)\n' "$GITHUB_REPOSITORY" "$VERSION"
+          } > notes.md
+          gh release create "v$VERSION" --title "$VERSION" --notes-file notes.md --verify-tag

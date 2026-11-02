@@ -1,8 +1,11 @@
 name: Update yt-dlp and gallery-dl
 
 # Sites break yt-dlp and gallery-dl often, and fixes ship in new releases. This
-# upgrades both in uv.lock every week, runs the tests, bumps the patch version (every
-# push to main is a new version) and pushes to main, then starts the publish workflow.
+# upgrades both in uv.lock every week, runs the tests, notes it in CHANGELOG.md and
+# pushes to main. If that update is the only change since the last release, it starts a
+# patch release (release.yml), so site fixes reach `latest` within a week. Otherwise
+# there's unreleased work nobody has released yet: it only publishes `edge`, and the
+# update goes out with the next release.
 on:
   schedule:
     - cron: "17 6 * * 1" # Mondays 06:17 UTC
@@ -10,7 +13,7 @@ on:
 
 permissions:
   contents: write
-  actions: write # to start publish.yml (pushes made with GITHUB_TOKEN don't trigger it)
+  actions: write # to start release.yml or publish.yml (pushes made with GITHUB_TOKEN don't)
 
 concurrency:
   group: update-downloaders
@@ -23,6 +26,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: main
+          fetch-depth: 0 # the tags, to find the last release
       - uses: astral-sh/setup-uv@v7
 
       - name: Upgrade yt-dlp and gallery-dl
@@ -48,35 +52,40 @@ jobs:
           uv run ruff check .
           uv run pytest -q
 
-      - name: Bump version, commit and push
+      - name: Note, commit and push
         if: steps.diff.outputs.changed == 'true'
-        id: push
         run: |
           versions=$(cd backend && uv run --no-sync python - <<'EOF'
           import importlib.metadata as m
           print(", ".join(f"{p} {m.version(p)}" for p in ("yt-dlp", "gallery-dl")))
           EOF
           )
-          new=$(python3 - <<'EOF'
-          import re
-          from pathlib import Path
-          p = Path("backend/creeparr/__init__.py")
-          s = p.read_text()
-          major, minor, patch = re.search(r'__version__ = "(\d+)\.(\d+)\.(\d+)"', s).groups()
-          new = f"{major}.{minor}.{int(patch) + 1}"
-          p.write_text(re.sub(r'__version__ = "[^"]+"', f'__version__ = "{new}"', s))
-          print(new)
-          EOF
-          )
+          python3 .github/scripts/release.py note "Update ${versions}."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/uv.lock backend/creeparr/__init__.py
-          git commit -m "Update ${versions}; bump to ${new}"
+          git add backend/uv.lock CHANGELOG.md
+          git commit -m "Update ${versions}"
           git push origin HEAD:main
-          echo "version=${new}" >> "$GITHUB_OUTPUT"
 
-      - name: Publish
+      - name: Release, or publish edge
         if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run publish.yml --ref main
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          others=""
+          if [ -n "$last" ]; then
+            # Anything since the last release besides this job's own updates?
+            others=$(git log --format='%an|%s' "$last"..HEAD \
+              | grep -v '^github-actions\[bot\]|Update yt-dlp' || true)
+          fi
+          if [ -n "$last" ] && [ -z "$others" ]; then
+            gh workflow run release.yml -f bump=patch
+            echo "Only downloader updates since $last: started a patch release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh workflow run publish.yml --ref main
+            {
+              echo "Published as \`edge\` only: there are unreleased changes since ${last:-the first commit}."
+              echo "This update goes out with the next release."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
