@@ -66,7 +66,7 @@ def test_only_what_was_set_is_sent():
 def test_the_hello_event_names_the_servers_version(env, engine):
     event = hello(build_services(env))
     assert event.version == __version__
-    assert set(event.providers) == {"patreon", "onlyfans", "youtube", "instagram", "reddit"}
+    assert set(event.providers) == {"patreon", "onlyfans", "youtube"}
 
 
 # ---- the actions offered ---------------------------------------------------------------

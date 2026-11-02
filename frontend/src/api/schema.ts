@@ -487,8 +487,6 @@ export interface PathsOut {
   patreon_download_dir: string | null;
   onlyfans_download_dir: string | null;
   youtube_download_dir: string | null;
-  instagram_download_dir: string | null;
-  reddit_download_dir: string | null;
 }
 
 export interface PatreonSettingsOut {
@@ -729,8 +727,6 @@ export interface SettingsEnvOut {
   patreon_download_dir: string | null;
   onlyfans_download_dir: string | null;
   youtube_download_dir: string | null;
-  instagram_download_dir: string | null;
-  reddit_download_dir: string | null;
   port: number;
   log_level: string;
   ffmpeg: string | null;
