@@ -11,6 +11,7 @@ const META: Record<ProviderQueueStatus["state"], { label: string; tone: StatusMe
   pacing: { label: "Spacing out", tone: "info" },
   blocked: { label: "Auth error", tone: "danger" },
   disabled: { label: "Disabled", tone: "muted" },
+  unavailable: { label: "Unavailable", tone: "muted" },
   paused: { label: "Paused", tone: "warn" },
   creators_off: { label: "Creators off", tone: "muted" },
   idle: { label: "Idle", tone: "muted" },
@@ -23,6 +24,7 @@ const DOT_CLASS: Record<ProviderQueueStatus["state"], string> = {
   pacing: "bg-info",
   blocked: "bg-danger",
   disabled: "bg-fg-dim",
+  unavailable: "bg-fg-dim",
   paused: "bg-warn",
   creators_off: "bg-fg-dim",
   idle: "bg-fg-dim",
@@ -76,6 +78,8 @@ function detail(p: ProviderQueueStatus, nowMs: number): string {
       return `${queued} · sign-in required`;
     case "disabled":
       return "provider turned off";
+    case "unavailable":
+      return `${p.queued} queued · not available in this version`;
     case "creators_off":
       return `${p.queued} queued · all creators disabled`;
     case "paused":

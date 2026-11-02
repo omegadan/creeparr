@@ -34,6 +34,7 @@ class ClaimState(StrEnum):
     """Why a provider's queue is or isn't moving, as the Queue page shows it."""
 
     DISABLED = "disabled"  # the provider is switched off
+    UNAVAILABLE = "unavailable"  # the provider isn't in this version; its jobs wait for it
     PAUSED = "paused"  # the whole queue is paused
     DOWNLOADING = "downloading"
     IDLE = "idle"  # nothing queued
@@ -168,6 +169,21 @@ class Claims:
                     "next_slot_at": next_slot_at.isoformat() if next_slot_at is not None else None,
                 }
             )
+        # Jobs left by a provider this version doesn't have (they'd otherwise be invisible).
+        for name in sorted(set(queued) - set(self.providers.names())):
+            out.append(
+                {
+                    "provider": name,
+                    "label": name.capitalize(),
+                    "state": ClaimState.UNAVAILABLE,
+                    "queued": int(queued[name]),
+                    "running": int(running.get(name, 0)),
+                    "hourly_limit": 0,
+                    "recent_starts": 0,
+                    "next_slot_seconds": None,
+                    "next_slot_at": None,
+                }
+            )
         return out
 
     # ---- rules ---------------------------------------------------------------------
@@ -206,6 +222,9 @@ class Claims:
                     .where(
                         DownloadJob.status == JobStatus.QUEUED,
                         Creator.enabled.is_(True),
+                        # A provider this version doesn't have: its jobs stay queued, untouched,
+                        # in case it's registered again.
+                        Creator.provider.in_(self.providers.names()),
                         Creator.provider.not_in(disabled | throttled),
                         DownloadJob.creator_id.not_in(full_creators),
                         or_(

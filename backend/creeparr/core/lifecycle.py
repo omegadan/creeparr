@@ -320,6 +320,7 @@ class MediaLifecycle:
         """
         posts_done = 0
         queued = 0
+        unavailable = 0
         with session_scope(self._factory) as s:
             ids = s.execute(select(Post.id)).scalars().all()
         for pid in ids:
@@ -332,6 +333,9 @@ class MediaLifecycle:
                 creator = s.get(Creator, post.creator_id)
                 if creator is None:
                     continue
+                if not providers.has(creator.provider):
+                    unavailable += 1  # left by a provider this version doesn't have
+                    continue
                 provider = providers.for_creator(creator)
                 pr = provider.post_from_raw(post.raw_json or {})
                 if pr is not None:
@@ -339,7 +343,7 @@ class MediaLifecycle:
                     queued += self._auto_queue(s, creator, post)
                     self._recompute(s, post)
                 posts_done += 1
-        return {"posts": posts_done, "queued": queued}
+        return {"posts": posts_done, "queued": queued, "unavailable": unavailable}
 
     # ---- downloads -----------------------------------------------------------------
 

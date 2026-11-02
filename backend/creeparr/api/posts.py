@@ -199,7 +199,7 @@ async def refresh_post(post_id: int, services: Services = Depends(get_services))
             return post.post_id, post.post_type, post.creator_id, c.provider, c.campaign_id
 
     ext_id, post_type, creator_id, provider_name, external_id = await asyncio.to_thread(_ext_id)
-    provider = services.providers.get(provider_name)
+    provider = services.providers.serving(provider_name)
     try:
         pr = await provider.get_post(external_id, ext_id, post_type=post_type)
     except ProviderError as exc:

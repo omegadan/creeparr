@@ -4,11 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from creeparr.core.errors import NotFound
+from creeparr.core.errors import Conflict, NotFound
 from creeparr.db.models import Creator
 from creeparr.providers.base import ProviderService
 
 DEFAULT_PROVIDER = "patreon"
+
+
+def unavailable_message(name: str) -> str:
+    """Why a creator of an unregistered provider (one this version doesn't have) is skipped."""
+    return f"'{name}' isn't available in this version of Creeparr"
 
 
 class ProviderRegistry:
@@ -40,7 +45,15 @@ class ProviderRegistry:
             raise NotFound(f"unknown provider '{key}'") from exc
 
     def for_creator(self, creator: Creator) -> ProviderService:
-        return self.get(creator.provider)
+        return self.serving(creator.provider)
+
+    def serving(self, name: str) -> ProviderService:
+        """The provider a stored creator names. Unlike `get`, an unregistered one is a
+        Conflict (`provider_unavailable`), not a NotFound: the creator exists, but this
+        version can't reach its provider."""
+        if not self.has(name):
+            raise Conflict(unavailable_message(name), code="provider_unavailable")
+        return self._by_name[name]
 
     def hosting(self, source: str) -> ProviderService | None:
         """The provider whose session fetches embeds of `source`, whoever posted them

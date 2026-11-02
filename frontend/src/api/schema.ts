@@ -40,7 +40,7 @@ export interface AuthUserOut {
 }
 
 /** Why a provider's queue is or isn't moving, as the Queue page shows it. */
-export type ClaimState = "disabled" | "paused" | "downloading" | "idle" | "creators_off" | "throttled" | "pacing" | "blocked" | "waiting";
+export type ClaimState = "disabled" | "unavailable" | "paused" | "downloading" | "idle" | "creators_off" | "throttled" | "pacing" | "blocked" | "waiting";
 
 export interface ClearedOut {
   cleared: number;

@@ -459,3 +459,22 @@ def test_the_newly_declared_responses_keep_their_shape(app, api):
     status = api.get("/api/v1/system/status").json()
     assert status["scan"] == {"running": None, "pending": []}
     assert status["paths"]["download_dir"] == settings["env"]["download_dir"]
+
+
+def test_refreshing_a_creator_of_an_unavailable_provider_is_a_conflict(app, api):
+    # The creator and post exist; it's their provider this version doesn't have.
+    from creeparr.db.engine import session_scope
+    from creeparr.db.models import Creator, Post
+
+    with session_scope(app.state.services.session_factory) as s:
+        creator = Creator(campaign_id="ig-1", name="Leftover", provider="instagram")
+        s.add(creator)
+        s.flush()
+        post = Post(post_id="p1", creator_id=creator.id, title="t")
+        s.add(post)
+        s.flush()
+        creator_id, post_id = creator.id, post.id
+    for path in (f"/creators/{creator_id}/refresh-metadata", f"/posts/{post_id}/refresh"):
+        r = api.post(f"/api/v1{path}")
+        assert r.status_code == 409, path
+        assert r.json()["error"]["code"] == "provider_unavailable", path
