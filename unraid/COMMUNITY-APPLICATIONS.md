@@ -10,7 +10,7 @@ is ready in this repo; the remaining steps require your Unraid forum account.
 - A square **PNG** icon: `unraid/creeparr-icon.png` (CA renders PNG better than SVG).
 - Valid template tags: `<Icon>`, `<TemplateURL>`, `<Project>`, `<Overview>`,
   `<Category>` (from CA's allowed list), and `<Support>`.
-- A public image on a registry: `ghcr.io/omegadan/creeparr:latest` (already published).
+- A public image on a registry: `ghcr.io/omegadan/creeparr:latest` (published by each release).
 
 ## 2. Create a support thread (required by CA)
 

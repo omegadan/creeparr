@@ -15,6 +15,8 @@ services:
       - CREEPARR_PATREON_DOWNLOAD_DIR=${PATREON_DOWNLOAD_DIR:+/downloads-patreon}
       - CREEPARR_ONLYFANS_DOWNLOAD_DIR=${ONLYFANS_DOWNLOAD_DIR:+/downloads-onlyfans}
       - CREEPARR_YOUTUBE_DOWNLOAD_DIR=${YOUTUBE_DOWNLOAD_DIR:+/downloads-youtube}
+      # Instagram and Reddit are switched off in this version; these two only keep an
+      # existing archive of theirs reachable.
       - CREEPARR_INSTAGRAM_DOWNLOAD_DIR=${INSTAGRAM_DOWNLOAD_DIR:+/downloads-instagram}
       - CREEPARR_REDDIT_DOWNLOAD_DIR=${REDDIT_DOWNLOAD_DIR:+/downloads-reddit}
     volumes:

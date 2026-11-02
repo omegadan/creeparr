@@ -1,15 +1,17 @@
 # Creeparr
 
-A self-hosted, *arr-style archiver for the creators you follow on **Patreon, OnlyFans,
-YouTube, Instagram and Reddit**. Add a creator, and Creeparr slowly backs up every post you
-have access to, then keeps checking for new ones.
+A self-hosted, *arr-style archiver for the creators you follow on **Patreon, OnlyFans and
+YouTube**. Add a creator, and Creeparr slowly backs up every post you have access to, then
+keeps checking for new ones.
+
+<!-- screenshots -->
 
 - Archives video (direct files, HLS streams, YouTube / Vimeo embeds via yt-dlp), and
   optionally images, audio and attachments per creator.
 - **Import your subscriptions** in one click, or add creators by URL / handle / id.
 - Gentle by design: per-provider request rates and a downloads-per-hour cap spread out at
   random, over a queue of any size.
-- Light/dark/auto web UI (theme switch in the sidebar; auto follows your OS): creators grid, per-creator post list with per-file status, live
+- Light/dark/auto web UI: creators grid, per-creator post list with per-file status, live
   download queue, history, settings, system status and logs.
 - Scheduled incremental scans, full back-fills, retries with back-off, DRM detection,
   disk-space guard, resumable downloads, `post.json` / `post.md` / `post.html` sidecars.
@@ -17,7 +19,20 @@ have access to, then keeps checking for new ones.
 
 > Creeparr only reads content **your own account** can already see. It never bypasses
 > access controls, skips DRM-protected media, and is intended for personal archival of the
-> content you pay for. Do not use it to redistribute creators' work.
+> content you pay for. Do not use it to redistribute creators' work. Patreon's and
+> OnlyFans' terms forbid automated access; using Creeparr is your decision and your risk.
+
+## What's supported
+
+| Provider  | Needs                                   | Notes                                                |
+| --------- | --------------------------------------- | ---------------------------------------------------- |
+| Patreon   | your `session_id` cookie                | Posts, embeds, attachments; import your memberships  |
+| OnlyFans  | `sess`, `auth_id` and `x-bc` from your browser | Posts and messages; DRM videos are skipped    |
+| YouTube   | nothing (cookies only for members-only) | Whole channels, via yt-dlp                           |
+
+Instagram and Reddit were supported in earlier versions and are **switched off** for now:
+both block automated access too aggressively to be usable. If you archived from them
+before, those creators, posts and files are kept and left alone.
 
 ## Quick start
 
@@ -25,7 +40,7 @@ have access to, then keeps checking for new ones.
 # docker-compose.yml
 services:
   creeparr:
-    image: ghcr.io/omegadan/creeparr:latest   # or build: . to build from source
+    image: ghcr.io/omegadan/creeparr:latest   # the latest release; see "Releases and updates"
     container_name: creeparr
     environment:
       - PUID=99                 # Unraid defaults; use your own uid/gid elsewhere
@@ -33,7 +48,7 @@ services:
       - TZ=America/Los_Angeles
     volumes:
       - ./config:/config
-      - /mnt/media/patreon:/downloads
+      - /mnt/media/creeparr:/downloads
     ports:
       - "7979:7979"
     restart: unless-stopped
@@ -44,13 +59,12 @@ docker compose up -d
 open http://localhost:7979
 ```
 
-Images are published to `ghcr.io/omegadan/creeparr` by GitHub Actions on every push to
-`main` (`latest`) and on `v*` tags, for `linux/amd64` and `linux/arm64`. The image is public;
-no login is needed to pull it. yt-dlp and gallery-dl are upgraded and a new image is
-published automatically every week, so site breakages get fixed without you doing anything.
+On first start Creeparr asks you to **set a password**. Do, unless it only runs on a
+network you trust: the accounts you connect are reachable through it (see
+[Security](#security)).
 
-Then, in **Settings**, open a provider's tab (Patreon, OnlyFans, YouTube, Instagram, Reddit)
-and connect it. YouTube and Reddit work without an account. For example, **Patreon**:
+Then, in **Settings**, open a provider's tab and connect it. YouTube works without an
+account. For example, **Patreon**:
 
 1. Log in to patreon.com in your browser.
 2. Open DevTools → Application → Cookies → `https://www.patreon.com` and copy the value of
@@ -73,7 +87,29 @@ A full back-fill starts immediately; after that, monitored creators are re-scann
         └── post.html      # post text as HTML
 ```
 
-The folder and file templates are editable in **Settings → Naming & general**.
+The folder and file templates are editable in **Settings → Naming & general**, with a live
+preview.
+
+## Releases and updates
+
+Images are published to `ghcr.io/omegadan/creeparr` for `linux/amd64` and `linux/arm64`.
+The image is public; no login is needed to pull it.
+
+| Tag             | What it is                                                      |
+| --------------- | --------------------------------------------------------------- |
+| `latest`        | The latest release. What the examples here and the Unraid template use. |
+| `0.2`           | The latest `0.2.x` release: fixes, but no new minor version.    |
+| `0.2.0`         | Exactly that release, never changes.                            |
+| `edge`          | Every merge to `main`, before it's released. For testing.       |
+
+Pin `0.2` (say) to choose when you move to the next minor version; pin an exact version to
+change nothing until you do. What changed in each release is in
+[CHANGELOG.md](CHANGELOG.md) and on the [Releases](https://github.com/omegadan/creeparr/releases)
+page.
+
+Sites often break yt-dlp, and fixes ship in its new releases. Creeparr checks every week;
+when a yt-dlp or gallery-dl update is the only change since the last release, it's released
+as a patch on its own, so `latest` and `0.2` pick it up without anyone doing anything.
 
 ## Unraid
 
@@ -97,13 +133,13 @@ Every variable is documented in that file. Summary:
 | `TZ`                   | `America/Los_Angeles` | Time zone                                      |
 | `CONFIG_DIR`           | required      | Host path mounted at `/config` (database, logs)        |
 | `DOWNLOAD_DIR`         | required      | Host path mounted at `/downloads`: the default archive root for every provider |
-| `PATREON_DOWNLOAD_DIR`, `ONLYFANS_DOWNLOAD_DIR`, `YOUTUBE_DOWNLOAD_DIR`, `INSTAGRAM_DOWNLOAD_DIR`, `REDDIT_DOWNLOAD_DIR` | unset | Optional per-provider archive root; unset ones use `DOWNLOAD_DIR` |
+| `PATREON_DOWNLOAD_DIR`, `ONLYFANS_DOWNLOAD_DIR`, `YOUTUBE_DOWNLOAD_DIR` | unset | Optional per-provider archive root; unset ones use `DOWNLOAD_DIR` |
 | `PORT`                 | `7979`        | Host port for the web UI                               |
 | `CREEPARR_LOG_LEVEL`   | `INFO`        | `DEBUG`, `INFO`, `WARNING`, `ERROR`                    |
 | `CREEPARR_ALLOWED_HOSTS` | unset       | Extra host names allowed while no password is set (see [Security](#security)) |
 | `CREEPARR_CONFIG_DIR`  | `/config`     | In-container config path (only when not using Docker) |
 | `CREEPARR_DOWNLOAD_DIR`| `/downloads`  | In-container default archive path (only when not using Docker) |
-| `CREEPARR_<PROVIDER>_DOWNLOAD_DIR` | unset | Per-provider archive path (`PATREON`, `ONLYFANS`, `YOUTUBE`, `INSTAGRAM`, `REDDIT`); falls back to `CREEPARR_DOWNLOAD_DIR` |
+| `CREEPARR_<PROVIDER>_DOWNLOAD_DIR` | unset | Per-provider archive path (`PATREON`, `ONLYFANS`, `YOUTUBE`); falls back to `CREEPARR_DOWNLOAD_DIR` |
 | `CREEPARR_PORT`        | `7979`        | Port the server listens on                             |
 
 Everything else (scan interval, concurrency, retries, naming, per-kind toggles, HTTP backend)
@@ -117,6 +153,34 @@ Patreon sits behind Cloudflare. If **Test connection** reports a *Cloudflare cha
    of only `session_id`; the `cf_clearance` cookie is forwarded.
 2. Switch **HTTP backend** to `curl_cffi` (Chrome TLS impersonation). It is included in the
    Docker image.
+
+## Security
+
+On first start Creeparr asks you to set a password; it gates the whole API. If you skip
+it, the sidebar shows **No password set** until you add one in **Settings → Security**.
+Skip it only on a network you trust: without a password, anyone who can reach Creeparr can
+use it.
+
+Credentials you paste (Patreon/OnlyFans cookies) are stored in the SQLite database under
+`/config`, **unencrypted**, and never shown back in full. They give full access to those
+accounts, so keep `/config` private and out of shared backups. Logs mask them.
+
+Two checks stop other websites from using the API through your browser:
+
+- State-changing API calls (`POST`/`PUT`/`PATCH`/`DELETE`) must send an
+  `X-Requested-With` header (any value). The web UI does; add it to your own scripts,
+  e.g. `curl -X POST -H 'X-Requested-With: curl' http://tower:7979/api/v1/creators/scan-all`.
+- While no password is set, the UI only answers to IP addresses, bare host names
+  (`tower`), `localhost` and `.local` / `.lan` / `.home.arpa` / `.internal` / `.ts.net`
+  names. To open it by another name (a reverse-proxy domain, say), set a password or
+  list the name in `CREEPARR_ALLOWED_HOSTS`.
+
+## Status
+
+Early, and changing. It's covered by unit and integration tests against recorded API
+responses, but the [end-to-end checklist](docs/e2e-checklist.md) against real accounts
+hasn't been run yet. The Patreon and OnlyFans APIs are private and can change without
+notice; when one does, expect a broken scan until a release fixes it.
 
 ## Development
 
@@ -141,32 +205,10 @@ Layout: `backend/creeparr/{providers,patreon,scanner,downloader,api,core,db}` an
 what was verified about Patreon's private API in [docs/patreon-api.md](docs/patreon-api.md);
 manual test plan in [docs/e2e-checklist.md](docs/e2e-checklist.md).
 
-## Status
-
-Early release. Verified against synthetic API fixtures and unit/integration tests; the
-end-to-end checklist against real accounts still needs to be run (see
-`docs/e2e-checklist.md`). The Patreon, OnlyFans and Instagram APIs are private and can
-change without notice.
-
-The version lives in one place, `backend/creeparr/__init__.py`, and goes up by one patch
-number on every push to `main`.
-
-## Security
-
-The web UI is unauthenticated by default. If Creeparr is reachable beyond your own machine,
-set a password in **Settings → Security**; it gates the whole API. Credentials you paste
-(Patreon/OnlyFans cookies) are stored in the SQLite DB under `/config` and never shown
-back in full.
-
-Two checks stop other websites from using the API through your browser:
-
-- State-changing API calls (`POST`/`PUT`/`PATCH`/`DELETE`) must send an
-  `X-Requested-With` header (any value). The web UI does; add it to your own scripts,
-  e.g. `curl -X POST -H 'X-Requested-With: curl' http://tower:7979/api/v1/creators/scan-all`.
-- While no password is set, the UI only answers to IP addresses, bare host names
-  (`tower`), `localhost` and `.local` / `.lan` / `.home.arpa` / `.internal` / `.ts.net`
-  names. To open it by another name (a reverse-proxy domain, say), set a password or
-  list the name in `CREEPARR_ALLOWED_HOSTS`.
+To release: add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) with each
+change people will notice. When it's time, run the **Release** workflow from the Actions
+tab (patch, minor or major); it bumps the version in `backend/creeparr/__init__.py`, tags
+it, publishes the image and writes the GitHub Release from the changelog.
 
 ## License
 
