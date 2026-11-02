@@ -417,9 +417,11 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
 
 def test_the_providers_endpoint_serves_the_description(api):
     providers = {p["name"]: p for p in api.get("/api/v1/providers").json()}
-    reddit = providers["reddit"]
-    assert reddit["label"] == "Reddit" and reddit["intro"].startswith("Public subreddits")
-    assert [c["key"] for c in reddit["credentials"]] == ["client_id", "client_secret"]
-    assert reddit["credentials"][0]["optional"] is True
-    assert reddit["download_dir_variable"] == "CREEPARR_REDDIT_DOWNLOAD_DIR"
-    assert providers["instagram"]["post_types"]["instagram_story"] == "Story"
+    assert list(providers) == ["patreon", "onlyfans", "youtube"]  # Instagram, Reddit are off
+    onlyfans = providers["onlyfans"]
+    assert onlyfans["label"] == "OnlyFans" and onlyfans["intro"].startswith("Reads content")
+    keys = [c["key"] for c in onlyfans["credentials"]]
+    assert keys == ["sess", "auth_id", "x_bc", "cookies_txt"]
+    assert onlyfans["credentials"][-1]["optional"] is True
+    assert onlyfans["download_dir_variable"] == "CREEPARR_ONLYFANS_DOWNLOAD_DIR"
+    assert onlyfans["post_types"]["onlyfans_message"] == "Message"
