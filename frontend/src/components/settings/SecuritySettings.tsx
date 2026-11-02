@@ -5,6 +5,8 @@ import { Button } from "../ui/Button";
 import { Badge } from "../ui/Badge";
 import { useToast } from "../ui/Toast";
 
+export const MIN_PASSWORD_LENGTH = 8;
+
 export function SecuritySettings() {
   const auth = useAuthState();
   const setPw = useSetPassword();
@@ -27,13 +29,13 @@ export function SecuritySettings() {
             <input type="password" className="input" value={current} onChange={(e) => setCurrent(e.target.value)} />
           </Field>
         )}
-        <Field label={enabled ? "New password" : "Set a password"} hint="At least 6 characters.">
+        <Field label={enabled ? "New password" : "Set a password"} hint={`At least ${MIN_PASSWORD_LENGTH} characters.`}>
           <input type="password" className="input" value={pw} onChange={(e) => setPw1(e.target.value)} />
         </Field>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="primary"
-            disabled={pw.length < 6}
+            disabled={pw.length < MIN_PASSWORD_LENGTH}
             loading={setPw.isPending}
             onClick={() => setPw.mutate({ password: pw, current_password: current || undefined }, { onSuccess: () => { toast("Password saved", "success"); setPw1(""); setCurrent(""); }, onError: (e) => error(e) })}
           >

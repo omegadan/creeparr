@@ -29,6 +29,15 @@ export function useSetPassword() {
   });
 }
 
+/** Answer the first-run question with "no password, local network only". */
+export function useSkipSetup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => post<OkOut>("/auth/setup/skip"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["authState"] }),
+  });
+}
+
 export function useDisableAuth() {
   const qc = useQueryClient();
   return useMutation({

@@ -1,7 +1,8 @@
 import { Link, NavLink, Outlet } from "react-router";
-import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, RefreshCw, Search, Settings, Users } from "lucide-react";
+import { Activity, AlertTriangle, ClipboardList, Download, FileText, Gauge, LockOpen, RefreshCw, Search, Settings, Users } from "lucide-react";
 import { useServerEvents } from "../../api/events";
 import { useSystemStatus } from "../../api/hooks/useSystem";
+import { useAuthState } from "../../api/hooks/useAuth";
 import { cx } from "../../lib/format";
 import { ThemeToggle } from "../ui/ThemeToggle";
 
@@ -21,6 +22,7 @@ const NAV = [
 export function AppShell() {
   const { serverUpdated } = useServerEvents();
   const status = useSystemStatus();
+  const auth = useAuthState();
   const queued = (status.data?.counts.queued ?? 0) + (status.data?.counts.running ?? 0);
   const providers = status.data?.providers ?? [];
   const connected = providers.filter((p) => p.auth.state === "valid");
@@ -70,6 +72,12 @@ export function AppShell() {
               {connected.length ? connected.map((p) => p.auth.user_name ?? p.label).join(", ") : anyConfigured ? "Session problem" : "Not connected"}
             </span>
           </Link>
+          {auth.data && !auth.data.auth_enabled && (
+            <Link to="/settings/security" className="mt-2 flex items-center gap-2 text-[var(--color-sidebar-muted)] hover:text-white" title="Anyone who can reach Creeparr can use it. Set a password in Settings → Security.">
+              <LockOpen className="h-3.5 w-3.5 text-warn" />
+              <span>No password set</span>
+            </Link>
+          )}
           <div className="mt-2 flex items-center justify-between">
             <span className="text-[var(--color-sidebar-muted)]">v{status.data?.version ?? "…"}</span>
             <ThemeToggle />

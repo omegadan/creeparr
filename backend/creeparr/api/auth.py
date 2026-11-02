@@ -20,6 +20,8 @@ from creeparr.services import Services
 router = APIRouter(tags=["auth"])
 
 COOKIE = "creeparr_session"
+MIN_PASSWORD_LENGTH = 8
+
 # Paths under /api/v1 that never require authentication.
 OPEN_PATHS = ("/api/v1/auth/login", "/api/v1/auth/status")
 
@@ -79,10 +81,20 @@ def _recent_failures(client: str, now: float) -> deque[float]:
 
 @router.get("/auth/status", response_model=LoginStateOut)
 def auth_status(request: Request, services: Services = Depends(get_services)):
+    active = auth_active(services)
     return {
-        "auth_enabled": auth_active(services),
+        "auth_enabled": active,
         "authenticated": is_authenticated(request, services),
+        "setup_required": not active and not services.settings.get().security.setup_done,
     }
+
+
+@router.post("/auth/setup/skip", response_model=OkOut)
+def skip_setup(services: Services = Depends(get_services)):
+    """Answer the first-run question with "no password, local network only". It decides
+    nothing about access: until a password is set, the API is open (behind the Host check)."""
+    services.settings.update({"security": {"setup_done": True}})
+    return {"ok": True}
 
 
 @router.post("/auth/login", response_model=OkOut)
@@ -106,11 +118,15 @@ def login(
         raise Unauthorized("incorrect password")
     with _failures_lock:
         _failures.pop(client, None)
+    _sign_in(response, services)
+    return {"ok": True}
+
+
+def _sign_in(response: Response, services: Services) -> None:
     token = make_token(session_key(services))
     response.set_cookie(
         COOKIE, token, max_age=30 * 24 * 3600, httponly=True, samesite="lax", path="/"
     )
-    return {"ok": True}
 
 
 @router.post("/auth/logout", response_model=OkOut)
@@ -125,19 +141,33 @@ def logout(request: Request, response: Response, services: Services = Depends(ge
 
 
 @router.put("/auth/password", response_model=OkOut)
-def set_password(body: PasswordBody, request: Request, services: Services = Depends(get_services)):
+def set_password(
+    body: PasswordBody,
+    request: Request,
+    response: Response,
+    services: Services = Depends(get_services),
+):
+    """Set or change the password, and sign this browser in with it (every other session
+    ends, since the password is part of the signing key)."""
     sec = services.settings.get().security
     # If a password already exists, require the current one (or an active session).
     if sec.password_hash and not is_authenticated(request, services):
         ok = body.current_password and verify_password(body.current_password, sec.password_hash)
         if not ok:
             raise Unauthorized("current password required")
-    if len(body.password) < 6:
-        raise ValidationFailed("password must be at least 6 characters")
+    if len(body.password) < MIN_PASSWORD_LENGTH:
+        raise ValidationFailed(f"password must be at least {MIN_PASSWORD_LENGTH} characters")
     services.settings.update(
-        {"security": {"password_hash": hash_password(body.password), "auth_enabled": True}},
+        {
+            "security": {
+                "password_hash": hash_password(body.password),
+                "auth_enabled": True,
+                "setup_done": True,
+            }
+        },
         allow_secrets=True,
     )
+    _sign_in(response, services)
     return {"ok": True}
 
 

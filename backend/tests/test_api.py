@@ -175,13 +175,49 @@ def test_ui_auth_flow(env):
     with TestClient(app, headers=UI_HEADERS) as c:
         assert c.get("/api/v1/auth/status").json()["auth_enabled"] is False
         assert c.get("/api/v1/creators").status_code == 200
-        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
+        # Whoever set the password is signed in with it; nobody else is.
+        assert c.get("/api/v1/creators").status_code == 200
+        c.cookies.clear()
         assert c.get("/api/v1/creators").status_code == 401
         assert c.post("/api/v1/auth/login", json={"password": "wrong"}).status_code == 401
-        assert c.post("/api/v1/auth/login", json={"password": "hunter2"}).status_code == 200
+        assert c.post("/api/v1/auth/login", json={"password": "hunter22"}).status_code == 200
         assert c.get("/api/v1/creators").status_code == 200
         assert c.delete("/api/v1/auth/password").status_code == 200
         assert c.get("/api/v1/creators").status_code == 200  # auth disabled again
+
+
+def test_first_run_asks_for_a_password_until_answered(env):
+    from creeparr.app import create_app
+
+    status = "/api/v1/auth/status"
+    app = create_app(env, start_background=False)
+    with TestClient(app, headers=UI_HEADERS) as c:
+        assert c.get(status).json()["setup_required"] is True
+        # Answering "no password" is remembered, and the API stays open.
+        assert c.post("/api/v1/auth/setup/skip").status_code == 200
+        assert c.get(status).json() == {
+            "auth_enabled": False,
+            "authenticated": True,
+            "setup_required": False,
+        }
+        assert c.get("/api/v1/creators").status_code == 200
+
+    fresh = env.model_copy(update={"config_dir": env.config_dir.parent / "fresh"})
+    fresh.ensure_dirs()
+    with TestClient(create_app(fresh, start_background=False), headers=UI_HEADERS) as c:
+        # Setting a password answers it too; removing the password later doesn't ask again.
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
+        assert c.get(status).json()["setup_required"] is False
+        assert c.post("/api/v1/auth/login", json={"password": "hunter22"}).status_code == 200
+        assert c.delete("/api/v1/auth/password").status_code == 200
+        assert c.get(status).json()["setup_required"] is False
+
+
+def test_a_new_password_needs_eight_characters(api):
+    r = api.put("/api/v1/auth/password", json={"password": "seven77"})
+    assert r.status_code == 422 and "at least 8" in r.json()["error"]["message"]
+    assert api.put("/api/v1/auth/password", json={"password": "eight888"}).status_code == 200
 
 
 def test_state_changing_calls_need_the_ui_header(app):
@@ -226,7 +262,7 @@ def test_allowed_hosts_env_and_password_lift_host_check(env):
         assert c.get("/api/v1/creators", headers={"host": "evil.example"}).status_code == 403
         # With a password set, an unknown host is no longer the attacker's way in: it
         # has no session, so it just gets 401 like any unauthenticated client.
-        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
         c.cookies.clear()
         assert c.get("/api/v1/creators", headers={"host": "evil.example"}).status_code == 401
 
@@ -270,14 +306,14 @@ def test_logout_and_password_change_end_old_sessions(env):
         return c.get("/api/v1/creators").status_code
 
     with TestClient(app, headers=UI_HEADERS) as c:
-        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
-        stolen = login(c, "hunter2")
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
+        stolen = login(c, "hunter22")
         assert with_cookie(c, stolen) == 200
         assert c.post("/api/v1/auth/logout").status_code == 200
         # The old cookie no longer works (e.g. one copied off another machine).
         assert with_cookie(c, stolen) == 401
 
-        before = login(c, "hunter2")
+        before = login(c, "hunter22")
         assert with_cookie(c, before) == 200
         r = c.put("/api/v1/auth/password", json={"password": "correct horse"})
         assert r.status_code == 200
@@ -291,22 +327,22 @@ def test_login_is_throttled_after_repeated_failures(env, monkeypatch):
     monkeypatch.setattr(auth, "_failures", {})
     app = create_app(env, start_background=False)
     with TestClient(app, headers=UI_HEADERS) as c:
-        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
         for _ in range(auth.LOGIN_MAX_FAILURES):
             assert c.post("/api/v1/auth/login", json={"password": "nope"}).status_code == 401
-        r = c.post("/api/v1/auth/login", json={"password": "hunter2"})
+        r = c.post("/api/v1/auth/login", json={"password": "hunter22"})
         assert r.status_code == 429 and r.json()["error"]["code"] == "too_many_attempts"
         # After the window, the right password works again.
         real = auth.time.monotonic
         monkeypatch.setattr(auth.time, "monotonic", lambda: real() + auth.LOGIN_WINDOW_SECONDS + 1)
-        assert c.post("/api/v1/auth/login", json={"password": "hunter2"}).status_code == 200
+        assert c.post("/api/v1/auth/login", json={"password": "hunter22"}).status_code == 200
 
 
 def test_api_docs_need_login_when_a_password_is_set(env):
     app = create_app(env, start_background=False)
     with TestClient(app, headers=UI_HEADERS) as c:
         assert c.get("/openapi.json").status_code == 200  # open while there's no password
-        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
         c.cookies.clear()
         assert c.get("/openapi.json").status_code == 401
         assert c.get("/api/docs").status_code == 401
@@ -342,7 +378,7 @@ def test_every_api_route_requires_login_when_a_password_is_set(env):
     app = create_app(env, start_background=False)
     paths = app.openapi()["paths"]  # every route, including ones in included routers
     with TestClient(app, headers=UI_HEADERS) as c:
-        assert c.put("/api/v1/auth/password", json={"password": "hunter2"}).status_code == 200
+        assert c.put("/api/v1/auth/password", json={"password": "hunter22"}).status_code == 200
         c.cookies.clear()
         checked = 0
         for template, ops in paths.items():

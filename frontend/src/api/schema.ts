@@ -355,6 +355,7 @@ export interface LoginBody {
 export interface LoginStateOut {
   auth_enabled: boolean;
   authenticated: boolean;
+  setup_required: boolean;
 }
 
 export interface LogsOut {
@@ -732,6 +733,7 @@ export interface SecuritySettingsOut {
   auth_enabled: boolean;
   password_hash: string;
   session_epoch: number;
+  setup_done: boolean;
 }
 
 /** The test of newly saved credentials, and the provider's settings as now stored. */
