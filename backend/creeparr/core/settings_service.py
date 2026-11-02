@@ -8,12 +8,22 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, ValidationError, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from sqlalchemy import select
 
 from creeparr.core.errors import ValidationFailed
+from creeparr.core.history import record_event
 from creeparr.db.engine import SessionFactory, session_scope
+from creeparr.db.enums import EventType
 from creeparr.db.models import Setting
+from creeparr.downloader import paths
 
 log = logging.getLogger(__name__)
 
@@ -149,6 +159,15 @@ class NamingSettings(BaseModel):
     write_nfo: bool = False
     embed_metadata: bool = True
 
+    @field_validator("post_folder_template", "file_template")
+    @classmethod
+    def _renders(cls, template: str, info: ValidationInfo) -> str:
+        # The path rules' own check, so a template no download could use is never saved.
+        problem = paths.template_problem(template, file=info.field_name == "file_template")
+        if problem:
+            raise ValueError(problem)
+        return template
+
 
 class SecuritySettings(BaseModel):
     auth_enabled: bool = False
@@ -206,6 +225,33 @@ def mask_secret(value: str) -> str:
     return f"••••{tail}"
 
 
+def reasons(exc: ValidationError) -> str:
+    """What's wrong, readably: `naming.file_template: The file name template can't ...`."""
+    return "; ".join(
+        f"{'.'.join(map(str, e['loc']))}: {e['msg'].removeprefix('Value error, ')}"
+        for e in exc.errors()
+    )
+
+
+def _usable(model: type[BaseModel], value: Any) -> tuple[dict[str, Any], list[str]]:
+    """A stored group's settings, with each one that fails validation reset to its default,
+    and the names of those reset."""
+    if not isinstance(value, dict):
+        return model().model_dump(), sorted(model.model_fields)
+    value = dict(value)
+    dropped: list[str] = []
+    while True:
+        try:
+            return model.model_validate(value).model_dump(), sorted(dropped)
+        except ValidationError as exc:
+            bad = {e["loc"][0] for e in exc.errors() if e["loc"] and e["loc"][0] in value}
+            if not bad:  # not one setting's fault: reset the group
+                return model().model_dump(), sorted({*dropped, *value})
+            dropped.extend(str(name) for name in bad)
+            for name in bad:
+                del value[name]
+
+
 class SettingsService:
     def __init__(self, session_factory: SessionFactory) -> None:
         self._factory = session_factory
@@ -222,19 +268,36 @@ class SettingsService:
                 self._cache = AppSettings.model_validate(data)
             except ValidationError as exc:
                 log.warning(
-                    "Stored settings failed validation; using defaults where needed: %s", exc
+                    "Stored settings failed validation; resetting what can't be used: %s", exc
                 )
                 merged: dict[str, Any] = {}
+                reset: dict[str, list[str]] = {}
                 for group, value in data.items():
                     if group not in AppSettings.model_fields:
                         continue
                     model = AppSettings.model_fields[group].annotation
-                    try:
-                        merged[group] = model.model_validate(value).model_dump()  # type: ignore[union-attr]
-                    except ValidationError:
-                        merged[group] = {}
+                    merged[group], dropped = _usable(model, value)  # type: ignore[arg-type]
+                    if dropped:
+                        reset[group] = dropped
                 self._cache = AppSettings.model_validate(merged)
+                self._save_reset(reset)
             return self._cache
+
+    def _save_reset(self, reset: dict[str, list[str]]) -> None:
+        """Store the groups that had settings reset, so the reset happens once, and say so in
+        the history."""
+        if not reset:
+            return
+        assert self._cache is not None
+        with session_scope(self._factory) as s:
+            for group, names in reset.items():
+                row = s.get(Setting, group)
+                if row is not None:
+                    row.value = getattr(self._cache, group).model_dump()
+                for name in names:
+                    message = f"{group}.{name} couldn't be used and was reset to the default"
+                    log.warning(message)
+                    record_event(s, None, EventType.SETTINGS_CHANGED, message, level="warning")
 
     def get(self) -> AppSettings:
         if self._cache is None:
@@ -262,7 +325,7 @@ class SettingsService:
             try:
                 validated = AppSettings.model_validate(current)
             except ValidationError as exc:
-                raise ValidationFailed("invalid settings", detail=str(exc)) from exc
+                raise ValidationFailed("invalid settings", detail=reasons(exc)) from exc
             with session_scope(self._factory) as s:
                 for group in patch:
                     row = s.get(Setting, group)

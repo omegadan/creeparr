@@ -362,8 +362,11 @@ class AuthBody(BaseModel):
 
 
 class NamingPreviewBody(BaseModel):
-    post_folder_template: str
-    file_template: str = "{filename}"
+    """The naming settings being edited; whatever isn't sent is as saved."""
+
+    post_folder_template: str | None = None
+    file_template: str | None = None
+    max_component_length: int | None = None
 
 
 # ---- settings, as read back ---------------------------------------------------------------
@@ -445,10 +448,27 @@ class NotificationTestOut(BaseModel):
     targets: list[str] | None = None
 
 
-class NamingPreviewOut(Out):
+class SamplePathOut(Out):
+    """Where a sample post's file would land, relative to the download folder."""
+
+    label: str
     post_folder: str
     file: str
     full_path: str
+
+
+class NamingTokenOut(Out):
+    name: str
+    description: str
+    #: Its value for the first sample.
+    example: str
+
+
+class NamingPreviewOut(Out):
+    samples: list[SamplePathOut]
+    #: Names in braces that aren't tokens there; they render as nothing.
+    unknown: list[str]
+    tokens: list[NamingTokenOut]
 
 
 # ---- UI login ---------------------------------------------------------------------------

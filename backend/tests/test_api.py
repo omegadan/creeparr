@@ -448,11 +448,6 @@ def test_the_newly_declared_responses_keep_their_shape(app, api):
     ]
     health = api.get("/api/v1/system/health").json()
     assert health["status"] in ("ok", "degraded") and "version" in health
-    preview = api.post(
-        "/api/v1/settings/naming-preview",
-        json={"post_folder_template": "{creator}/{title}", "file_template": "{filename}"},
-    ).json()
-    assert preview["full_path"] == f"{preview['post_folder']}/{preview['file']}"
     # Only what applies is sent, as before.
     assert api.post("/api/v1/settings/notifications/test").json() == {
         "ok": False,
