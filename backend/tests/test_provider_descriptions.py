@@ -7,9 +7,12 @@ import pytest
 
 from creeparr.core.settings_service import AppSettings, secret_fields
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
+from creeparr.providers.catalog import PROVIDER_TYPES
 from creeparr.providers.instagram.client import SOURCE_URLS, group_into_posts
+from creeparr.providers.instagram.provider import InstagramProvider
 from creeparr.providers.onlyfans.client import OnlyFansClient
 from creeparr.providers.reddit.client import _post_from_json
+from creeparr.providers.reddit.provider import RedditProvider
 from creeparr.providers.youtube import YouTubeProvider
 from creeparr.services import build_services
 from tests import onlyfans_fixtures as of
@@ -56,9 +59,8 @@ def _youtube_types(env, settings, session_factory, bus) -> set[str]:
 
 
 @pytest.mark.parametrize("name", ["patreon", "onlyfans", "youtube", "instagram", "reddit"])
-def test_every_post_type_a_parser_stores_is_declared(
-    providers, env, settings, session_factory, bus, name
-):
+def test_every_post_type_a_parser_stores_is_declared(env, settings, session_factory, bus, name):
+    # Instagram and Reddit are unlisted for now, but their descriptions are still checked.
     produced = {
         "patreon": _patreon_types,
         "onlyfans": lambda: {
@@ -77,8 +79,9 @@ def test_every_post_type_a_parser_stores_is_declared(
             ).post_type
         },
     }[name]()
-    provider = next(p for p in providers if p.name == name)
-    declared = set(provider.description.post_types)
+    classes = (*PROVIDER_TYPES, InstagramProvider, RedditProvider)
+    description = next(c.description for c in classes if c.description.name == name)
+    declared = set(description.post_types)
     assert produced and produced <= declared, f"{name}: {produced - declared} not declared"
 
 
