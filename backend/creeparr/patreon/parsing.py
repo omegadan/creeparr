@@ -119,6 +119,13 @@ def post_from_resource(item: dict[str, Any], index: IncludedIndex) -> PostResour
     )
 
 
+def file_link_changed(stored_raw: dict[str, Any] | None, post: PostResource) -> bool:
+    """Whether the post's own file has a new link since `stored_raw` (its stored JSON)."""
+    attrs = ((stored_raw or {}).get("data") or {}).get("attributes") or {}
+    stored = attrs.get("post_file") if isinstance(attrs.get("post_file"), dict) else {}
+    return stored.get("url") != (post.post_file or {}).get("url")
+
+
 def campaign_from_resource(item: dict[str, Any], index: IncludedIndex | None = None) -> CreatorInfo:
     attrs = item.get("attributes") or {}
     rels = item.get("relationships") or {}

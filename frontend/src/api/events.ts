@@ -1,13 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Job, Queue } from "./types";
+import { serverVersionWatcher } from "../lib/version";
+import type { Queue, ServerEvents } from "./types";
 
-type Handler = (data: Record<string, unknown>) => void;
+/** A handler for each event the UI reacts to, given that event's payload. */
+type Handlers = { [E in Exclude<keyof ServerEvents, "hello">]?: (data: ServerEvents[E]) => void };
 
-/** Subscribe to the server-sent event stream and keep TanStack Query caches fresh. */
-export function useServerEvents(): void {
+/** Subscribe to the server-sent event stream and keep TanStack Query caches fresh.
+ * Returns whether the server has been updated since this tab loaded. */
+export function useServerEvents(): { serverUpdated: boolean } {
   const qc = useQueryClient();
   const timers = useRef<Record<string, number>>({});
+  const [serverUpdated, setServerUpdated] = useState(false);
 
   useEffect(() => {
     const pending = timers.current; // one object for the effect's lifetime
@@ -17,7 +21,7 @@ export function useServerEvents(): void {
     };
     const invalidate = (keys: unknown[][]) => () => keys.forEach((k) => qc.invalidateQueries({ queryKey: k }));
 
-    const handlers: Record<string, Handler> = {
+    const handlers: Handlers = {
       "auth.status": () => debounced("status", invalidate([["system", "status"], ["providers"]])),
       "scan.started": () => debounced("creators", invalidate([["creators"], ["system", "status"]])),
       "scan.queued": () => debounced("creators", invalidate([["creators"], ["system", "status"]])),
@@ -29,7 +33,7 @@ export function useServerEvents(): void {
         // Every cached queue page (keys are ["queue", page, failedPage]).
         qc.setQueriesData<Queue>({ queryKey: ["queue"] }, (old) => {
           if (!old) return old;
-          const jobs = old.jobs.map((j) => (j.id === d.id ? { ...j, ...(d as Partial<Job>), status: "running" as const } : j));
+          const jobs = old.jobs.map((j) => (j.id === d.id ? { ...j, ...d, status: "running" as const } : j));
           return { ...old, jobs };
         });
       },
@@ -57,9 +61,10 @@ export function useServerEvents(): void {
     let retryTimer = 0;
     let delay = 1000;
     let stopped = false;
+    const updated = serverVersionWatcher();
     const connect = () => {
       es = new EventSource("/api/v1/events");
-      for (const [name, fn] of Object.entries(handlers)) {
+      for (const [name, fn] of Object.entries(handlers) as [string, (data: unknown) => void][]) {
         es.addEventListener(name, (e: MessageEvent) => {
           try {
             fn(JSON.parse(e.data));
@@ -68,8 +73,14 @@ export function useServerEvents(): void {
           }
         });
       }
-      es.addEventListener("hello", () => {
+      es.addEventListener("hello", (e: MessageEvent) => {
         delay = 1000;
+        try {
+          const hello = JSON.parse(e.data) as ServerEvents["hello"];
+          setServerUpdated(updated(hello.version));
+        } catch {
+          /* ignore malformed */
+        }
         // (Re)connected: refresh everything that may have changed while we were away.
         qc.invalidateQueries();
       });
@@ -88,4 +99,5 @@ export function useServerEvents(): void {
       Object.values(pending).forEach((t) => window.clearTimeout(t));
     };
   }, [qc]);
+  return { serverUpdated };
 }

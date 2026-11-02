@@ -57,6 +57,9 @@ class FakeProvider:
     def resolve_media(self, pr):
         return resolve_media(pr)
 
+    def post_changed(self, stored_raw, pr):
+        return fx.POSTS.post_changed(stored_raw, pr)
+
     def post_from_raw(self, raw):
         from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 
@@ -296,15 +299,15 @@ def test_rescan_keeps_backfilled_date_and_description(session_factory, settings,
         creator = Creator(campaign_id=fx.CAMPAIGN_ID, name="C")
         s.add(creator)
         s.flush()
-        post = lifecycle.sync_post(s, creator, listing, resolve_media).post
+        post = lifecycle.sync_post(s, creator, listing, fx.POSTS).post
         post.published_at = backfilled
         post.content_html = "From the video"
-        lifecycle.sync_post(s, creator, listing, resolve_media)  # the next scan
+        lifecycle.sync_post(s, creator, listing, fx.POSTS)  # the next scan
         assert post.published_at.replace(tzinfo=UTC) == backfilled
         assert post.content_html == "From the video"
         # A listing that does carry values still updates them.
         dated = replace(listing, published_at=datetime(2020, 1, 1, tzinfo=UTC), content="New")
-        lifecycle.sync_post(s, creator, dated, resolve_media)
+        lifecycle.sync_post(s, creator, dated, fx.POSTS)
         assert post.published_at.year == 2020 and post.content_html == "New"
 
 

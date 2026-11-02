@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 from creeparr.db.enums import MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import CookieSet
+from creeparr.providers.description import COOKIES_TXT, CredentialField, ProviderDescription
 from creeparr.providers.errors import NotConfigured, ProviderError
 from creeparr.providers.http import RateLimiter, build_transport
 from creeparr.providers.media import MediaRef, MediaSession
@@ -27,6 +28,7 @@ from creeparr.providers.models import (
 from creeparr.providers.onlyfans.client import (
     DEFAULT_UA,
     MESSAGE_POST_TYPE,
+    POST_POST_TYPE,
     OnlyFansClient,
     OnlyFansCredentials,
     rebuild_post,
@@ -52,10 +54,34 @@ _KIND_MAP = {
 }
 
 
+DESCRIPTION = ProviderDescription(
+    name="onlyfans",
+    label="OnlyFans",
+    intro=(
+        "Reads content your OnlyFans account is subscribed to. Signing rules are fetched "
+        "automatically. OnlyFans is strict about automation; use a low request rate and expect "
+        "DRM videos to be skipped."
+    ),
+    credentials=(
+        CredentialField(
+            "sess", "sess cookie", "onlyfans.com → DevTools → Application → Cookies → sess"
+        ),
+        CredentialField(
+            "auth_id", "auth_id cookie", "onlyfans.com cookie auth_id (your numeric user id)"
+        ),
+        CredentialField(
+            "x_bc",
+            "x-bc token",
+            "Request header x-bc from any onlyfans.com/api2 request in the Network tab",
+        ),
+        COOKIES_TXT,
+    ),
+    post_types={POST_POST_TYPE: "Post", MESSAGE_POST_TYPE: "Message"},
+)
+
+
 class OnlyFansProvider(ProviderService):
-    name: ClassVar[str] = "onlyfans"
-    label: ClassVar[str] = "OnlyFans"
-    credential_fields: ClassVar[tuple[str, ...]] = ("sess", "auth_id", "x_bc", "cookies_txt")
+    description: ClassVar[ProviderDescription] = DESCRIPTION
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

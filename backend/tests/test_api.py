@@ -56,14 +56,19 @@ def test_patreon_auth_roundtrip(api, respx_mock):
     r = api.put("/api/v1/settings/auth/patreon", json={"session_id": "newsid-abcdef"})
     assert r.status_code == 200 and r.json()["ok"]
     assert r.json()["settings"]["session_id"].endswith("cdef")
-    status = api.get("/api/v1/system/status").json()
-    assert status["auth"]["state"] == "valid" and status["auth"]["user_name"] == "Test Patron"
+    auth = patreon_auth(api)
+    assert auth["state"] == "valid" and auth["user_name"] == "Test Patron"
     respx_mock.get(f"{API_URL}/current_user").mock(
         return_value=httpx.Response(401, json={"errors": [{"detail": "nope"}]})
     )
     r = api.post("/api/v1/settings/auth/patreon/test")
     assert r.json() == {"ok": False, "reason": "auth_invalid", "detail": r.json()["detail"]}
-    assert api.get("/api/v1/system/status").json()["auth"]["state"] == "invalid"
+    assert patreon_auth(api)["state"] == "invalid"
+
+
+def patreon_auth(api) -> dict:
+    providers = api.get("/api/v1/system/status").json()["providers"]
+    return next(p["auth"] for p in providers if p["name"] == "patreon")
 
 
 def test_lookup_add_and_list_creator(api, respx_mock):
@@ -389,7 +394,6 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
     from creeparr.db.engine import session_scope
     from creeparr.db.enums import MediaStatus
     from creeparr.db.models import Creator, MediaItem
-    from creeparr.patreon.media_resolver import resolve_media
     from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 
     services = app.state.services
@@ -400,7 +404,7 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
         s.add(creator)
         s.flush()
         creator_id = creator.id
-        services.lifecycle.sync_post(s, creator, pr, resolve_media)
+        services.lifecycle.sync_post(s, creator, pr, fx.POSTS)
     assert api.get("/api/v1/queue").json()["queued_total"] > 0
 
     r = api.patch(f"/api/v1/creators/{creator_id}", json={"include_images": False})
@@ -409,3 +413,54 @@ def test_turning_a_media_type_off_cancels_its_queued_downloads(app, api):
     assert services.claims.next("w0") is None  # no worker downloads them anyway
     with session_scope(services.session_factory) as s:
         assert {m.status for m in s.execute(select(MediaItem)).scalars()} == {MediaStatus.SKIPPED}
+
+
+def test_the_providers_endpoint_serves_the_description(api):
+    providers = {p["name"]: p for p in api.get("/api/v1/providers").json()}
+    assert list(providers) == ["patreon", "onlyfans", "youtube"]  # Instagram, Reddit are off
+    onlyfans = providers["onlyfans"]
+    assert onlyfans["label"] == "OnlyFans" and onlyfans["intro"].startswith("Reads content")
+    keys = [c["key"] for c in onlyfans["credentials"]]
+    assert keys == ["sess", "auth_id", "x_bc", "cookies_txt"]
+    assert onlyfans["credentials"][-1]["optional"] is True
+    assert onlyfans["download_dir_variable"] == "CREEPARR_ONLYFANS_DOWNLOAD_DIR"
+    assert onlyfans["post_types"]["onlyfans_message"] == "Message"
+
+
+def test_the_newly_declared_responses_keep_their_shape(app, api):
+    # These routes sent bare dicts before their responses were declared; the declarations
+    # must accept what they send and keep sending it.
+    async def noop() -> None:
+        return None
+
+    app.state.services.scheduler._register("noop", "Does nothing", None, noop)
+    assert api.get("/api/v1/system/tasks").json() == [
+        {
+            "name": "noop",
+            "description": "Does nothing",
+            "interval_seconds": None,
+            "next_run_at": None,
+            "last_run_at": None,
+            "last_status": None,
+            "last_error": None,
+            "running": False,
+        }
+    ]
+    health = api.get("/api/v1/system/health").json()
+    assert health["status"] in ("ok", "degraded") and "version" in health
+    preview = api.post(
+        "/api/v1/settings/naming-preview",
+        json={"post_folder_template": "{creator}/{title}", "file_template": "{filename}"},
+    ).json()
+    assert preview["full_path"] == f"{preview['post_folder']}/{preview['file']}"
+    # Only what applies is sent, as before.
+    assert api.post("/api/v1/settings/notifications/test").json() == {
+        "ok": False,
+        "detail": "no notification targets configured",
+    }
+    settings = api.get("/api/v1/settings").json()
+    assert settings["youtube"]["has_cookies_txt"] is False
+    assert settings["env"]["patreon_download_dir"] is None
+    status = api.get("/api/v1/system/status").json()
+    assert status["scan"] == {"running": None, "pending": []}
+    assert status["paths"]["download_dir"] == settings["env"]["download_dir"]

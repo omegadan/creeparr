@@ -12,7 +12,7 @@ from typing import Any, Protocol
 
 from creeparr.core.downloads import FailureKind
 from creeparr.core.settings_service import SettingsService
-from creeparr.db.enums import MediaKind
+from creeparr.db.enums import JobStage, MediaKind
 from creeparr.downloader.fs import atomic_replace
 from creeparr.downloader.handlers.base import (
     DownloadCancelled,
@@ -68,7 +68,7 @@ class DirectHandler:
         target = plan.container if media.kind == MediaKind.VIDEO else native
         dest = place.reserve(target)
         parts = [_part(dest)]  # kept only for a retry's resume
-        progress.set_stage("downloading")
+        progress.set_stage(JobStage.DOWNLOADING)
         try:
             if native == target:
                 res = await download_direct(
@@ -215,7 +215,7 @@ async def download_direct(
             raise DownloadFailed(FailureKind.RETRYABLE, f"unexpected HTTP {status}", "http")
 
         downloaded = existing
-        reporter.set_stage("downloading")
+        reporter.set_stage(JobStage.DOWNLOADING)
         with part.open(mode) as f:
             async for chunk in resp.aiter_bytes(1 << 16):
                 if not chunk:

@@ -43,31 +43,6 @@ export const TONE_CLASS: Record<StatusMeta["tone"], string> = {
   muted: "bg-bg-3 text-fg-muted border-line",
 };
 
-export const POST_TYPES: Record<string, string> = {
-  video_external_file: "Video",
-  video_embed: "Embed",
-  image_file: "Images",
-  audio_file: "Audio",
-  podcast: "Podcast",
-  text: "Text",
-  poll: "Poll",
-  link: "Link",
-  livestream_youtube: "Livestream",
-  onlyfans_post: "Post",
-  onlyfans_message: "Message",
-  youtube_video: "Video",
-  instagram_post: "Post",
-  instagram_reel: "Reel",
-  instagram_story: "Story",
-  instagram_highlight: "Highlight",
-  instagram_tagged: "Tagged",
-  reddit_post: "Post",
-};
-
-export function postTypeLabel(t: string | null): string {
-  if (!t) return "–";
-  return POST_TYPES[t] ?? t.replace(/_/g, " ");
-}
 
 export function sourceLabel(s: string | null): string {
   switch (s) {

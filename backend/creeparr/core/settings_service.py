@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Literal
+from dataclasses import dataclass
+from functools import cache
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import select
@@ -18,10 +20,22 @@ log = logging.getLogger(__name__)
 DEFAULT_USER_AGENT = "Patreon/126.9.0.15 (Android; Android 14; Scale/2.10)"
 
 
+@dataclass(frozen=True)
+class Secret:
+    """Marks a settings field secret: masked when settings are read, and changed only by the
+    auth endpoints. A text secret (a cookies.txt) reads back as empty plus `has_<name>`."""
+
+    text: bool = False
+
+
+SecretStr = Annotated[str, Secret()]
+SecretText = Annotated[str, Secret(text=True)]
+
+
 class PatreonSettings(BaseModel):
     enabled: bool = True
-    session_id: str = ""
-    cookies_txt: str = ""
+    session_id: SecretStr = ""
+    cookies_txt: SecretText = ""
     user_agent: str = DEFAULT_USER_AGENT
     requests_per_second: float = Field(default=1.0, ge=0.1, le=10)
     random_delay_min: float = Field(default=0.0, ge=0.0, le=60)
@@ -39,10 +53,10 @@ class PatreonSettings(BaseModel):
 
 class OnlyFansSettings(BaseModel):
     enabled: bool = True
-    sess: str = ""
-    auth_id: str = ""
-    x_bc: str = ""
-    cookies_txt: str = ""
+    sess: SecretStr = ""
+    auth_id: SecretStr = ""
+    x_bc: SecretStr = ""
+    cookies_txt: SecretText = ""
     user_agent: str = ""
     requests_per_second: float = Field(default=0.5, ge=0.1, le=5)
     random_delay_min: float = Field(default=0.0, ge=0.0, le=60)
@@ -66,7 +80,7 @@ class OnlyFansSettings(BaseModel):
 class RedditSettings(BaseModel):
     enabled: bool = True
     client_id: str = ""
-    client_secret: str = ""
+    client_secret: SecretStr = ""
     user_agent: str = ""
     max_posts: int = Field(default=0, ge=0)
     sleep_request: float = Field(default=0.6, ge=0.0, le=30)
@@ -75,8 +89,8 @@ class RedditSettings(BaseModel):
 
 class InstagramSettings(BaseModel):
     enabled: bool = True
-    sessionid: str = ""
-    cookies_txt: str = ""
+    sessionid: SecretStr = ""
+    cookies_txt: SecretText = ""
     user_agent: str = ""
     include_reels: bool = True
     include_stories: bool = False
@@ -89,7 +103,7 @@ class InstagramSettings(BaseModel):
 
 class YouTubeSettings(BaseModel):
     enabled: bool = True
-    cookies_txt: str = ""
+    cookies_txt: SecretText = ""
     max_videos: int = Field(default=0, ge=0)
     downloads_per_hour: int = Field(default=0, ge=0)
 
@@ -138,7 +152,7 @@ class NamingSettings(BaseModel):
 
 class SecuritySettings(BaseModel):
     auth_enabled: bool = False
-    password_hash: str = ""
+    password_hash: SecretStr = ""
     # Part of the session signing key: logging out bumps it, ending every session.
     session_epoch: int = 0
 
@@ -172,15 +186,17 @@ class AppSettings(BaseModel):
     history: HistorySettings = Field(default_factory=HistorySettings)
 
 
-SECRET_FIELDS: dict[str, set[str]] = {
-    "patreon": {"session_id", "cookies_txt"},
-    "onlyfans": {"sess", "auth_id", "x_bc", "cookies_txt"},
-    "security": {"password_hash"},
-    "youtube": {"cookies_txt"},
-    "instagram": {"sessionid", "cookies_txt"},
-    "reddit": {"client_secret"},
-}
-TEXT_SECRETS = {"cookies_txt"}
+@cache
+def secret_fields() -> dict[str, dict[str, Secret]]:
+    """Each settings group's secret fields, as marked on its model."""
+    found: dict[str, dict[str, Secret]] = {}
+    for group, info in AppSettings.model_fields.items():
+        model = info.annotation
+        for name, field_info in model.model_fields.items():  # type: ignore[union-attr]
+            mark = next((m for m in field_info.metadata if isinstance(m, Secret)), None)
+            if mark is not None:
+                found.setdefault(group, {})[name] = mark
+    return found
 
 
 def mask_secret(value: str) -> str:
@@ -231,6 +247,7 @@ class SettingsService:
         # fields of a group must not each write back the other's stale copy.
         with self._lock:
             current = self.get().model_dump()
+            secrets = secret_fields()
             for group, fields in patch.items():
                 if group not in AppSettings.model_fields:
                     raise ValidationFailed(f"unknown settings group '{group}'")
@@ -239,7 +256,7 @@ class SettingsService:
                 for name, value in fields.items():
                     if name not in current[group]:
                         raise ValidationFailed(f"unknown setting '{group}.{name}'")
-                    if not allow_secrets and name in SECRET_FIELDS.get(group, set()):
+                    if not allow_secrets and name in secrets.get(group, {}):
                         continue
                     current[group][name] = value
             try:
@@ -259,10 +276,10 @@ class SettingsService:
 
     def masked(self) -> dict[str, Any]:
         data = self.get().model_dump()
-        for group, names in SECRET_FIELDS.items():
-            for name in names:
+        for group, marks in secret_fields().items():
+            for name, mark in marks.items():
                 value = data[group].get(name, "")
-                if name in TEXT_SECRETS:
+                if mark.text:
                     data[group][f"has_{name}"] = bool(value)
                     data[group][name] = ""
                 else:

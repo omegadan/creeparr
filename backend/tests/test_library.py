@@ -15,7 +15,6 @@ from creeparr.db.engine import session_scope
 from creeparr.db.enums import EventType, JobStatus, MediaStatus, PostStatus
 from creeparr.db.models import Creator, DownloadJob, History, MediaItem
 from creeparr.downloader.library import UNMOUNTED_MIN_FILES, root_unavailable
-from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from tests import patreon_fixtures as fx
 from tests.downloads import FakeFfmpeg, Kit, build, patreon_registry
@@ -52,7 +51,7 @@ def seed_completed(env, session_factory, kit: Kit) -> tuple[int, int]:
         )
         s.add(creator)
         s.flush()
-        post = kit.lifecycle.sync_post(s, creator, pr, resolve_media).post
+        post = kit.lifecycle.sync_post(s, creator, pr, fx.POSTS).post
         item = post.media_items[0]
         item.status = MediaStatus.COMPLETED
         item.file_path = FILE_REL

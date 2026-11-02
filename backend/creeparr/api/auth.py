@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 
 from creeparr.api.deps import get_services
+from creeparr.api.schemas import LoginStateOut, OkOut
 from creeparr.core.errors import AppError, ValidationFailed
 from creeparr.core.security import hash_password, make_token, verify_password, verify_token
 from creeparr.services import Services
@@ -76,7 +77,7 @@ def _recent_failures(client: str, now: float) -> deque[float]:
     return times
 
 
-@router.get("/auth/status")
+@router.get("/auth/status", response_model=LoginStateOut)
 def auth_status(request: Request, services: Services = Depends(get_services)):
     return {
         "auth_enabled": auth_active(services),
@@ -84,7 +85,7 @@ def auth_status(request: Request, services: Services = Depends(get_services)):
     }
 
 
-@router.post("/auth/login")
+@router.post("/auth/login", response_model=OkOut)
 def login(
     body: LoginBody,
     request: Request,
@@ -112,7 +113,7 @@ def login(
     return {"ok": True}
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", response_model=OkOut)
 def logout(request: Request, response: Response, services: Services = Depends(get_services)):
     # Tokens are stateless, so ending one means ending all: bump the signing key.
     # (Single-user app: "log out" logs out every browser.)
@@ -123,7 +124,7 @@ def logout(request: Request, response: Response, services: Services = Depends(ge
     return {"ok": True}
 
 
-@router.put("/auth/password")
+@router.put("/auth/password", response_model=OkOut)
 def set_password(body: PasswordBody, request: Request, services: Services = Depends(get_services)):
     sec = services.settings.get().security
     # If a password already exists, require the current one (or an active session).
@@ -140,7 +141,7 @@ def set_password(body: PasswordBody, request: Request, services: Services = Depe
     return {"ok": True}
 
 
-@router.delete("/auth/password")
+@router.delete("/auth/password", response_model=OkOut)
 def disable_auth(request: Request, services: Services = Depends(get_services)):
     if not is_authenticated(request, services):
         raise Unauthorized("authentication required")

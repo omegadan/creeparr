@@ -33,7 +33,6 @@ from creeparr.downloader.longwork import LongWork
 from creeparr.downloader.manager import DownloadManager
 from creeparr.downloader.progress import JobProgress
 from creeparr.downloader.run import DownloadRun
-from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from creeparr.providers.patreon import PatreonProvider
 from creeparr.providers.registry import ProviderRegistry
@@ -232,7 +231,7 @@ def queue_post(
                 s.flush()
         else:
             creator = s.get(Creator, creator_id)
-        post = lifecycle.sync_post(s, creator, pr, resolve_media).post
+        post = lifecycle.sync_post(s, creator, pr, fx.POSTS).post
         job = (
             s.execute(
                 select(DownloadJob).where(DownloadJob.post_id == post.id).order_by(DownloadJob.id)

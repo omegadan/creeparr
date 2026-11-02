@@ -8,6 +8,9 @@ Creeparr archives creators' posts and media from subscription and social platfor
 A platform Creeparr archives from: Patreon, OnlyFans, YouTube, Instagram or Reddit.
 _Avoid_: site, platform, source
 
+**Provider description**:
+What Creeparr knows about a provider without asking it: its name, label, account fields, post types and download folder.
+
 **Creator**:
 An account on a provider whose posts are archived: a Patreon campaign, an OnlyFans or Instagram account, a YouTube channel, a subreddit or a Reddit user.
 _Avoid_: channel, campaign, artist

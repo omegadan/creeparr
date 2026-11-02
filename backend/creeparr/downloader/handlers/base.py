@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from creeparr.core.downloads import FailureKind
+from creeparr.db.enums import JobStage
 from creeparr.providers.media import MediaSession
 
 
@@ -141,13 +142,13 @@ class ProgressReporter:
         self._last_bytes = 0
         self._last_bytes_ts = time.monotonic()
         self.cancel_event = threading.Event()
-        self.stage: str | None = None
+        self.stage: JobStage | None = None
 
     def check_cancel(self) -> None:
         if self.cancel_event.is_set():
             raise DownloadCancelled()
 
-    def set_stage(self, stage: str) -> None:
+    def set_stage(self, stage: JobStage) -> None:
         self.stage = stage
         self._emit({"stage": stage}, force=True)
 

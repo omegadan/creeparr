@@ -8,22 +8,17 @@ log level). Everything else is a user setting stored in the DB; see
 from __future__ import annotations
 
 import os
+import re
 import shutil
+from collections.abc import Iterable
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Providers that may have their own archive root (``CREEPARR_<PROVIDER>_DOWNLOAD_DIR``).
-# Any provider without one falls back to ``CREEPARR_DOWNLOAD_DIR``.
-PROVIDERS_WITH_DOWNLOAD_DIR: tuple[str, ...] = (
-    "patreon",
-    "onlyfans",
-    "youtube",
-    "instagram",
-    "reddit",
-)
+# A provider's own archive root. Any provider without one uses ``CREEPARR_DOWNLOAD_DIR``.
+_PROVIDER_DIR_VARIABLE = re.compile(r"CREEPARR_([A-Z0-9]+)_DOWNLOAD_DIR")
 
 
 class EnvConfig(BaseSettings):
@@ -32,11 +27,9 @@ class EnvConfig(BaseSettings):
     config_dir: Path = Field(default=Path("/config"))
     # Default archive root, used by every provider that has no directory of its own.
     download_dir: Path = Field(default=Path("/downloads"))
-    patreon_download_dir: Path | None = None
-    onlyfans_download_dir: Path | None = None
-    youtube_download_dir: Path | None = None
-    instagram_download_dir: Path | None = None
-    reddit_download_dir: Path | None = None
+    #: Providers' own archive roots, by provider name, read from
+    #: ``CREEPARR_<PROVIDER>_DOWNLOAD_DIR`` unless given.
+    provider_dirs: dict[str, Path] = Field(default_factory=dict)
     host: str = "0.0.0.0"
     port: int = 7979
     # Extra Host names accepted while no UI password is set (see creeparr.api.guard).
@@ -51,12 +44,7 @@ class EnvConfig(BaseSettings):
     def _upper(cls, v: str) -> str:
         return v.upper()
 
-    @field_validator(
-        *(f"{p}_download_dir" for p in PROVIDERS_WITH_DOWNLOAD_DIR),
-        "db_path",
-        "static_dir",
-        mode="before",
-    )
+    @field_validator("db_path", "static_dir", mode="before")
     @classmethod
     def _blank_is_unset(cls, v: object) -> object:
         """``CREEPARR_X_DOWNLOAD_DIR=`` (empty) means "not set", not the current dir.
@@ -68,6 +56,15 @@ class EnvConfig(BaseSettings):
             return None
         return v
 
+    @model_validator(mode="after")
+    def _read_provider_dirs(self) -> EnvConfig:
+        if not self.provider_dirs:
+            for variable, value in os.environ.items():
+                match = _PROVIDER_DIR_VARIABLE.fullmatch(variable)
+                if match and value.strip():  # blank means unset, as above
+                    self.provider_dirs[match.group(1).lower()] = Path(value)
+        return self
+
     @property
     def database_path(self) -> Path:
         return self.db_path or (self.config_dir / "creeparr.db")
@@ -76,17 +73,12 @@ class EnvConfig(BaseSettings):
     def database_url(self) -> str:
         return f"sqlite:///{self.database_path}"
 
-    def provider_download_dirs(self) -> dict[str, Path | None]:
-        """Each provider's own archive root, or None where it uses ``download_dir``."""
-        return {p: getattr(self, f"{p}_download_dir") for p in PROVIDERS_WITH_DOWNLOAD_DIR}
-
     def download_root(self, provider: str) -> Path:
         """Base directory for a provider's archive.
 
         ``CREEPARR_<PROVIDER>_DOWNLOAD_DIR`` when set, otherwise ``CREEPARR_DOWNLOAD_DIR``.
         """
-        own = getattr(self, f"{provider}_download_dir", None)
-        return own if own is not None else self.download_dir
+        return self.provider_dirs.get(provider, self.download_dir)
 
     def download_roots(self) -> dict[str, Path]:
         """Distinct download roots, keyed by a label (for disk checks / status).
@@ -95,18 +87,20 @@ class EnvConfig(BaseSettings):
         appears under its own name only when it points somewhere else.
         """
         roots = {"downloads": self.download_dir}
-        for provider, path in self.provider_download_dirs().items():
-            if path is not None and path != self.download_dir and path not in roots.values():
+        for provider, path in self.provider_dirs.items():
+            if path != self.download_dir and path not in roots.values():
                 roots[provider] = path
         return roots
 
-    def describe_paths(self) -> dict[str, str | None]:
-        """Path summary for the settings / status API (None = uses the default root)."""
+    def describe_paths(self, providers: Iterable[str]) -> dict[str, str | None]:
+        """Path summary for the settings / status API: `<provider>_download_dir` for each
+        of `providers` (None = uses the default root)."""
         out: dict[str, str | None] = {
             "config_dir": str(self.config_dir),
             "download_dir": str(self.download_dir),
         }
-        for provider, path in self.provider_download_dirs().items():
+        for provider in providers:
+            path = self.provider_dirs.get(provider)
             out[f"{provider}_download_dir"] = str(path) if path is not None else None
         return out
 

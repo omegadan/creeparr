@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from creeparr import __version__
+from creeparr.api.contract import serve_events_in_openapi
 from creeparr.api.router import api_router
 from creeparr.api.system import health_payload
 from creeparr.config import EnvConfig, get_env_config
@@ -143,6 +144,7 @@ def create_app(env: EnvConfig | None = None, *, start_background: bool = True) -
 
     app.add_middleware(AuthMiddleware)
     app.include_router(api_router)
+    serve_events_in_openapi(app)
 
     @app.get("/health", include_in_schema=False)
     def health():

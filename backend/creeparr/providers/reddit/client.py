@@ -27,6 +27,8 @@ from creeparr.providers.errors import (
 from creeparr.providers.http import parse_retry_after
 from creeparr.providers.models import MediaResource, PostResource
 
+POST_TYPE = "reddit_post"
+
 log = logging.getLogger("creeparr.reddit")
 
 WWW = "https://www.reddit.com"
@@ -209,7 +211,7 @@ def _post_from_json(post: dict[str, Any], target: str) -> PostResource | None:
     return PostResource(
         id=str(post["id"]),
         title=title[:200] or str(post["id"]),
-        post_type="reddit_post",
+        post_type=POST_TYPE,
         content=post.get("selftext") or None,
         url=_permalink(post),
         published_at=_dt(post.get("created_utc")),

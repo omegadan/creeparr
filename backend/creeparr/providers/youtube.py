@@ -23,6 +23,7 @@ import yt_dlp
 from creeparr.db.enums import AuthState, MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
 from creeparr.providers.cookies import write_cookiefile
+from creeparr.providers.description import COOKIES_TXT, ProviderDescription
 from creeparr.providers.errors import NotFoundError, ProviderError
 from creeparr.providers.media import MediaSession
 from creeparr.providers.models import (
@@ -65,14 +66,27 @@ def _parse_rss(xml: str) -> dict[str, datetime]:
     return dates
 
 
+POST_TYPE = "youtube_video"
+
+DESCRIPTION = ProviderDescription(
+    name="youtube",
+    label="YouTube",
+    intro=(
+        "Public YouTube channels need no login. Add a cookies.txt only for members-only or "
+        "age-restricted videos."
+    ),
+    credentials=(COOKIES_TXT,),
+    post_types={POST_TYPE: "Video"},
+    # Keeps YouTube's VP9/AV1/Opus streams without re-encoding.
+    video_container="mkv",
+    # YouTube videos embedded in any creator's posts use the YouTube cookies.
+    hosts=frozenset({MediaSource.EMBED_YOUTUBE}),
+    sign_in_help="Add YouTube cookies in Settings -> Accounts -> YouTube",
+)
+
+
 class YouTubeProvider(ProviderService):
-    name: ClassVar[str] = "youtube"
-    label: ClassVar[str] = "YouTube"
-    credential_fields: ClassVar[tuple[str, ...]] = ("cookies_txt",)
-    #: Keeps YouTube's VP9/AV1/Opus streams without re-encoding.
-    video_container: ClassVar[str] = "mkv"
-    #: YouTube videos embedded in any creator's posts use the YouTube cookies.
-    hosts: ClassVar[frozenset[MediaSource]] = frozenset({MediaSource.EMBED_YOUTUBE})
+    description: ClassVar[ProviderDescription] = DESCRIPTION
 
     # ---- settings / auth -----------------------------------------------------------
 
@@ -132,10 +146,6 @@ class YouTubeProvider(ProviderService):
     @property
     def auth_blocked(self) -> bool:
         return False
-
-    @property
-    def sign_in_help(self) -> str:
-        return "Add YouTube cookies in Settings -> Accounts -> YouTube"
 
     # ---- yt-dlp helpers ------------------------------------------------------------
 
@@ -223,7 +233,7 @@ class YouTubeProvider(ProviderService):
         return PostResource(
             id=str(vid),
             title=entry.get("title") or str(vid),
-            post_type="youtube_video",
+            post_type=POST_TYPE,
             url=entry.get("url") or f"{WATCH}{vid}",
             published_at=published,
             current_user_can_view=True,
@@ -283,7 +293,7 @@ class YouTubeProvider(ProviderService):
         return PostResource(
             id=str(info.get("id") or post_id),
             title=info.get("title") or post_id,
-            post_type="youtube_video",
+            post_type=POST_TYPE,
             content=info.get("description"),
             url=info.get("webpage_url") or f"{WATCH}{post_id}",
             published_at=published,

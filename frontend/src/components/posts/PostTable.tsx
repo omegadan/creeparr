@@ -2,7 +2,9 @@ import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight, Download, ExternalLink, RefreshCw, SkipForward, Undo2 } from "lucide-react";
 import type { Post } from "../../api/types";
 import { useDownloadPost, useRefreshPost, useSkipPost, useUnskipPost } from "../../api/hooks/usePosts";
-import { postStatus, postTypeLabel } from "../../lib/status";
+import { postStatus } from "../../lib/status";
+import { postTypeLabel } from "../../lib/providers";
+import { usePostTypeLabels } from "../../api/hooks/useCreators";
 import { formatDate, cx } from "../../lib/format";
 import { StatusBadge } from "../ui/Badge";
 import { IconButton } from "../ui/Button";
@@ -11,6 +13,7 @@ import { useToast } from "../ui/Toast";
 
 export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?: boolean }) {
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const postTypes = usePostTypeLabels();
   const download = useDownloadPost();
   const skip = useSkipPost();
   const unskip = useUnskipPost();
@@ -72,7 +75,7 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
                       )}
                     </div>
                   </td>
-                  <td className="text-fg-muted">{postTypeLabel(p.post_type)}{p.embed_provider ? ` · ${p.embed_provider}` : ""}</td>
+                  <td className="text-fg-muted">{postTypeLabel(postTypes, p.post_type)}{p.embed_provider ? ` · ${p.embed_provider}` : ""}</td>
                   <td><StatusBadge meta={postStatus(p.status)} title={p.status_reason ?? undefined} /></td>
                   <td className="text-xs text-fg-muted">
                     {ms.total === 0 ? "–" : (
@@ -85,10 +88,10 @@ export function PostTable({ posts, showCreator }: { posts: Post[]; showCreator?:
                   </td>
                   <td className="text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-0.5">
-                      <IconButton title="Download / re-queue" onClick={() => download.mutate({ id: p.id, body: { force: p.status === "completed" } }, { onError: (e) => error(e), onSuccess: () => toast("Queued", "success") })}>
+                      <IconButton title="Download / re-queue" onClick={() => download.mutate({ id: p.id, body: { force: p.actions.includes("force_download") } }, { onError: (e) => error(e), onSuccess: () => toast("Queued", "success") })}>
                         <Download className="h-4 w-4" />
                       </IconButton>
-                      {p.status === "skipped" ? (
+                      {p.actions.includes("unskip") ? (
                         <IconButton title="Unskip" onClick={() => unskip.mutate({ id: p.id }, { onError: (e) => error(e) })}><Undo2 className="h-4 w-4" /></IconButton>
                       ) : (
                         <IconButton title="Skip this post" onClick={() => skip.mutate({ id: p.id }, { onError: (e) => error(e) })}><SkipForward className="h-4 w-4" /></IconButton>

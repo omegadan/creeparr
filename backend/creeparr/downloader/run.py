@@ -30,7 +30,7 @@ from creeparr.core.downloads import (
 from creeparr.core.lifecycle import MediaLifecycle
 from creeparr.core.settings_service import AppSettings, SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
-from creeparr.db.enums import EMBED_SOURCES, MediaKind, MediaSource, MediaStatus
+from creeparr.db.enums import EMBED_SOURCES, JobStage, MediaKind, MediaSource, MediaStatus
 from creeparr.db.models import Creator, MediaItem, Post
 from creeparr.downloader.embed import Embedder
 from creeparr.downloader.fs import set_times, sha256_file, try_hardlink
@@ -155,7 +155,7 @@ class DownloadRun:
             fetched = await handler.fetch(media, plan, place, progress)
             path = fetched.path
             if not fetched.placed:
-                progress.set_stage("verifying")
+                progress.set_stage(JobStage.VERIFYING)
                 path = await asyncio.to_thread(place.file, fetched.path, fetched.learned)
         except DownloadCancelled:
             place.remove_scratch()
@@ -208,7 +208,7 @@ class DownloadRun:
                 creator = s.get(Creator, media.creator_id)
                 if post is None or creator is None:
                     return None
-                self.lifecycle.sync_post(s, creator, pr, provider.resolve_media, refresh=True)
+                self.lifecycle.sync_post(s, creator, pr, provider, refresh=True)
                 return _snapshot(s, claim)
 
         renewed = await asyncio.to_thread(_apply)
@@ -222,11 +222,11 @@ class DownloadRun:
         hosted_by = self.providers.hosting(media.source)
         via = hosted_by or provider
         choice = settings.downloads.container
-        container = choice if choice in ("mp4", "mkv") else provider.video_container
+        container = choice if choice in ("mp4", "mkv") else provider.description.video_container
         if hosted_by is not None or media.source not in EMBED_SOURCES:
             message = (
                 f"{via.label} requires a signed-in session for this video. "
-                f"{via.sign_in_help}, then retry."
+                f"{via.description.sign_in_help}, then retry."
             )
         else:
             site = (urlparse(media.url or "").hostname or "").removeprefix("www.")

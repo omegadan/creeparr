@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from creeparr.db.enums import AuthState, MediaKind, MediaSource
 from creeparr.providers.base import ProviderService
+from creeparr.providers.description import CredentialField, ProviderDescription
 from creeparr.providers.errors import NotFoundError
 from creeparr.providers.media import MediaRef, MediaSession
 from creeparr.providers.models import (
@@ -22,6 +23,7 @@ from creeparr.providers.models import (
 )
 from creeparr.providers.reddit.client import (
     DEFAULT_UA,
+    POST_TYPE,
     WWW,
     RedditClient,
     RedditCredentials,
@@ -31,10 +33,34 @@ from creeparr.providers.reddit.client import (
 log = logging.getLogger("creeparr.reddit")
 
 
+DESCRIPTION = ProviderDescription(
+    name="reddit",
+    label="Reddit",
+    intro=(
+        "Public subreddits and users work without login. Only add a Reddit app (client id + "
+        "secret from reddit.com/prefs/apps, type: script) if Reddit blocks anonymous requests "
+        "on your network."
+    ),
+    credentials=(
+        CredentialField(
+            "client_id",
+            "Reddit app client id",
+            'reddit.com/prefs/apps → create a "script" app → the id under the app name',
+            optional=True,
+        ),
+        CredentialField(
+            "client_secret",
+            "Reddit app secret",
+            'The "secret" field of your Reddit script app',
+            optional=True,
+        ),
+    ),
+    post_types={POST_TYPE: "Post"},
+)
+
+
 class RedditProvider(ProviderService):
-    name: ClassVar[str] = "reddit"
-    label: ClassVar[str] = "Reddit"
-    credential_fields: ClassVar[tuple[str, ...]] = ("client_id", "client_secret")
+    description: ClassVar[ProviderDescription] = DESCRIPTION
 
     # ---- config --------------------------------------------------------------------
 
@@ -202,7 +228,7 @@ class RedditProvider(ProviderService):
         return PostResource(
             id=str(data.get("id")),
             title=str(data.get("title") or data.get("id")),
-            post_type="reddit_post",
+            post_type=POST_TYPE,
             url=data.get("permalink") or f"{WWW}/comments/{data.get('id')}/",
             campaign_id=str(data.get("target") or ""),
             media=media,

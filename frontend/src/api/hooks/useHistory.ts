@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { get, qs } from "../client";
-import type { HistoryEvent, Page } from "../types";
+import type { HistoryPage } from "../types";
 
 export interface HistoryFilters {
   page?: number;
@@ -13,6 +13,6 @@ export interface HistoryFilters {
 export const useHistory = (filters: HistoryFilters) =>
   useQuery({
     queryKey: ["history", filters],
-    queryFn: () => get<Page<HistoryEvent>>(`/history${qs({ page_size: 50, ...filters })}`),
+    queryFn: () => get<HistoryPage>(`/history${qs({ page_size: 50, ...filters })}`),
     placeholderData: keepPreviousData,
   });

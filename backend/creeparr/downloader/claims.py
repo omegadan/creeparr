@@ -8,6 +8,7 @@ import random
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import func, or_, select
@@ -27,6 +28,21 @@ log = logging.getLogger(__name__)
 # anywhere from half to one-and-a-half times it, so the pattern is irregular
 # but still averages out to the configured rate.
 PACING_JITTER = (0.5, 1.5)
+
+
+class ClaimState(StrEnum):
+    """Why a provider's queue is or isn't moving, as the Queue page shows it."""
+
+    DISABLED = "disabled"  # the provider is switched off
+    PAUSED = "paused"  # the whole queue is paused
+    DOWNLOADING = "downloading"
+    IDLE = "idle"  # nothing queued
+    CREATORS_OFF = "creators_off"  # everything queued is for creators switched off
+    THROTTLED = "throttled"  # the hourly limit is used up
+    PACING = "pacing"  # under the limit, spreading starts across the hour
+    BLOCKED = "blocked"  # signed out
+    WAITING = "waiting"  # free to start next
+
 
 # Per provider: (starts in the last hour, the oldest of them, the newest of them).
 _Starts = dict[str, tuple[int, datetime | None, datetime | None]]
@@ -115,29 +131,29 @@ class Claims:
             next_slot_seconds: int | None = None
             next_slot_at: datetime | None = None
             if name in disabled:
-                state = "disabled"
+                state = ClaimState.DISABLED
             elif paused:
-                state = "paused"
+                state = ClaimState.PAUSED
             elif r > 0:
-                state = "downloading"
+                state = ClaimState.DOWNLOADING
             elif run_q == 0:
                 # Nothing runnable: either truly empty, or everything queued sits
                 # behind creators that are switched off (so it will never start).
-                state = "creators_off" if q > 0 else "idle"
+                state = ClaimState.CREATORS_OFF if q > 0 else ClaimState.IDLE
             elif limit > 0 and recent >= limit:
-                state = "throttled"
+                state = ClaimState.THROTTLED
                 if oldest is not None:
                     next_slot_at = oldest + timedelta(hours=1)
                     next_slot_seconds = max(0, int((next_slot_at - now).total_seconds()))
             elif pacing_until is not None and pacing_until > now:
                 # Under the cap, but spreading starts out across the hour.
-                state = "pacing"
+                state = ClaimState.PACING
                 next_slot_at = pacing_until
                 next_slot_seconds = max(0, int((next_slot_at - now).total_seconds()))
             elif name in blocked:
-                state = "blocked"
+                state = ClaimState.BLOCKED
             else:
-                state = "waiting"
+                state = ClaimState.WAITING
 
             out.append(
                 {

@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post, qs } from "../client";
-import type { MediaItem, Page, Post, PostDetail } from "../types";
+import type { MediaItem, PostDetail, PostPage } from "../types";
 
 export interface PostFilters {
   creator_id?: number;
@@ -15,7 +15,7 @@ export interface PostFilters {
 export const usePosts = (filters: PostFilters) =>
   useQuery({
     queryKey: ["posts", filters],
-    queryFn: () => get<Page<Post>>(`/posts${qs({ page_size: 50, ...filters })}`),
+    queryFn: () => get<PostPage>(`/posts${qs({ page_size: 50, ...filters })}`),
     placeholderData: keepPreviousData,
   });
 

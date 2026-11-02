@@ -11,8 +11,9 @@ from typing import Any
 
 from sqlalchemy import select
 
-from creeparr.core.errors import Conflict
+from creeparr.core.errors import Conflict, NotFound
 from creeparr.core.events import EventBus
+from creeparr.core.server_events import ScanQueuedEvent
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import ScanMode
 from creeparr.db.models import Creator
@@ -29,7 +30,7 @@ class ScanRequest:
     mode: ScanMode
     trigger: str
     requested_at: datetime
-    provider: str = "patreon"
+    provider: str
 
 
 class ScanManager:
@@ -73,8 +74,9 @@ class ScanManager:
         """Enqueue a scan; returns False if one is already pending/running for this creator."""
         with session_scope(self._factory) as s:
             creator = s.get(Creator, creator_id)
-            provider_name = creator.provider if creator else "patreon"
-            creator_enabled = creator.enabled if creator else True
+            if creator is None:
+                raise NotFound("creator not found")
+            provider_name, creator_enabled = creator.provider, creator.enabled
         provider = self.providers.get(provider_name)
         if not provider.enabled:
             raise Conflict(f"{provider.label} is disabled in Settings", code="provider_disabled")
@@ -95,7 +97,7 @@ class ScanManager:
         req = ScanRequest(creator_id, mode, trigger, datetime.now(UTC), provider_name)
         self._pending[creator_id] = req
         self._queue.put_nowait(req)
-        self.bus.publish("scan.queued", {"creator_id": creator_id, "mode": mode})
+        self.bus.publish(ScanQueuedEvent(creator_id=creator_id, mode=mode))
         return True
 
     def request_scan_all(self, mode: ScanMode = ScanMode.AUTO, trigger: str = "manual") -> int:

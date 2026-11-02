@@ -6,7 +6,10 @@ import asyncio
 import logging
 import threading
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from creeparr.core.server_events import ServerEvent
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +39,9 @@ class EventBus:
         with self._lock:
             return len(self._subs)
 
-    def publish(self, event: str, data: dict[str, Any] | None = None) -> None:
-        msg = {"event": event, "data": data or {}, "ts": datetime.now(UTC).isoformat()}
+    def publish(self, event: ServerEvent) -> None:
+        name = event.event
+        msg = {"event": name, "data": event.payload(), "ts": datetime.now(UTC).isoformat()}
         with self._lock:
             subs = list(self._subs)
         if not subs:
@@ -48,7 +52,7 @@ class EventBus:
                 try:
                     q.put_nowait(msg)
                 except asyncio.QueueFull:
-                    log.debug("event subscriber queue full; dropping %s", event)
+                    log.debug("event subscriber queue full; dropping %s", name)
 
         loop = self._loop
         if loop is None or loop.is_closed():

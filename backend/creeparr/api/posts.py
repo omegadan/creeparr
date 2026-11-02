@@ -208,9 +208,7 @@ async def refresh_post(post_id: int, services: Services = Depends(get_services))
     def _apply() -> PostDetailOut:
         with session_scope(services.session_factory) as s:
             creator = s.get(Creator, creator_id)
-            result = services.lifecycle.sync_post(
-                s, creator, pr, provider.resolve_media, refresh=True
-            )
+            result = services.lifecycle.sync_post(s, creator, pr, provider, refresh=True)
             return post_detail(load_post(s, result.post.id), creator.name if creator else None)
 
     return await asyncio.to_thread(_apply)
@@ -253,8 +251,7 @@ def media_file(
     item = load_media(db, media_id)
     if item.status != MediaStatus.COMPLETED or not item.file_path:
         raise NotFound("no downloaded file for this media item")
-    provider = item.post.creator.provider if item.post and item.post.creator else "patreon"
-    root = services.env.download_root(provider).resolve()
+    root = services.env.download_root(item.post.creator.provider).resolve()
     path = (root / item.file_path).resolve()
     if root not in path.parents:
         raise AppError("invalid path", code="forbidden")

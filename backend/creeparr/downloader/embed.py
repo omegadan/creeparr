@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
+from creeparr.db.enums import JobStage
 from creeparr.db.models import MediaItem, Post
 from creeparr.downloader.fs import sha256_file
 from creeparr.downloader.handlers.base import ProgressReporter
@@ -72,7 +73,7 @@ class Embedder:
         if not self.available:
             return None
         if progress is not None:
-            progress.set_stage("embedding")
+            progress.set_stage(JobStage.EMBEDDING)
         tags = await asyncio.to_thread(self._load, media_id)
         if tags is None:
             return None
@@ -106,10 +107,10 @@ class Embedder:
             if media is None or media.post is None:
                 return None
             post, creator = media.post, media.post.creator
-            name = creator.name if creator else ""
+            name = creator.name
             description = html_to_text(post.content_html or post.teaser_text)
             return _Tags(
-                provider=creator.provider if creator else "patreon",
+                provider=creator.provider,
                 metadata={
                     "title": post.title or "",
                     "artist": name,

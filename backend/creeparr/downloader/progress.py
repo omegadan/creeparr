@@ -8,6 +8,7 @@ import logging
 from typing import Any
 
 from creeparr.core.events import EventBus
+from creeparr.core.server_events import JobProgressEvent
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import JobStatus
 from creeparr.db.models import DownloadJob
@@ -35,7 +36,7 @@ class JobProgress:
         return ProgressReporter(functools.partial(self._report, job_id))
 
     def _report(self, job_id: int, data: dict[str, Any]) -> None:
-        self.bus.publish("job.progress", {"id": job_id, **data})
+        self.bus.publish(JobProgressEvent(id=job_id, **data))
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:

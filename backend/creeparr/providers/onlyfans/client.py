@@ -33,6 +33,7 @@ from creeparr.providers.models import (
 )
 from creeparr.providers.onlyfans.signing import DynamicRules, sign_request
 
+POST_POST_TYPE = "onlyfans_post"
 #: Messages can't be fetched one at a time, so their media's links can't be renewed.
 MESSAGE_POST_TYPE = "onlyfans_message"
 
@@ -328,7 +329,7 @@ class OnlyFansClient:
         return PostResource(
             id=str(p.get("id")),
             title=(p.get("text") or "").strip()[:200] or f"Post {p.get('id')}",
-            post_type="onlyfans_post",
+            post_type=POST_POST_TYPE,
             content=p.get("rawText") or p.get("text"),
             url=f"https://onlyfans.com/{p.get('id')}",
             published_at=_parse_dt(p.get("postedAt")),

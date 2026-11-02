@@ -71,7 +71,7 @@ def test_download_root_per_provider(tmp_path: Path):
 
     base = tmp_path / "dl"
     of = tmp_path / "dl-of"
-    env = EnvConfig(config_dir=tmp_path / "c", download_dir=base, onlyfans_download_dir=of)
+    env = EnvConfig(config_dir=tmp_path / "c", download_dir=base, provider_dirs={"onlyfans": of})
     assert env.download_root("patreon") == base
     assert env.download_root("onlyfans") == of
     assert set(env.download_roots()) == {"downloads", "onlyfans"}
@@ -86,13 +86,13 @@ def test_patreon_has_its_own_download_dir(tmp_path: Path):
 
     base = tmp_path / "dl"
     pat = tmp_path / "dl-patreon"
-    env = EnvConfig(config_dir=tmp_path / "c", download_dir=base, patreon_download_dir=pat)
+    env = EnvConfig(config_dir=tmp_path / "c", download_dir=base, provider_dirs={"patreon": pat})
     assert env.download_root("patreon") == pat
     # every other provider still uses the default root
     for provider in ("onlyfans", "youtube", "instagram", "reddit"):
         assert env.download_root(provider) == base
     assert env.download_roots() == {"downloads": base, "patreon": pat}
-    paths = env.describe_paths()
+    paths = env.describe_paths(["patreon", "onlyfans"])
     assert paths["download_dir"] == str(base)
     assert paths["patreon_download_dir"] == str(pat)
     assert paths["onlyfans_download_dir"] is None
@@ -111,8 +111,7 @@ def test_download_dirs_from_env(tmp_path: Path, monkeypatch):
     env = EnvConfig()
     assert env.download_root("patreon") == tmp_path / "pat"
     assert env.download_root("youtube") == tmp_path / "yt"
-    assert env.onlyfans_download_dir is None
-    assert env.reddit_download_dir is None
+    assert set(env.provider_dirs) == {"patreon", "youtube"}
     assert env.download_root("onlyfans") == tmp_path / "dl"
     assert env.download_root("reddit") == tmp_path / "dl"
     assert set(env.download_roots()) == {"downloads", "patreon", "youtube"}
@@ -126,9 +125,11 @@ def test_download_roots_dedupes_shared_dirs(tmp_path: Path):
     env = EnvConfig(
         config_dir=tmp_path / "c",
         download_dir=base,
-        patreon_download_dir=base,  # same as default: not listed twice
-        youtube_download_dir=shared,
-        reddit_download_dir=shared,  # same dir as youtube: listed once
+        provider_dirs={
+            "patreon": base,  # same as default: not listed twice
+            "youtube": shared,
+            "reddit": shared,  # same dir as youtube: listed once
+        },
     )
     assert env.download_roots() == {"downloads": base, "youtube": shared}
 

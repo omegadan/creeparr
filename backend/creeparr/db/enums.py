@@ -80,6 +80,7 @@ class JobStage(StrEnum):
     DOWNLOADING = "downloading"
     MERGING = "merging"
     VERIFYING = "verifying"
+    EMBEDDING = "embedding"
 
 
 class ScanMode(StrEnum):

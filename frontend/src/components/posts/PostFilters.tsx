@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { useDebounced } from "../../lib/useDebounced";
-import { POST_STATUS, POST_TYPES } from "../../lib/status";
+import { POST_STATUS } from "../../lib/status";
+import { usePostTypeLabels } from "../../api/hooks/useCreators";
 import type { PostFilters as Filters } from "../../api/hooks/usePosts";
 
 export function PostFilters({ value, onChange }: { value: Filters; onChange: (f: Filters) => void }) {
+  const postTypes = usePostTypeLabels();
   const set = (k: keyof Filters, v: string | undefined) => onChange({ ...value, [k]: v || undefined, page: 1 });
   // Type freely; the filter (and the request) follows once typing pauses.
   const [term, setTerm] = useState(value.q ?? "");
@@ -27,7 +29,7 @@ export function PostFilters({ value, onChange }: { value: Filters; onChange: (f:
       </select>
       <select className="input w-36" value={value.post_type ?? ""} onChange={(e) => set("post_type", e.target.value)}>
         <option value="">All types</option>
-        {Object.entries(POST_TYPES).map(([k, l]) => (
+        {Object.entries(postTypes).map(([k, l]) => (
           <option key={k} value={k}>{l}</option>
         ))}
       </select>

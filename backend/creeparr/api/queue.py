@@ -7,7 +7,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from creeparr.api.deps import get_db, get_services
-from creeparr.api.schemas import FailedMediaOut, JobOut, QueueOut
+from creeparr.api.schemas import (
+    ClearedOut,
+    DownloadsStatusOut,
+    FailedMediaOut,
+    JobOut,
+    JobRetriedOut,
+    QueueOut,
+    RequeuedOut,
+)
 from creeparr.core.errors import NotFound
 from creeparr.db.enums import FAILED_MEDIA_STATUSES, JobStatus
 from creeparr.db.models import DownloadJob, MediaItem, Post
@@ -150,7 +158,7 @@ def remove_job(
     services.lifecycle.remove_job(db, job)
 
 
-@router.post("/queue/{job_id:int}/retry", status_code=202)
+@router.post("/queue/{job_id:int}/retry", status_code=202, response_model=JobRetriedOut)
 def retry_job(
     job_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
@@ -163,23 +171,23 @@ def retry_job(
     return {"job_id": new.id if new else None}
 
 
-@router.post("/queue/pause")
+@router.post("/queue/pause", response_model=DownloadsStatusOut)
 def pause_queue(services: Services = Depends(get_services)):
     services.downloads.pause("user")
     return services.downloads.status()
 
 
-@router.post("/queue/resume")
+@router.post("/queue/resume", response_model=DownloadsStatusOut)
 def resume_queue(services: Services = Depends(get_services)):
     services.downloads.resume()
     return services.downloads.status()
 
 
-@router.post("/queue/retry-failed")
+@router.post("/queue/retry-failed", response_model=RequeuedOut)
 def retry_failed(db: Session = Depends(get_db), services: Services = Depends(get_services)):
     return {"requeued": services.lifecycle.retry_failed(db)}
 
 
-@router.delete("/queue/failed")
+@router.delete("/queue/failed", response_model=ClearedOut)
 def clear_failed(db: Session = Depends(get_db), services: Services = Depends(get_services)):
     return {"cleared": services.lifecycle.clear_failed(db)}

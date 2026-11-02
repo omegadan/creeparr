@@ -18,7 +18,7 @@ from yt_dlp.utils import DownloadError, UnsupportedError
 
 from creeparr.core.downloads import FailureKind, mentions_drm
 from creeparr.core.settings_service import SettingsService
-from creeparr.db.enums import MediaSource
+from creeparr.db.enums import JobStage, MediaSource
 from creeparr.downloader.handlers.base import (
     DownloadCancelled,
     DownloadFailed,
@@ -162,7 +162,7 @@ def run_ytdlp(
         if reporter.cancel_event.is_set():
             raise YtDlpCancelled("cancelled by user")
         if d.get("status") == "started":
-            reporter.set_stage("merging")
+            reporter.set_stage(JobStage.MERGING)
 
     ydl_opts: dict[str, Any] = {
         # Fixed name: generic HLS ids/titles can be hundreds of bytes and overflow NAME_MAX.
@@ -302,7 +302,7 @@ class YtDlpHandler:
             remote_components=d.ytdlp_remote_components,
             sign_in_message=plan.sign_in_message,
         )
-        progress.set_stage("downloading")
+        progress.set_stage(JobStage.DOWNLOADING)
         produced, meta = await self._long.run(
             self._engine, url, place.scratch(), opts, progress, media.label
         )

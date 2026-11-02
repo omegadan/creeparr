@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from creeparr.config import EnvConfig
 from creeparr.core.events import EventBus
 from creeparr.core.lifecycle import MediaLifecycle
+from creeparr.core.server_events import QueueChangedEvent
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import SessionFactory, session_scope
 from creeparr.db.enums import MediaKind, MediaStatus
@@ -196,7 +197,7 @@ class Library:
             except Exception:  # noqa: BLE001
                 log.exception("backlog embed failed for media %s", media_id)
         if embedded:
-            self.bus.publish("queue.changed", {})
+            self.bus.publish(QueueChangedEvent())
         return {"embedded": embedded, "candidates": len(rows)}
 
     async def _embed_one(self, media_id: int, path: Path) -> bool:
