@@ -9,14 +9,11 @@ from sqlalchemy.orm import Session, selectinload
 from creeparr.api.deps import get_db, get_services
 from creeparr.api.schemas import FailedMediaOut, JobOut, QueueOut
 from creeparr.core.errors import NotFound
-from creeparr.db.enums import JobStatus, MediaStatus
+from creeparr.db.enums import FAILED_MEDIA_STATUSES, JobStatus
 from creeparr.db.models import DownloadJob, MediaItem, Post
-from creeparr.downloader.queue import enqueue_media, recompute_post_status
 from creeparr.services import Services
 
 router = APIRouter(tags=["queue"])
-
-FAILED_STATUSES = [MediaStatus.FAILED, MediaStatus.FAILED_PERMANENT, MediaStatus.MISSING]
 
 
 def job_out(job: DownloadJob) -> JobOut:
@@ -96,7 +93,9 @@ def get_queue(
         ).all()
     )
     failed_total = db.execute(
-        select(func.count()).select_from(MediaItem).where(MediaItem.status.in_(FAILED_STATUSES))
+        select(func.count())
+        .select_from(MediaItem)
+        .where(MediaItem.status.in_(FAILED_MEDIA_STATUSES))
     ).scalar_one()
     jobs = (
         db.execute(
@@ -117,7 +116,7 @@ def get_queue(
         db.execute(
             select(MediaItem)
             .options(selectinload(MediaItem.post).selectinload(Post.creator))
-            .where(MediaItem.status.in_(FAILED_STATUSES))
+            .where(MediaItem.status.in_(FAILED_MEDIA_STATUSES))
             .order_by(MediaItem.updated_at.desc())
             .offset((failed_page - 1) * page_size)
             .limit(page_size)
@@ -143,30 +142,12 @@ def get_queue(
 
 @router.delete("/queue/{job_id:int}", status_code=204)
 def remove_job(
-    job_id: int,
-    skip_media: bool = Query(default=False),
-    db: Session = Depends(get_db),
-    services: Services = Depends(get_services),
+    job_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     job = db.execute(_job_query().where(DownloadJob.id == job_id)).scalar_one_or_none()
     if job is None:
         raise NotFound(f"job {job_id} not found")
-    media = job.media_item
-    if job.status == JobStatus.RUNNING:
-        services.downloads.cancel_job(job.id)
-        if skip_media and media is not None:
-            media.wanted = False
-    elif job.status == JobStatus.QUEUED:
-        job.status = JobStatus.CANCELLED
-        if media is not None:
-            media.status = MediaStatus.SKIPPED if skip_media else MediaStatus.CANCELLED
-            media.status_reason = "removed from queue"
-            if skip_media:
-                media.wanted = False
-            if media.post is not None:
-                recompute_post_status(media.post)
-    db.flush()
-    services.bus.publish("queue.changed", {})
+    services.lifecycle.remove_job(db, job)
 
 
 @router.post("/queue/{job_id:int}/retry", status_code=202)
@@ -176,17 +157,9 @@ def retry_job(
     job = db.execute(_job_query().where(DownloadJob.id == job_id)).scalar_one_or_none()
     if job is None:
         raise NotFound(f"job {job_id} not found")
-    media = job.media_item
-    if media is None:
+    if job.media_item is None:
         raise NotFound("media item no longer exists")
-    if media.status == MediaStatus.FAILED_PERMANENT:
-        media.attempts = 0
-    new = enqueue_media(db, media, priority=10, force=media.status != MediaStatus.NO_ACCESS)
-    if media.post is not None:
-        recompute_post_status(media.post)
-    db.flush()
-    services.downloads.notify()
-    services.bus.publish("queue.changed", {})
+    new = services.lifecycle.retry_media(db, job.media_item)
     return {"job_id": new.id if new else None}
 
 
@@ -204,46 +177,9 @@ def resume_queue(services: Services = Depends(get_services)):
 
 @router.post("/queue/retry-failed")
 def retry_failed(db: Session = Depends(get_db), services: Services = Depends(get_services)):
-    items = (
-        db.execute(
-            select(MediaItem)
-            .options(selectinload(MediaItem.post).selectinload(Post.media_items))
-            .where(MediaItem.status.in_(FAILED_STATUSES))
-        )
-        .scalars()
-        .all()
-    )
-    n = 0
-    for m in items:
-        if m.status in (MediaStatus.FAILED_PERMANENT, MediaStatus.MISSING):
-            m.attempts = 0
-        if enqueue_media(db, m, force=True):
-            n += 1
-        if m.post is not None:
-            recompute_post_status(m.post)
-    db.flush()
-    services.downloads.notify()
-    services.bus.publish("queue.changed", {})
-    return {"requeued": n}
+    return {"requeued": services.lifecycle.retry_failed(db)}
 
 
 @router.delete("/queue/failed")
 def clear_failed(db: Session = Depends(get_db), services: Services = Depends(get_services)):
-    items = (
-        db.execute(
-            select(MediaItem)
-            .options(selectinload(MediaItem.post).selectinload(Post.media_items))
-            .where(MediaItem.status.in_(FAILED_STATUSES))
-        )
-        .scalars()
-        .all()
-    )
-    for m in items:
-        m.status = MediaStatus.SKIPPED
-        m.status_reason = "cleared from failed list"
-        m.wanted = False
-        if m.post is not None:
-            recompute_post_status(m.post)
-    db.flush()
-    services.bus.publish("queue.changed", {})
-    return {"cleared": len(items)}
+    return {"cleared": services.lifecycle.clear_failed(db)}

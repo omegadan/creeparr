@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from creeparr.core.history import record_event
+from creeparr.core.lifecycle import enqueue_media, publish_post_changed, recompute_post_status
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import (
     EventType,
@@ -26,7 +27,6 @@ from creeparr.downloader.fs import (
     sha256_file,
 )
 from creeparr.downloader.metadata import embed_metadata, html_to_text
-from creeparr.downloader.queue import enqueue_media, publish_post_changed, recompute_post_status
 
 log = logging.getLogger(__name__)
 
@@ -349,7 +349,7 @@ class MaintenanceMixin:
                     n += 1
         if n:
             log.info("re-queued %d failed downloads", n)
-            self._kick.set()
+            self.notify()
         return n
 
     def prune_jobs(self, keep_days: int) -> int:

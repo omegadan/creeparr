@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from creeparr.core.history import record_event
+from creeparr.core.lifecycle import publish_post_changed, recompute_post_status
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import (
     EventType,
@@ -27,7 +28,6 @@ from creeparr.downloader.fs import (
     try_hardlink,
 )
 from creeparr.downloader.handlers.base import DownloadResult
-from creeparr.downloader.queue import publish_post_changed, recompute_post_status
 from creeparr.downloader.sidecars import write_nfo, write_text_sidecars
 
 log = logging.getLogger(__name__)

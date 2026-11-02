@@ -44,6 +44,13 @@ ACTIVE_MEDIA_STATUSES = {
     MediaStatus.FAILED,
 }
 
+# Media that needs the user's attention. Every failed count and the failed list use this.
+FAILED_MEDIA_STATUSES = {
+    MediaStatus.FAILED,
+    MediaStatus.FAILED_PERMANENT,
+    MediaStatus.MISSING,
+}
+
 
 class PostStatus(StrEnum):
     NEW = "new"

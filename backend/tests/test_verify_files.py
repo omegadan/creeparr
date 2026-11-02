@@ -6,6 +6,8 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from creeparr.core.events import EventBus
+from creeparr.core.lifecycle import MediaLifecycle, recompute_post_status
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import AuthState, EventType, JobStatus, MediaStatus, PostStatus
 from creeparr.db.models import Creator, DownloadJob, History, MediaItem
@@ -14,7 +16,6 @@ from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from creeparr.providers.patreon import PatreonProvider
 from creeparr.providers.registry import ProviderRegistry
-from creeparr.scanner.scanner import sync_media_items, upsert_post
 from tests import patreon_fixtures as fx
 
 FILE_REL = "Example Creator/2026-03-14 - Ep 1 [p1]/episode.mp4"
@@ -27,16 +28,22 @@ def seed_completed(env, session_factory) -> tuple[int, int]:
     path.parent.mkdir(parents=True)
     path.write_bytes(b"video")
     with session_scope(session_factory) as s:
-        creator = Creator(campaign_id=fx.CAMPAIGN_ID, name="Example Creator", vanity=fx.VANITY)
+        creator = Creator(
+            campaign_id=fx.CAMPAIGN_ID,
+            name="Example Creator",
+            vanity=fx.VANITY,
+            auto_download=False,
+        )
         s.add(creator)
         s.flush()
-        post, _, _ = upsert_post(s, creator, pr)
-        (item,) = sync_media_items(s, creator, post, resolve_media(pr))[:1]
+        lifecycle = MediaLifecycle(session_factory, EventBus())
+        post = lifecycle.sync_post(s, creator, pr, resolve_media).post
+        item = post.media_items[0]
         item.status = MediaStatus.COMPLETED
         item.file_path = FILE_REL
         item.file_size_bytes = 5
         item.completed_at = datetime.now(UTC)
-        post.status = PostStatus.COMPLETED
+        recompute_post_status(post)
         s.flush()
         return post.id, item.id
 
@@ -47,7 +54,9 @@ def make_manager(env, settings, session_factory, bus) -> DownloadManager:
     )
     registry = ProviderRegistry([PatreonProvider(env, settings, session_factory, bus)])
     registry.get("patreon")._set_auth_status(AuthState.VALID, user_name="Test Patron")
-    return DownloadManager(env, session_factory, settings, bus, registry)
+    return DownloadManager(
+        env, session_factory, settings, bus, registry, MediaLifecycle(session_factory, bus)
+    )
 
 
 def media_state(session_factory, media_id: int) -> tuple[str, str | None, str]:

@@ -9,7 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from creeparr.api.deps import get_db, get_services
 from creeparr.api.schemas import (
@@ -32,7 +32,6 @@ from creeparr.db.engine import session_scope
 from creeparr.db.enums import EventType, JobStatus, MediaStatus, PostStatus, ScanMode
 from creeparr.db.models import Creator, DownloadJob, MediaItem, Post, ScanRun
 from creeparr.downloader.fs import remove_tree
-from creeparr.downloader.queue import apply_creator_prefs, enqueue_media, recompute_post_status
 from creeparr.providers.base import ProviderService
 from creeparr.providers.errors import (
     AuthError,
@@ -41,7 +40,6 @@ from creeparr.providers.errors import (
     ProviderError,
 )
 from creeparr.providers.models import CreatorInfo, SubscriptionInfo
-from creeparr.scanner.scanner import should_auto_queue
 from creeparr.services import Services
 
 log = logging.getLogger(__name__)
@@ -351,31 +349,9 @@ def patch_creator(
         if key == "folder_name" and value is not None:
             value = value.strip() or None
         setattr(creator, key, value)
-    queued = 0
     if prefs_changed:
-        posts = (
-            db.execute(
-                select(Post)
-                .options(selectinload(Post.media_items))
-                .where(Post.creator_id == creator.id)
-            )
-            .scalars()
-            .all()
-        )
-        for post in posts:
-            for item in post.media_items:
-                apply_creator_prefs(creator, item)
-                if (
-                    item.wanted
-                    and item.status == MediaStatus.DISCOVERED
-                    and should_auto_queue(creator, post)
-                    and enqueue_media(db, item)
-                ):
-                    queued += 1
-            recompute_post_status(post)
+        services.lifecycle.apply_creator_prefs(db, creator)
     db.flush()
-    if queued:
-        services.downloads.notify()
     services.bus.publish("creator.changed", {"id": creator.id})
     stats = creator_stats(db, [creator.id])[creator.id]
     return to_out(creator, stats, services.scan_manager.is_busy(creator.id))

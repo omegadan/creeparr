@@ -7,16 +7,16 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
+from creeparr.core.events import EventBus
+from creeparr.core.lifecycle import MediaLifecycle
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import AuthState, JobStatus
 from creeparr.db.models import Creator, DownloadJob
 from creeparr.downloader.manager import DownloadManager
-from creeparr.downloader.queue import enqueue_media
 from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from creeparr.providers.patreon import PatreonProvider
 from creeparr.providers.registry import ProviderRegistry
-from creeparr.scanner.scanner import sync_media_items, upsert_post
 from tests import patreon_fixtures as fx
 
 
@@ -40,9 +40,7 @@ def queue_posts(session_factory, n: int) -> None:
         for i in range(n):
             res = fx.native_video_post(f"p{i}", title=f"Ep {i}")
             pr = post_from_resource(res, IncludedIndex(fx.posts_page([res])))
-            post, _, _ = upsert_post(s, creator, pr)
-            items = sync_media_items(s, creator, post, resolve_media(pr))
-            enqueue_media(s, items[0])
+            MediaLifecycle(session_factory, EventBus()).sync_post(s, creator, pr, resolve_media)
 
 
 def finish_running(session_factory) -> None:
@@ -69,7 +67,9 @@ def test_pacing_gap_is_random_around_even_spacing():
 def test_spread_spaces_starts_and_reports_pacing(env, session_factory, settings, bus, providers):
     queue_posts(session_factory, 3)
     settings.update({"patreon": {"downloads_per_hour": 4}, "downloads": {"max_per_creator": 8}})
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
 
     assert mgr._claim_next("w0") is not None  # first start is immediate
     next_start = mgr._next_start["patreon"]
@@ -98,7 +98,9 @@ def test_spread_off_bursts_up_to_the_cap(env, session_factory, settings, bus, pr
             "downloads": {"spread_downloads": False, "max_per_creator": 8},
         }
     )
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     assert mgr._claim_next("w0") is not None
     assert mgr._claim_next("w1") is not None
     assert "patreon" not in mgr._next_start
@@ -109,12 +111,16 @@ def test_spread_off_bursts_up_to_the_cap(env, session_factory, settings, bus, pr
 def test_gap_survives_restart(env, session_factory, settings, bus, providers):
     queue_posts(session_factory, 2)
     settings.update({"patreon": {"downloads_per_hour": 4}, "downloads": {"max_per_creator": 8}})
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     assert mgr._claim_next("w0") is not None
 
     # A fresh manager has no in-memory gap; it must re-derive one from the
     # persisted start so a restart cannot be used to skip the spacing.
-    mgr2 = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr2 = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     finish_running(session_factory)
     assert mgr2._claim_next("w0") is None
     st = patreon_status(mgr2)
@@ -124,7 +130,9 @@ def test_gap_survives_restart(env, session_factory, settings, bus, providers):
 def test_no_cap_means_no_pacing(env, session_factory, settings, bus, providers):
     queue_posts(session_factory, 2)
     settings.update({"downloads": {"max_per_creator": 8}})
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     assert mgr._claim_next("w0") is not None
     assert mgr._claim_next("w1") is not None
     assert "patreon" not in mgr._next_start

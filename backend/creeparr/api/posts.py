@@ -20,31 +20,19 @@ from creeparr.api.schemas import (
     PostOut,
 )
 from creeparr.core.errors import AppError, NotFound, UpstreamError
+from creeparr.core.lifecycle import KIND_DISABLED_REASON
 from creeparr.db.engine import session_scope
-from creeparr.db.enums import JobStatus, MediaStatus, PostStatus
+from creeparr.db.enums import FAILED_MEDIA_STATUSES, MediaStatus
 from creeparr.db.models import Creator, MediaItem, Post
-from creeparr.downloader.queue import (
-    KIND_DISABLED_REASON,
-    active_job_for,
-    apply_creator_prefs,
-    enqueue_media,
-    publish_post_changed,
-    recompute_post_status,
-)
 from creeparr.providers.errors import ProviderError
-from creeparr.scanner.scanner import sync_post
 from creeparr.services import Services
 
 router = APIRouter(tags=["posts"])
 
 PENDING = {MediaStatus.DISCOVERED, MediaStatus.QUEUED, MediaStatus.DOWNLOADING}
-FAILED = {
-    MediaStatus.FAILED,
-    MediaStatus.FAILED_PERMANENT,
-    MediaStatus.CANCELLED,
-    MediaStatus.MISSING,
-}
 UNSUPPORTED = {MediaStatus.UNSUPPORTED, MediaStatus.UNSUPPORTED_DRM}
+# Cancelled media was stopped by the user, so it counts with skipped, not failed.
+SKIPPED = {MediaStatus.SKIPPED, MediaStatus.CANCELLED}
 
 
 def summarise(post: Post) -> MediaSummary:
@@ -61,11 +49,11 @@ def summarise(post: Post) -> MediaSummary:
             ms.completed += 1
         elif m.status in PENDING:
             ms.pending += 1
-        elif m.status in FAILED:
+        elif m.status in FAILED_MEDIA_STATUSES:
             ms.failed += 1
         elif m.status in UNSUPPORTED:
             ms.unsupported += 1
-        elif m.status == MediaStatus.SKIPPED:
+        elif m.status in SKIPPED:
             ms.skipped += 1
     return ms
 
@@ -179,31 +167,8 @@ def download_post(
     db: Session = Depends(get_db),
     services: Services = Depends(get_services),
 ):
-    force = bool(body and body.force)
     post = load_post(db, post_id)
-    if post.status == PostStatus.SKIPPED:
-        post.status = PostStatus.NEW
-    n = 0
-    for item in post.media_items:
-        if item.status == MediaStatus.SKIPPED and item.status_reason != KIND_DISABLED_REASON:
-            item.status = MediaStatus.DISCOVERED
-            item.status_reason = None
-            item.wanted = True
-        if force and item.status in (
-            MediaStatus.COMPLETED,
-            MediaStatus.FAILED_PERMANENT,
-            *UNSUPPORTED,
-        ):
-            item.attempts = 0
-        if enqueue_media(
-            db, item, priority=10, force=force and item.status != MediaStatus.NO_ACCESS
-        ):
-            n += 1
-    recompute_post_status(post)
-    db.flush()
-    if n:
-        services.downloads.notify()
-    publish_post_changed(services.bus, post)
+    services.lifecycle.download_post(db, post, force=bool(body and body.force))
     return post_detail(post, post.creator.name if post.creator else None)
 
 
@@ -212,20 +177,7 @@ def skip_post(
     post_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     post = load_post(db, post_id)
-    for item in post.media_items:
-        job = active_job_for(db, item.id)
-        if job is not None:
-            if job.status == JobStatus.RUNNING:
-                services.downloads.cancel_job(job.id)
-            else:
-                job.status = JobStatus.CANCELLED
-        if item.status != MediaStatus.COMPLETED:
-            item.status = MediaStatus.SKIPPED
-            item.status_reason = "skipped by user"
-            item.wanted = False
-    post.status = PostStatus.SKIPPED
-    db.flush()
-    publish_post_changed(services.bus, post)
+    services.lifecycle.skip_post(db, post)
     return post_detail(post, post.creator.name if post.creator else None)
 
 
@@ -234,18 +186,8 @@ def unskip_post(
     post_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     post = load_post(db, post_id)
-    creator = post.creator
-    for item in post.media_items:
-        if item.status == MediaStatus.SKIPPED:
-            item.status = MediaStatus.DISCOVERED
-            item.status_reason = None
-            item.wanted = True
-            apply_creator_prefs(creator, item)
-    post.status = PostStatus.NEW
-    recompute_post_status(post)
-    db.flush()
-    publish_post_changed(services.bus, post)
-    return post_detail(post, creator.name if creator else None)
+    services.lifecycle.unskip_post(db, post)
+    return post_detail(post, post.creator.name if post.creator else None)
 
 
 @router.post("/posts/{post_id}/refresh", response_model=PostDetailOut)
@@ -265,12 +207,10 @@ async def refresh_post(post_id: int, services: Services = Depends(get_services))
     def _apply() -> PostDetailOut:
         with session_scope(services.session_factory) as s:
             creator = s.get(Creator, creator_id)
-            post, _, _, queued = sync_post(s, creator, pr, provider.resolve_media)
-            s.flush()
-            publish_post_changed(services.bus, post)
-            if queued:
-                services.downloads.notify()
-            return post_detail(load_post(s, post.id), creator.name if creator else None)
+            result = services.lifecycle.sync_post(
+                s, creator, pr, provider.resolve_media, refresh=True
+            )
+            return post_detail(load_post(s, result.post.id), creator.name if creator else None)
 
     return await asyncio.to_thread(_apply)
 
@@ -283,17 +223,7 @@ def retry_media(
     media_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     item = load_media(db, media_id)
-    if item.status in (MediaStatus.FAILED_PERMANENT, MediaStatus.MISSING, *UNSUPPORTED):
-        item.attempts = 0
-    if item.status == MediaStatus.SKIPPED:
-        item.status = MediaStatus.DISCOVERED
-        item.status_reason = None
-    item.wanted = True
-    enqueue_media(db, item, priority=10, force=item.status != MediaStatus.NO_ACCESS)
-    recompute_post_status(item.post)
-    db.flush()
-    services.downloads.notify()
-    publish_post_changed(services.bus, item.post)
+    services.lifecycle.retry_media(db, item)
     return MediaItemOut.model_validate(item)
 
 
@@ -302,19 +232,7 @@ def skip_media(
     media_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     item = load_media(db, media_id)
-    job = active_job_for(db, item.id)
-    if job is not None:
-        if job.status == JobStatus.RUNNING:
-            services.downloads.cancel_job(job.id)
-        else:
-            job.status = JobStatus.CANCELLED
-    if item.status != MediaStatus.COMPLETED:
-        item.status = MediaStatus.SKIPPED
-        item.status_reason = "skipped by user"
-    item.wanted = False
-    recompute_post_status(item.post)
-    db.flush()
-    publish_post_changed(services.bus, item.post)
+    services.lifecycle.skip_media(db, item)
     return MediaItemOut.model_validate(item)
 
 
@@ -323,13 +241,7 @@ def unskip_media(
     media_id: int, db: Session = Depends(get_db), services: Services = Depends(get_services)
 ):
     item = load_media(db, media_id)
-    if item.status == MediaStatus.SKIPPED:
-        item.status = MediaStatus.DISCOVERED
-        item.status_reason = None
-    item.wanted = True
-    recompute_post_status(item.post)
-    db.flush()
-    publish_post_changed(services.bus, item.post)
+    services.lifecycle.unskip_media(db, item)
     return MediaItemOut.model_validate(item)
 
 

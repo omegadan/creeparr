@@ -24,7 +24,7 @@ function useQueueMutation<TArgs>(fn: (args: TArgs) => Promise<unknown>) {
 
 export const usePauseQueue = () => useQueueMutation(() => post("/queue/pause"));
 export const useResumeQueue = () => useQueueMutation(() => post("/queue/resume"));
-export const useRemoveJob = () => useQueueMutation(({ id, skip }: { id: number; skip: boolean }) => del(`/queue/${id}${qs({ skip_media: skip })}`));
+export const useRemoveJob = () => useQueueMutation((id: number) => del(`/queue/${id}`));
 export const useRetryJob = () => useQueueMutation((id: number) => post(`/queue/${id}/retry`));
 export const useRetryFailed = () => useQueueMutation(() => post("/queue/retry-failed"));
 export const useClearFailed = () => useQueueMutation(() => del("/queue/failed"));

@@ -10,6 +10,7 @@ import respx
 
 from creeparr.config import EnvConfig
 from creeparr.core.events import EventBus
+from creeparr.core.lifecycle import MediaLifecycle
 from creeparr.core.settings_service import SettingsService
 from creeparr.db.engine import make_engine, make_session_factory
 from creeparr.db.migrate import run_migrations
@@ -48,6 +49,11 @@ def settings(session_factory) -> SettingsService:
 @pytest.fixture
 def bus() -> EventBus:
     return EventBus()
+
+
+@pytest.fixture
+def lifecycle(session_factory, bus) -> MediaLifecycle:
+    return MediaLifecycle(session_factory, bus)
 
 
 @pytest.fixture

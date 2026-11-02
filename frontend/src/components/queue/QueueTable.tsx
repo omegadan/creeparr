@@ -53,7 +53,7 @@ export function JobTable({ jobs }: { jobs: Job[] }) {
               <td className="text-right">
                 <div className="flex justify-end gap-0.5">
                   {j.status === "failed" && <IconButton title="Retry" onClick={() => retry.mutate(j.id, { onError: (e) => error(e) })}><RotateCcw className="h-4 w-4" /></IconButton>}
-                  <IconButton title={j.status === "running" ? "Cancel" : "Remove from queue"} onClick={() => remove.mutate({ id: j.id, skip: false }, { onError: (e) => error(e) })}>
+                  <IconButton title={j.status === "running" ? "Cancel" : "Remove from queue"} onClick={() => remove.mutate(j.id, { onError: (e) => error(e) })}>
                     <X className="h-4 w-4" />
                   </IconButton>
                 </div>

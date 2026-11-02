@@ -11,34 +11,37 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from creeparr.core.events import EventBus
+from creeparr.core.lifecycle import MediaLifecycle
 from creeparr.db.engine import session_scope
 from creeparr.db.enums import AuthState, JobStatus, MediaStatus, PostStatus
 from creeparr.db.models import Creator, DownloadJob, History, MediaItem, Post
 from creeparr.downloader.manager import DownloadManager
-from creeparr.downloader.queue import enqueue_media
 from creeparr.patreon.client import API_URL
 from creeparr.patreon.media_resolver import resolve_media
 from creeparr.patreon.parsing import IncludedIndex, post_from_resource
 from creeparr.providers.patreon import PatreonProvider
 from creeparr.providers.registry import ProviderRegistry
-from creeparr.scanner.scanner import sync_media_items, upsert_post
 from tests import patreon_fixtures as fx
 from tests.conftest import json_response
 
 VIDEO_URL = f"{fx.CDN}/p1/episode.mp4?token=x"
 
 
+def sync_queued(session_factory, s, creator, resource) -> tuple[int, int]:
+    """Sync a post the way a scan does; its video is queued. Returns (post id, job id)."""
+    pr = post_from_resource(resource, IncludedIndex(fx.posts_page([resource])))
+    post = MediaLifecycle(session_factory, EventBus()).sync_post(s, creator, pr, resolve_media).post
+    job = s.execute(select(DownloadJob).where(DownloadJob.post_id == post.id)).scalar_one()
+    return post.id, job.id
+
+
 def seed(session_factory, resource) -> tuple[int, int]:
-    page = fx.posts_page([resource])
-    pr = post_from_resource(resource, IncludedIndex(page))
     with session_scope(session_factory) as s:
         creator = Creator(campaign_id=fx.CAMPAIGN_ID, name="Example Creator", vanity=fx.VANITY)
         s.add(creator)
         s.flush()
-        post, _, _ = upsert_post(s, creator, pr)
-        items = sync_media_items(s, creator, post, resolve_media(pr))
-        job = enqueue_media(s, items[0])
-        return post.id, job.id
+        return sync_queued(session_factory, s, creator, resource)
 
 
 async def wait_for(pred, timeout=10.0):
@@ -75,7 +78,9 @@ async def test_direct_download_end_to_end(
     )
     post_id, job_id = seed(session_factory, fx.native_video_post("p1", title="Ep 1: Intro"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
@@ -116,7 +121,9 @@ async def test_failed_download_gets_backoff_then_permanent(
     )
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.FAILED)
@@ -153,7 +160,9 @@ async def test_hls_drm_marks_unsupported(
     )
     _, job_id = seed(session_factory, fx.native_video_post("p1", hls=True))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.FAILED)
@@ -175,7 +184,9 @@ async def test_disk_full_pauses(env, session_factory, settings, bus, providers, 
     monkeypatch.setattr("creeparr.downloader.manager.free_space_bytes", lambda _p: 0)
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: mgr.paused_reason == "disk_full", timeout=5)
@@ -193,7 +204,9 @@ async def test_recover_stale_jobs(env, session_factory, settings, bus, providers
         job = s.get(DownloadJob, job_id)
         job.status = JobStatus.RUNNING
         s.get(MediaItem, job.media_item_id).status = MediaStatus.DOWNLOADING
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     mgr._recover_stale_jobs()
     with session_scope(session_factory) as s:
         assert s.get(DownloadJob, job_id).status == JobStatus.QUEUED
@@ -210,21 +223,18 @@ async def test_hourly_limit_persists_across_restart(env, session_factory, settin
         j.status = JobStatus.COMPLETED
         j.started_at = datetime.now(UTC)
     # A second item is queued and waiting to download.
-    res2 = fx.native_video_post("p2", title="Ep 2")
-    page2 = fx.posts_page([res2])
-    pr2 = post_from_resource(res2, IncludedIndex(page2))
     with session_scope(session_factory) as s:
         creator = s.execute(select(Creator)).scalar_one()
-        post, _, _ = upsert_post(s, creator, pr2)
-        items = sync_media_items(s, creator, post, resolve_media(pr2))
-        enqueue_media(s, items[0])
+        sync_queued(session_factory, s, creator, fx.native_video_post("p2", title="Ep 2"))
 
     settings.update(
         {"patreon": {"downloads_per_hour": 1}, "downloads": {"spread_downloads": False}}
     )
     # A brand-new manager (as after a restart, with empty in-memory state) must
     # still count the persisted earlier start and refuse to exceed the limit.
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     assert mgr._claim_next("w0") is None
     status = {p["provider"]: p for p in mgr.provider_status()}["patreon"]
     assert status["state"] == "throttled" and status["recent_starts"] == 1
@@ -241,7 +251,9 @@ async def test_provider_status_creators_off(env, session_factory, settings, bus,
     seed(session_factory, fx.native_video_post("p1", title="Ep 1"))
     with session_scope(session_factory) as s:
         s.execute(select(Creator)).scalar_one().enabled = False
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     status = {p["provider"]: p for p in mgr.provider_status()}["patreon"]
     assert status["state"] == "creators_off"
     assert status["queued"] == 1
@@ -250,13 +262,9 @@ async def test_provider_status_creators_off(env, session_factory, settings, bus,
 
 
 def add_queued_post(session_factory, resource) -> int:
-    page = fx.posts_page([resource])
-    pr = post_from_resource(resource, IncludedIndex(page))
     with session_scope(session_factory) as s:
         creator = s.execute(select(Creator)).scalar_one()
-        post, _, _ = upsert_post(s, creator, pr)
-        items = sync_media_items(s, creator, post, resolve_media(pr))
-        return enqueue_media(s, items[0]).id
+        return sync_queued(session_factory, s, creator, resource)[1]
 
 
 @pytest.mark.asyncio
@@ -269,7 +277,9 @@ async def test_worker_survives_media_deleted_mid_job(
     settings.update({"downloads": {"concurrency": 1}})
     _, first_job = seed(session_factory, fx.native_video_post("p1", title="Ep 1"))
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     real_run_job = mgr._run_job
     ran: list[int] = []
 
@@ -303,16 +313,14 @@ async def test_worker_survives_media_deleted_mid_job(
 
 
 def queue_posts(session_factory, creator_id: int, post_ids: list[str]) -> list[int]:
-    job_ids = []
     with session_scope(session_factory) as s:
         creator = s.get(Creator, creator_id)
-        for pid in post_ids:
-            res = fx.native_video_post(pid, title=f"Ep {pid}")
-            pr = post_from_resource(res, IncludedIndex(fx.posts_page([res])))
-            post, _, _ = upsert_post(s, creator, pr)
-            items = sync_media_items(s, creator, post, resolve_media(pr))
-            job_ids.append(enqueue_media(s, items[0]).id)
-    return job_ids
+        return [
+            sync_queued(session_factory, s, creator, fx.native_video_post(pid, title=f"Ep {pid}"))[
+                1
+            ]
+            for pid in post_ids
+        ]
 
 
 @pytest.mark.asyncio
@@ -332,7 +340,9 @@ async def test_claim_is_not_starved_by_a_long_blocked_backlog(
     queue_posts(session_factory, off_id, [f"a{i}" for i in range(250)])
     (waiting,) = queue_posts(session_factory, on_id, ["b1"])
 
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     ctx = mgr._claim_next("w0")
     assert ctx is not None and ctx.job_id == waiting
     await providers.aclose_all()
@@ -352,7 +362,9 @@ async def test_claim_skips_creators_at_their_cap_in_the_query(
     first, *_ = queue_posts(session_factory, busy_id, [f"a{i}" for i in range(250)])
     (other,) = queue_posts(session_factory, idle_id, ["b1"])
 
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     assert mgr._claim_next("w0").job_id == first  # Busy is now at its cap of 1
     assert mgr._claim_next("w1").job_id == other
     assert mgr._claim_next("w2") is None  # everything left belongs to Busy
@@ -366,7 +378,9 @@ async def test_same_named_files_downloading_together_get_distinct_names(
     # Patreon keeps uploaders' file names, so one post can hold two "image.png"s and
     # they download in parallel. Neither file exists while both are being written,
     # so the name check alone gave both the same path (and the same .part file).
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     target = env.download_dir / "Creator" / "Post" / "image.png"
 
     class Ctx:
@@ -400,7 +414,9 @@ async def test_undated_video_is_filed_under_its_backfilled_date(
 
     monkeypatch.setattr("creeparr.downloader.manager.run_ytdlp", fake_ytdlp)
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
@@ -435,7 +451,9 @@ async def test_failed_embed_is_left_for_the_backlog(
     monkeypatch.setattr(type(env), "resolve_ffmpeg", lambda self: "ffmpeg")
     monkeypatch.setattr("creeparr.downloader.manager.embed_metadata", lambda *a, **k: False)
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
@@ -464,7 +482,9 @@ async def test_permanent_failure_removes_the_part_file(
 
     monkeypatch.setattr("creeparr.downloader.manager.download_direct", fake_direct)
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.FAILED)
@@ -495,7 +515,9 @@ async def test_long_work_runs_in_its_own_pool(
 
     monkeypatch.setattr("creeparr.downloader.manager.run_ytdlp", fake_ytdlp)
     bus.bind(asyncio.get_running_loop())
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     await mgr.start()
     try:
         assert await wait_for(lambda: job_status(session_factory, job_id) == JobStatus.COMPLETED)
@@ -512,7 +534,9 @@ async def test_progress_is_written_off_the_event_loop_and_not_after_finish(
     import threading
 
     _, job_id = seed(session_factory, fx.native_video_post("p1"))
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     with session_scope(session_factory) as s:
         s.get(DownloadJob, job_id).status = JobStatus.RUNNING
 
@@ -555,7 +579,9 @@ async def test_restart_keeps_interrupted_starts_in_the_hourly_window(
     with session_scope(session_factory) as s:
         job = s.get(DownloadJob, job_id)
         job.status, job.started_at = JobStatus.RUNNING, started
-    mgr = DownloadManager(env, session_factory, settings, bus, providers)
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
     mgr._recover_stale_jobs()
     with session_scope(session_factory) as s:
         job = s.get(DownloadJob, job_id)
@@ -610,10 +636,27 @@ async def test_dedupe_links_to_the_twin_in_its_own_providers_root(
     new = tmp_path / "downloads" / "Other" / "copy.mkv"
     new.parent.mkdir(parents=True)
     new.write_bytes(b"same")
-    mgr = DownloadManager(env, factory, settings, bus, ProviderRegistry([]))
+    mgr = DownloadManager(
+        env, factory, settings, bus, ProviderRegistry([]), MediaLifecycle(factory, bus)
+    )
 
     class Ctx:
         job_id, media_id = 1, 999
 
     assert mgr._dedupe(Ctx(), DownloadResult(new, 4, "abc"))
     assert new.stat().st_ino == (tmp_path / "yt" / rel).stat().st_ino
+
+
+@pytest.mark.asyncio
+async def test_notify_from_another_thread_wakes_the_workers(
+    env, session_factory, settings, bus, providers
+):
+    # The media lifecycle wakes the workers from whichever thread commits a new job: an
+    # API request's or a scan's, never the event loop's.
+    mgr = DownloadManager(
+        env, session_factory, settings, bus, providers, MediaLifecycle(session_factory, bus)
+    )
+    mgr._loop = asyncio.get_running_loop()
+    await asyncio.to_thread(mgr.notify)
+    await asyncio.wait_for(mgr._kick.wait(), timeout=1)
+    await providers.aclose_all()
