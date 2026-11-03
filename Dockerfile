@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Every image below is pinned by digest, so a build uses exactly what was reviewed.
 # Dependabot (.github/dependabot.yml) opens a PR when a tag's digest or version moves.
-FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc AS uv
+FROM ghcr.io/astral-sh/uv:0.13.6@sha256:af22a52f5eafef3d78e551599d405c02df61919d18028f0cea8eda93bc9986d0 AS uv
 FROM denoland/deno:bin-2.9.8@sha256:b507583d3c68ba69f3ed2ce5969ae5b8b70f43421c781279c7aea06435263543 AS deno
 # Static ffmpeg/ffprobe (statically linked, so they run on any base) instead of the
 # large apt ffmpeg and its dependencies.
