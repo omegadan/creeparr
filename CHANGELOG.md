@@ -10,6 +10,9 @@ change people will notice; the Release workflow turns it into the next version's
 - ffmpeg comes from a different static build and is now version 9.0.2 (was 7.0.2). The
   image is about 180 MB larger.
 - OnlyFans signing rules that do anything but fill in the signature are refused.
+- Security: certifi 2026.10.23 drops root certificates whose intermediate keys were
+  compromised (critical). Mako 1.4.2 and other dependencies updated too, including
+  FastAPI 0.162, SQLAlchemy 2.1, curl_cffi 0.17 and deno 2.9.8.
 
 ## 0.2.0 (2026-11-03)
 
