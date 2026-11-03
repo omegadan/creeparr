@@ -25,7 +25,7 @@ class CredentialField:
 COOKIES_TXT = CredentialField(
     "cookies_txt",
     "cookies.txt (optional)",
-    "Full Netscape cookie export; extra cookies (cf_clearance) are forwarded",
+    "Full Netscape cookie export; all its cookies for the site are sent, as your browser sends them",
     optional=True,
     multiline=True,
 )

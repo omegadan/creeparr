@@ -32,8 +32,8 @@ keeps checking for new ones.
 
 > [!IMPORTANT]
 > Creeparr only reads content **your own account** can already see. It never gets around
-> paywalls or access controls, skips DRM-protected media, and is for a personal archive
-> of what you subscribe to. Don't redistribute creators' work. Patreon's and OnlyFans'
+> paywalls, doesn't solve CAPTCHAs or bot checks, skips DRM-protected media, and is for a
+> personal archive of what you subscribe to. Don't redistribute creators' work. Patreon's and OnlyFans'
 > terms forbid automated access, and YouTube's restrict downloading: using Creeparr is
 > your decision and your risk. Creeparr isn't affiliated with any of these sites. Read
 > the full [disclaimer](DISCLAIMER.md).
@@ -161,14 +161,21 @@ Every variable is documented in that file. Summary:
 Everything else (scan interval, concurrency, retries, naming, per-kind toggles, HTTP backend)
 lives in the database and is edited in the UI. See [docs/configuration.md](docs/configuration.md).
 
-## If Patreon blocks requests
+## If Patreon asks for a browser check
 
-Patreon sits behind Cloudflare. If **Test connection** reports a *Cloudflare challenge*:
+Patreon uses Cloudflare, which sometimes asks a visitor to pass a check in the browser.
+Creeparr doesn't solve these checks, so when one comes up, **Test connection** reports a
+*Cloudflare challenge*. Open patreon.com in your own browser, then make Creeparr's
+requests match that browser:
 
-1. Paste a full `cookies.txt` export (e.g. the "Get cookies.txt LOCALLY" extension) instead
-   of only `session_id`; the `cf_clearance` cookie is forwarded.
-2. Switch **HTTP backend** to `curl_cffi` (Chrome TLS impersonation). It is included in the
-   Docker image.
+1. Paste a full `cookies.txt` export of your patreon.com cookies (e.g. with the "Get
+   cookies.txt LOCALLY" extension) instead of only `session_id`. Creeparr then sends the
+   same cookies your browser does.
+2. Set **HTTP backend** to `curl_cffi`, which connects the way Chrome does. It's included
+   in the Docker image.
+
+If the check keeps coming back, lower Patreon's request rate in Settings, or wait and try
+again later.
 
 ## Security
 

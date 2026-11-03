@@ -22,10 +22,10 @@ export function OnlyFansSettings({ settings }: { settings: Settings }) {
       <ProviderAccount name="onlyfans" settings={settings} />
       <Section title="OnlyFans behaviour" description="Signing rules are fetched from the URL below and cached for an hour. Change these only if requests are being blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="HTTP backend" hint="curl_cffi impersonates Chrome's TLS fingerprint.">
+          <Field label="HTTP backend" hint="curl_cffi connects the way Chrome does, to match the browser your cookies come from.">
             <select className="input" value={f.form.http_backend} onChange={(e) => f.set("http_backend", e.target.value as "httpx" | "curl_cffi")}>
               <option value="httpx">httpx (default)</option>
-              <option value="curl_cffi">curl_cffi (Chrome impersonation)</option>
+              <option value="curl_cffi">curl_cffi (connects like Chrome)</option>
             </select>
           </Field>
           <Field label="Requests per second" hint="Keep this low; OnlyFans flags aggressive automation.">

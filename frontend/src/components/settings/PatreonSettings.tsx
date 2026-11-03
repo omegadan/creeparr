@@ -11,10 +11,10 @@ export function PatreonSettings({ settings }: { settings: Settings }) {
       <ProviderAccount name="patreon" settings={settings} />
       <Section title="Patreon requests" description="How Creeparr talks to patreon.com. Lower the rate or add a random delay if requests get blocked.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="HTTP backend" hint="curl_cffi impersonates Chrome's TLS fingerprint (helps with Cloudflare).">
+          <Field label="HTTP backend" hint="curl_cffi connects the way Chrome does, to match the browser your cookies come from.">
             <select className="input" value={f.form.http_backend} onChange={(e) => f.set("http_backend", e.target.value as "httpx" | "curl_cffi")}>
               <option value="httpx">httpx (default)</option>
-              <option value="curl_cffi">curl_cffi (Chrome impersonation)</option>
+              <option value="curl_cffi">curl_cffi (connects like Chrome)</option>
             </select>
           </Field>
           <Field label="Requests per second" hint="Steady rate limit for API calls (0.1–10).">
