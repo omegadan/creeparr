@@ -1,0 +1,44 @@
+# Weekly PRs for new versions of everything the build pulls in. CI runs on each PR,
+# including a build of the image, so a bump that breaks something shows up there.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Base and tool images in the Dockerfile, pinned by digest: a new digest for the same
+  # tag (security fixes in python:3.12-slim, say) is a PR too.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # Stay on the versions the code and lockfiles are tested with; move these by hand.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: uv
+    directory: /backend
+    schedule:
+      interval: weekly
+    ignore:
+      # update-downloaders.yml updates these every week and releases them.
+      - dependency-name: yt-dlp
+      - dependency-name: gallery-dl
+    groups:
+      python:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        update-types: ["minor", "patch"]

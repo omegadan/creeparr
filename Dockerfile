@@ -1,43 +1,24 @@
 # syntax=docker/dockerfile:1
-# Pinned tool images; bump deliberately.
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.12.18
-ARG DENO_IMAGE=denoland/deno:bin-2.9.7
-
-FROM ${UV_IMAGE} AS uv
-FROM ${DENO_IMAGE} AS deno
+# Every image below is pinned by digest, so a build uses exactly what was reviewed.
+# Dependabot (.github/dependabot.yml) opens a PR when a tag's digest or version moves.
+FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc AS uv
+FROM denoland/deno:bin-2.9.7@sha256:bc5aa4466e21b6d3021226a85ba2e1911f7c386254d97b9d797903ab74edace2 AS deno
+# Static ffmpeg/ffprobe (statically linked, so they run on any base) instead of the
+# large apt ffmpeg and its dependencies.
+FROM mwader/static-ffmpeg:9.0.2-1@sha256:f5d100184884eb3e82b0eb14bb5ebf98da99826ac824989720297fb9ef21c822 AS ffmpeg
 
 # ---- frontend build -----------------------------------------------------------
 # The built UI is plain JS/CSS, so build it once on the runner's own platform
 # instead of under QEMU for every target architecture.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend
+FROM --platform=$BUILDPLATFORM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS frontend
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# ---- ffmpeg -------------------------------------------------------------------
-# Static ffmpeg/ffprobe (glibc build) instead of the large apt ffmpeg + its deps,
-# fetched in its own stage so curl/xz leftovers don't reach the final image.
-FROM debian:bookworm-slim AS ffmpeg
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-RUN set -eux; \
-    arch="$(dpkg --print-architecture)"; \
-    case "$arch" in \
-      amd64|arm64) url="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${arch}-static.tar.xz" ;; \
-      *) echo "unsupported arch $arch" >&2; exit 1 ;; \
-    esac; \
-    cd /tmp; \
-    curl -fsSL "$url" -o ffmpeg-release-${arch}-static.tar.xz; \
-    curl -fsSL "$url.md5" -o ffmpeg.md5; \
-    md5sum -c ffmpeg.md5; \
-    mkdir ff && tar -xJf ffmpeg-release-${arch}-static.tar.xz -C ff --strip-components=1; \
-    mv ff/ffmpeg ff/ffprobe /usr/local/bin/
-
 # ---- backend ------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS backend
+FROM python:3.12-slim-bookworm@sha256:e697c81897302a4c4333bade000d98038fbb21eb064f8ee1fd42d02ebcd9d337 AS backend
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -56,7 +37,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends gosu tzdata curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ffmpeg /usr/local/bin/ffmpeg /usr/local/bin/ffprobe /usr/local/bin/
+COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
 # yt-dlp needs a JavaScript runtime for YouTube; deno is its default.
 COPY --from=deno /deno /usr/local/bin/deno
 

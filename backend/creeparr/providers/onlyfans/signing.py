@@ -9,6 +9,7 @@ algorithm below is the long-standing DIGITALCRIMINALs / onlyfans-dynamic-rules o
 from __future__ import annotations
 
 import hashlib
+import string
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -26,14 +27,47 @@ class DynamicRules:
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> DynamicRules:
+        """Rules from the (third-party) rules URL; ValueError if they look wrong."""
         return cls(
             static_param=data["static_param"],
-            format=data["format"],
-            checksum_indexes=list(data["checksum_indexes"]),
+            format=_checked_format(data["format"]),
+            checksum_indexes=_checked_indexes(data["checksum_indexes"]),
             checksum_constant=int(data["checksum_constant"]),
             app_token=data.get("app_token") or data.get("app-token", ""),
             remove_headers=list(data.get("remove_headers", [])),
         )
+
+
+_SHA1_HEX_LENGTH = 40
+
+
+def _checked_format(fmt: Any) -> str:
+    """The sign format may only place the hash and the checksum, e.g. `1:{}:{:x}:2`.
+
+    It's passed to str.format, which can also reach attributes and items of its
+    arguments; a rules file from someone else gets no more than filling in.
+    """
+    if not isinstance(fmt, str):
+        raise ValueError("rules format is not a string")
+    try:
+        fields = [p for p in string.Formatter().parse(fmt) if p[1] is not None]
+        for _, field, spec, conversion in fields:
+            if field not in ("", "0", "1") or conversion or "{" in (spec or ""):
+                raise ValueError
+        if not fields:
+            raise ValueError
+        fmt.format("0" * _SHA1_HEX_LENGTH, 0)  # e.g. mixed {} and {0} numbering
+    except (ValueError, IndexError, KeyError):
+        raise ValueError(f"rules format {fmt!r} may only contain {{}} fields") from None
+    return fmt
+
+
+def _checked_indexes(indexes: Any) -> list[int]:
+    if not isinstance(indexes, list) or not all(
+        type(i) is int and 0 <= i < _SHA1_HEX_LENGTH for i in indexes
+    ):
+        raise ValueError(f"rules checksum_indexes {indexes!r} must be positions in the hash")
+    return indexes
 
 
 def sign_request(
