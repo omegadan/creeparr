@@ -5,6 +5,9 @@ change people will notice; the Release workflow turns it into the next version's
 
 ## Unreleased
 
+- Logs now also mask OnlyFans, YouTube, Instagram and Reddit session cookies and
+  `Authorization` headers, not only Patreon's `session_id`.
+
 ## 0.2.1 (2026-11-03)
 
 - Images now carry a signed build provenance attestation and an SBOM; see SECURITY.md

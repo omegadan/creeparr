@@ -1,0 +1,32 @@
+name: Feature request
+description: An idea for something Creeparr could do.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Creeparr only archives what your own account can already see. Ideas that get
+        around paywalls, DRM or other access controls are out of scope (see
+        DISCLAIMER.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The problem, not the solution. What's missing or awkward today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+      description: How you picture it working.
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - Not provider-specific
+        - Patreon
+        - OnlyFans
+        - YouTube
+        - A new site

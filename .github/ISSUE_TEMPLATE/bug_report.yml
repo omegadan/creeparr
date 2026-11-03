@@ -1,0 +1,72 @@
+name: Bug report
+description: Something doesn't work as it should.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Found a security problem? Don't post it here; report it
+        privately (see SECURITY.md).
+
+        **Never paste cookies, session values or other credentials into an issue.** They
+        give anyone full access to your accounts.
+  - type: input
+    id: version
+    attributes:
+      label: Creeparr version
+      description: Shown at the bottom of the sidebar, and on System status.
+      placeholder: v0.2.1
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it?
+      options:
+        - Docker / Docker Compose
+        - Unraid template
+        - From source
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      description: Which site is it about, if any?
+      options:
+        - Patreon
+        - OnlyFans
+        - YouTube
+        - Not provider-specific
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If you can make it happen again, how? Leave out creator names you'd rather not share.
+      placeholder: |
+        1. Add a creator by URL
+        2. Click Scan
+        3. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        From the Logs page (set the level to DEBUG first if you can), or `docker logs creeparr`.
+        Creeparr masks the session cookies it knows about, but check what you paste anyway.
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: Screenshots, browser, host OS, reverse proxy, ...
