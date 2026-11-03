@@ -477,6 +477,8 @@ class NamingPreviewOut(Out):
 class LoginStateOut(Out):
     auth_enabled: bool
     authenticated: bool
+    #: No password, and the first-run question hasn't been answered yet.
+    setup_required: bool
 
 
 class OkOut(Out):

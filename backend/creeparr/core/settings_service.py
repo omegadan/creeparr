@@ -174,6 +174,8 @@ class SecuritySettings(BaseModel):
     password_hash: SecretStr = ""
     # Part of the session signing key: logging out bumps it, ending every session.
     session_epoch: int = 0
+    # The first-run question (set a password, or go on without one) has been answered.
+    setup_done: bool = False
 
 
 class NotificationSettings(BaseModel):

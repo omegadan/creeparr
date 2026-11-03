@@ -2,7 +2,7 @@
 
 ## Environment variables
 
-See the table in the README. They cover paths, port and log level only. `CREEPARR_DOWNLOAD_DIR` is the default archive root. Each provider can be sent to its own directory with `CREEPARR_PATREON_DOWNLOAD_DIR`, `CREEPARR_ONLYFANS_DOWNLOAD_DIR`, `CREEPARR_YOUTUBE_DOWNLOAD_DIR`, `CREEPARR_INSTAGRAM_DOWNLOAD_DIR` or `CREEPARR_REDDIT_DOWNLOAD_DIR`; any that is unset or empty falls back to `CREEPARR_DOWNLOAD_DIR`. In Docker the entrypoint also falls back when a configured provider directory has nothing mounted at it, so an archive never lands in the container's own filesystem.
+See the table in the README. They cover paths, port and log level only. `CREEPARR_DOWNLOAD_DIR` is the default archive root. Each provider can be sent to its own directory with `CREEPARR_PATREON_DOWNLOAD_DIR`, `CREEPARR_ONLYFANS_DOWNLOAD_DIR` or `CREEPARR_YOUTUBE_DOWNLOAD_DIR` (and `CREEPARR_INSTAGRAM_DOWNLOAD_DIR` / `CREEPARR_REDDIT_DOWNLOAD_DIR`, which only keep an existing archive of those switched-off providers reachable); any that is unset or empty falls back to `CREEPARR_DOWNLOAD_DIR`. In Docker the entrypoint also falls back when a configured provider directory has nothing mounted at it, so an archive never lands in the container's own filesystem.
 
 ## Settings (stored in the database, edited in the UI or via `PUT /api/v1/settings`)
 
@@ -19,12 +19,6 @@ See the table in the README. They cover paths, port and log level only. `CREEPAR
 | onlyfans.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) before each OnlyFans request |
 | youtube.max_videos | 0 | Cap videos per channel (0 = all) |
 | youtube.cookies_txt | "" | Optional cookies for members-only/age-restricted videos |
-| instagram.sessionid | "" | Instagram login cookie (required) |
-| instagram.include_reels/stories/highlights/tagged | reels on | Which Instagram content to archive |
-| instagram.max_posts | 0 | Cap posts per profile (0 = all) |
-| instagram.sleep_request | 1.0 | Seconds between Instagram requests |
-| reddit.client_id / client_secret | "" | Optional Reddit "script" app for authenticated API access |
-| reddit.max_posts | 0 | Cap posts per subreddit/user (0 = Reddit's ~1000 listing cap) |
 | patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |
 | scan.interval_minutes | 60 | 0 disables scheduled scans |
 | scan.overlap_posts | 10 | Incremental stop condition |
@@ -86,3 +80,17 @@ file is gone become `missing` (a history entry is written), and missing items wh
 come back become `completed` again. Missing items can be re-downloaded per item, with
 Queue → Retry failed, or automatically with `downloads.requeue_missing`. Set
 `downloads.verify_files_hours` to run it on a schedule.
+
+## Switched-off providers
+
+Instagram and Reddit are switched off in this version (both block automated access too
+aggressively). Their settings are kept, for when they come back:
+
+| Group.key | Default | Notes |
+| --- | --- | --- |
+| instagram.sessionid | "" | Instagram login cookie (required) |
+| instagram.include_reels/stories/highlights/tagged | reels on | Which Instagram content to archive |
+| instagram.max_posts | 0 | Cap posts per profile (0 = all) |
+| instagram.sleep_request | 1.0 | Seconds between Instagram requests |
+| reddit.client_id / client_secret | "" | Optional Reddit "script" app for authenticated API access |
+| reddit.max_posts | 0 | Cap posts per subreddit/user (0 = Reddit's ~1000 listing cap) |

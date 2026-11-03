@@ -9,7 +9,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/omegadan/creeparr/issues</Support>
   <Project>https://github.com/omegadan/creeparr</Project>
-  <Overview>Self-hosted, arr-style archiver for the creators you follow on Patreon, OnlyFans, YouTube, Instagram and Reddit. Adds a creator, back-fills every post you have access to, and keeps checking for new ones. Videos always; images, audio and attachments optional per creator. Web UI with a live download queue, history and per-provider settings.</Overview>
+  <Overview>Self-hosted, arr-style archiver for the creators you follow on Patreon, OnlyFans and YouTube. Adds a creator, back-fills every post you have access to, and keeps checking for new ones. Videos always; images, audio and attachments optional per creator. Web UI with a live download queue, history and per-provider settings.</Overview>
   <Category>Downloaders: MediaApp:Video: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:7979]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/omegadan/creeparr/main/unraid/creeparr.xml</TemplateURL>
@@ -20,7 +20,7 @@
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Description>Self-hosted archiver for creators on Patreon, OnlyFans, YouTube, Instagram and Reddit. Connect providers in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
+  <Description>Self-hosted archiver for creators on Patreon, OnlyFans and YouTube. Connect providers in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
@@ -126,8 +126,8 @@
   <Config Name="Patreon downloads" Target="/downloads-patreon" Default="" Mode="rw" Description="Optional: separate archive root for Patreon. Leave blank to archive Patreon under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
   <Config Name="OnlyFans downloads" Target="/downloads-onlyfans" Default="" Mode="rw" Description="Optional: separate archive root for OnlyFans. Leave blank to archive OnlyFans under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
   <Config Name="YouTube downloads" Target="/downloads-youtube" Default="" Mode="rw" Description="Optional: separate archive root for YouTube. Leave blank to archive YouTube under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
-  <Config Name="Instagram downloads" Target="/downloads-instagram" Default="" Mode="rw" Description="Optional: separate archive root for Instagram. Leave blank to archive Instagram under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
-  <Config Name="Reddit downloads" Target="/downloads-reddit" Default="" Mode="rw" Description="Optional: separate archive root for Reddit. Leave blank to archive Reddit under Downloads" Type="Path" Display="always" Required="false" Mask="false"></Config>
+  <Config Name="Instagram downloads (existing archive)" Target="/downloads-instagram" Default="" Mode="rw" Description="Instagram is switched off in this version. Set this only if you already have a Instagram archive in its own folder, so it stays reachable" Type="Path" Display="advanced" Required="false" Mask="false"></Config>
+  <Config Name="Reddit downloads (existing archive)" Target="/downloads-reddit" Default="" Mode="rw" Description="Reddit is switched off in this version. Set this only if you already have a Reddit archive in its own folder, so it stays reachable" Type="Path" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
   <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns files" Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
   <Config Name="TZ" Target="TZ" Default="America/Los_Angeles" Mode="" Description="Time zone (IANA name)" Type="Variable" Display="advanced" Required="false" Mask="false">America/Los_Angeles</Config>

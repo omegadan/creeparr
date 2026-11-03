@@ -3,6 +3,7 @@ import { Outlet } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthState } from "./api/hooks/useAuth";
 import { LoginPage } from "./pages/LoginPage";
+import { SetupPage } from "./pages/SetupPage";
 import { Spinner } from "./components/ui/Misc";
 
 export function App() {
@@ -15,5 +16,6 @@ export function App() {
   }, [qc]);
   if (auth.isLoading) return <div className="flex min-h-screen items-center justify-center"><Spinner /></div>;
   if (auth.data?.auth_enabled && !auth.data.authenticated) return <LoginPage />;
+  if (auth.data?.setup_required) return <SetupPage />;
   return <Outlet />;
 }
