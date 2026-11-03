@@ -5,6 +5,8 @@ change people will notice; the Release workflow turns it into the next version's
 
 ## Unreleased
 
+## 0.2.1 (2026-11-03)
+
 - Images now carry a signed build provenance attestation and an SBOM; see SECURITY.md
   to verify one. Everything the image is built from is pinned to an exact version.
 - ffmpeg comes from a different static build and is now version 9.0.2 (was 7.0.2). The
