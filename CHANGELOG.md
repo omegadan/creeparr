@@ -5,6 +5,8 @@ change people will notice; the Release workflow turns it into the next version's
 
 ## Unreleased
 
+## 0.2.0 (2026-11-03)
+
 - First-run setup: a new install asks you to set a password, or to continue without
   one on a trusted local network. Setting a password signs you in, and the sidebar
   shows "No password set" until you have one. New passwords need 8 characters.
