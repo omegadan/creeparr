@@ -20,6 +20,7 @@ change people will notice; the Release workflow turns it into the next version's
 - Adding several creators no longer stops queuing their first scans at the first one
   that can't scan.
 - The naming preview in Settings uses the same path rules as downloads.
+- Fixed: a YouTube download whose size yt-dlp only estimates no longer fails (it failed on reporting its progress).
 
 ## 0.1.13 and earlier
 

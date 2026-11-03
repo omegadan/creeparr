@@ -4,7 +4,20 @@ A self-hosted, *arr-style archiver for the creators you follow on **Patreon, Onl
 YouTube**. Add a creator, and Creeparr slowly backs up every post you have access to, then
 keeps checking for new ones.
 
-<!-- screenshots -->
+![A creator's posts in Creeparr, with each video's archive status](docs/screenshots/creator.jpg)
+
+<details>
+<summary>More screenshots</summary>
+
+| | |
+| --- | --- |
+| ![The download queue, one video downloading at 8.6 MB/s](docs/screenshots/queue.jpg) | ![The creators page](docs/screenshots/creators.jpg) |
+| ![The first-run setup screen asking for a password](docs/screenshots/setup.png) | |
+
+</details>
+
+<sub>Screenshots show openly licensed videos: Blender Studio and the Blender Foundation
+(CC BY) and NASA (public domain).</sub>
 
 - Archives video (direct files, HLS streams, YouTube / Vimeo embeds via yt-dlp), and
   optionally images, audio and attachments per creator.
