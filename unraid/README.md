@@ -2,6 +2,9 @@
 
 Creeparr is not (yet) in Community Applications, so add it as a template manually.
 
+Creeparr is for a personal archive of what your own account can see, and using it may
+break the terms of the sites it works with. Read the [disclaimer](../DISCLAIMER.md) first.
+
 ## Option A — template URL
 
 1. Unraid → **Docker** tab → **Add Container**.

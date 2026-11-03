@@ -30,10 +30,13 @@ keeps checking for new ones.
   disk-space guard, resumable downloads, `post.json` / `post.md` / `post.html` sidecars.
 - One container, SQLite, no external services. `PUID`/`PGID`/`TZ` like linuxserver images.
 
-> Creeparr only reads content **your own account** can already see. It never bypasses
-> access controls, skips DRM-protected media, and is intended for personal archival of the
-> content you pay for. Do not use it to redistribute creators' work. Patreon's and
-> OnlyFans' terms forbid automated access; using Creeparr is your decision and your risk.
+> [!IMPORTANT]
+> Creeparr only reads content **your own account** can already see. It never gets around
+> paywalls or access controls, skips DRM-protected media, and is for a personal archive
+> of what you subscribe to. Don't redistribute creators' work. Patreon's and OnlyFans'
+> terms forbid automated access, and YouTube's restrict downloading: using Creeparr is
+> your decision and your risk. Creeparr isn't affiliated with any of these sites. Read
+> the full [disclaimer](DISCLAIMER.md).
 
 ## What's supported
 
@@ -230,4 +233,4 @@ it, publishes the image and writes the GitHub Release from the changelog.
 
 ## License
 
-MIT
+MIT. See also the [disclaimer](DISCLAIMER.md).
