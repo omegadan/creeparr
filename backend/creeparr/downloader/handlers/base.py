@@ -8,6 +8,7 @@ learned about the post, for the download run to file in the post's folder.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -19,6 +20,8 @@ from typing import Any, Protocol
 from creeparr.core.downloads import FailureKind
 from creeparr.db.enums import JobStage
 from creeparr.providers.media import MediaSession
+
+log = logging.getLogger(__name__)
 
 
 class DownloadCancelled(Exception):
@@ -155,13 +158,17 @@ class ProgressReporter:
     def update(
         self,
         *,
-        downloaded: int | None = None,
-        total: int | None = None,
+        downloaded: float | None = None,
+        total: float | None = None,
         speed: float | None = None,
         eta: float | None = None,
         force: bool = False,
     ) -> None:
         self.check_cancel()
+        # Sizes count whole bytes; yt-dlp's total_bytes_estimate (and some byte counts)
+        # are floats.
+        downloaded = int(downloaded) if downloaded is not None else None
+        total = int(total) if total is not None else None
         now = time.monotonic()
         if speed is None and downloaded is not None:
             dt = now - self._last_bytes_ts
@@ -191,4 +198,8 @@ class ProgressReporter:
         if not force and now - self._last_emit < self._min:
             return
         self._last_emit = now
-        self._cb({k: v for k, v in data.items() if v is not None})
+        try:
+            self._cb({k: v for k, v in data.items() if v is not None})
+        except Exception:  # noqa: BLE001
+            # Progress is only shown; failing to report it must not fail the download.
+            log.warning("could not report download progress", exc_info=True)
