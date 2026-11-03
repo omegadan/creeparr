@@ -20,7 +20,7 @@ See the table in the README. They cover paths, port and log level only. `CREEPAR
 | onlyfans.dynamic_rules_url | DATAHOARDERS/dynamic-rules `onlyfans.json` | Where the request signing rules come from (fetched hourly). Point it at your own copy to stop depending on that repository; see SECURITY.md |
 | youtube.max_videos | 0 | Cap videos per channel (0 = all) |
 | youtube.cookies_txt | "" | Optional cookies for members-only/age-restricted videos |
-| patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |
+| patreon.http_backend | httpx | `curl_cffi` connects the way Chrome does (TLS fingerprint), to match the browser your cookies come from |
 | scan.interval_minutes | 60 | 0 disables scheduled scans |
 | scan.overlap_posts | 10 | Incremental stop condition |
 | scan.full_rescan_days | 0 | 0 disables periodic full rescans |

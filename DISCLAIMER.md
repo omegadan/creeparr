@@ -11,6 +11,8 @@ and saves the posts **your account can already see**, so you keep a copy of what
 subscribe to.
 
 - It doesn't get around paywalls or give access to anything your account can't open.
+- It doesn't solve CAPTCHAs or other bot checks. When a site asks for one, you pass it in
+  your own browser, and Creeparr sends that browser's cookies.
 - It doesn't share accounts or sessions, and doesn't send what it saves anywhere.
 - It skips DRM-protected media and never tries to decrypt it.
 
