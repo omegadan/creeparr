@@ -20,7 +20,7 @@
   <DateInstalled/>
   <DonateText/>
   <DonateLink/>
-  <Description>Self-hosted archiver for creators on Patreon, OnlyFans and YouTube. Connect providers in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for personal archival of content you pay for only; OnlyFans forbids automated downloading in its terms.</Description>
+  <Description>Self-hosted archiver for creators on Patreon, OnlyFans and YouTube. Connect providers in Settings, import your subscriptions, and it archives and monitors them. Each provider can optionally be archived to its own folder. Note: for a personal archive of content your own account can see. Patreon's and OnlyFans' terms forbid automated access; using it is your decision and your risk. Not affiliated with Patreon, OnlyFans or YouTube. See DISCLAIMER.md in the repository.</Description>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
