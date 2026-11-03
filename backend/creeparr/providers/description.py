@@ -25,7 +25,7 @@ class CredentialField:
 COOKIES_TXT = CredentialField(
     "cookies_txt",
     "cookies.txt (optional)",
-    "Full Netscape cookie export; all its cookies for the site are sent, as your browser sends them",
+    "Full Netscape cookie export; Creeparr sends all its cookies, as your browser does",
     optional=True,
     multiline=True,
 )
