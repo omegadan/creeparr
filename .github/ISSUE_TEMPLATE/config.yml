@@ -1,0 +1,5 @@
+blank_issues_enabled: true # for questions, which fit neither form
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/omegadan/creeparr/security/advisories/new
+    about: Report it privately here, not in a public issue.

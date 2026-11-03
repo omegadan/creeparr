@@ -205,6 +205,9 @@ notice; when one does, expect a broken scan until a release fixes it.
 
 ## Development
 
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[code of conduct](CODE_OF_CONDUCT.md).
+
 ```bash
 # backend (Python 3.12, uv)
 cd backend && uv sync --all-extras   # plain `uv sync` removes curl_cffi (the `impersonate` extra the image ships)

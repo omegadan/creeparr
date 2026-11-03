@@ -12,11 +12,23 @@ from pathlib import Path
 
 FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 
-_SECRET_RE = re.compile(r"(session_id=)([^;\s\"']+)", re.IGNORECASE)
+# Every cookie or header that carries a session for a provider Creeparr talks to, in
+# the shapes it can appear: `name=value` (cookie headers), `name: value` / `"name":
+# "value"` (headers, dicts, JSON) and cookies.txt's tab-separated `name<TAB>value`.
+_SECRET_NAMES = (
+    r"session_id|sess|auth_id|auth_uid_\w*|x[-_]bc|cf_clearance"  # Patreon, OnlyFans
+    r"|sessionid|reddit_session|token_v2"  # Instagram, Reddit
+    r"|__Secure-[\w-]+|SAPISID|APISID|HSID|SSID|SID|LOGIN_INFO"  # YouTube
+    r"|authorization"
+)
+_SECRET_RE = re.compile(
+    rf"""(?<![\w-])((?:{_SECRET_NAMES})["']?(?:=|:\s*["']?|\t)(?:Bearer\s+)?)[^;\s"',}}]+""",
+    re.IGNORECASE,
+)
 
 
 class RedactFilter(logging.Filter):
-    """Mask session cookies wherever they might sneak into a log line."""
+    """Mask credentials wherever they might sneak into a log line."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
