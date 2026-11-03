@@ -17,6 +17,7 @@ See the table in the README. They cover paths, port and log level only. `CREEPAR
 | patreon.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) added before each request; 0/0 disables |
 | onlyfans.requests_per_second | 0.5 | Steady API rate limit (0.1–5) |
 | onlyfans.random_delay_min / random_delay_max | 0 / 0 | Extra random pause (s) before each OnlyFans request |
+| onlyfans.dynamic_rules_url | DATAHOARDERS/dynamic-rules `onlyfans.json` | Where the request signing rules come from (fetched hourly). Point it at your own copy to stop depending on that repository; see SECURITY.md |
 | youtube.max_videos | 0 | Cap videos per channel (0 = all) |
 | youtube.cookies_txt | "" | Optional cookies for members-only/age-restricted videos |
 | patreon.http_backend | httpx | `curl_cffi` for Chrome TLS impersonation |

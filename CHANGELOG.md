@@ -5,6 +5,12 @@ change people will notice; the Release workflow turns it into the next version's
 
 ## Unreleased
 
+- Images now carry a signed build provenance attestation and an SBOM; see SECURITY.md
+  to verify one. Everything the image is built from is pinned to an exact version.
+- ffmpeg comes from a different static build and is now version 9.0.2 (was 7.0.2). The
+  image is about 180 MB larger.
+- OnlyFans signing rules that do anything but fill in the signature are refused.
+
 ## 0.2.0 (2026-11-03)
 
 - First-run setup: a new install asks you to set a password, or to continue without

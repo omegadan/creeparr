@@ -188,6 +188,11 @@ Two checks stop other websites from using the API through your browser:
   names. To open it by another name (a reverse-proxy domain, say), set a password or
   list the name in `CREEPARR_ALLOWED_HOSTS`.
 
+Images are built only by GitHub Actions, from pinned inputs, and each carries a signed
+provenance attestation and an SBOM. OnlyFans signing rules are downloaded from a
+community-maintained file; you can point Creeparr at your own copy. How to verify an
+image, and how to report a vulnerability privately: [SECURITY.md](SECURITY.md).
+
 ## Status
 
 Early, and changing. It's covered by unit and integration tests against recorded API
@@ -212,7 +217,7 @@ make build   # builds the UI and copies it into backend/creeparr/static
 make docker  # builds the image
 ```
 
-The Docker image is about 720 MB unpacked (Python, yt-dlp, gallery-dl, deno, static ffmpeg).
+The Docker image is about 900 MB unpacked (Python, yt-dlp, gallery-dl, deno, static ffmpeg).
 Layout: `backend/creeparr/{providers,patreon,scanner,downloader,api,core,db}` and
 `frontend/src/{pages,components,api}`. Architecture notes in [docs/architecture.md](docs/architecture.md);
 what was verified about Patreon's private API in [docs/patreon-api.md](docs/patreon-api.md);

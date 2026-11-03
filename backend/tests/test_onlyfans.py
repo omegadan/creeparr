@@ -30,6 +30,44 @@ def test_sign_request_is_deterministic_and_uses_path():
     assert c["sign"] != a["sign"]
 
 
+RULES_JSON = {
+    "static_param": "abc123",
+    "format": "51245:{}:{:x}:6672df30",
+    "checksum_indexes": [0, 5, 39],
+    "checksum_constant": 42,
+    "app_token": "tok",
+}
+
+
+def test_rules_json_with_a_plain_format_loads():
+    rules = DynamicRules.from_json(RULES_JSON)
+    assert rules.format == "51245:{}:{:x}:6672df30"
+    assert rules.checksum_indexes == [0, 5, 39]
+
+
+@pytest.mark.parametrize(
+    "fmt",
+    [
+        "{0.__class__}:{1}",  # attribute access
+        "{0[0]}:{1}",  # indexing
+        "{}:{2}",  # an argument that isn't there
+        "{}:{:{}}",  # a nested field
+        "{0!r}:{1}",  # a conversion
+        "{name}:{}",  # a named field
+    ],
+)
+def test_rules_json_with_a_format_that_does_more_than_fill_in_is_refused(fmt):
+    # The rules come from a third-party URL; their format may only place the two values.
+    with pytest.raises(ValueError, match="format"):
+        DynamicRules.from_json({**RULES_JSON, "format": fmt})
+
+
+@pytest.mark.parametrize("indexes", [[0, 40], [-1], ["3"]])
+def test_rules_json_with_checksum_indexes_outside_the_hash_is_refused(indexes):
+    with pytest.raises(ValueError, match="checksum_indexes"):
+        DynamicRules.from_json({**RULES_JSON, "checksum_indexes": indexes})
+
+
 def test_post_parsing_and_media_resolution():
     raw = {
         "id": 555,
