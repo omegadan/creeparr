@@ -5,6 +5,8 @@ change people will notice; the Release workflow turns it into the next version's
 
 ## Unreleased
 
+## 0.2.2 (2026-11-03)
+
 - Logs now also mask OnlyFans, YouTube, Instagram and Reddit session cookies and
   `Authorization` headers, not only Patreon's `session_id`.
 
