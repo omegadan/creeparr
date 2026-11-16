@@ -5,6 +5,8 @@ change people will notice; the Release workflow turns it into the next version's
 
 ## Unreleased
 
+- Update yt-dlp 2026.10.26, gallery-dl 1.32.20.
+
 ## 0.2.2 (2026-11-03)
 
 - Logs now also mask OnlyFans, YouTube, Instagram and Reddit session cookies and
