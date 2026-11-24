@@ -5,7 +5,7 @@ FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b98
 FROM denoland/deno:bin-2.9.8@sha256:b507583d3c68ba69f3ed2ce5969ae5b8b70f43421c781279c7aea06435263543 AS deno
 # Static ffmpeg/ffprobe (statically linked, so they run on any base) instead of the
 # large apt ffmpeg and its dependencies.
-FROM mwader/static-ffmpeg:9.0.2-1@sha256:f5d100184884eb3e82b0eb14bb5ebf98da99826ac824989720297fb9ef21c822 AS ffmpeg
+FROM mwader/static-ffmpeg:9.1@sha256:dd09509d8c2152bfa601c8c20e3dd166bde906d37951b9f7e8bbd922267f5ac9 AS ffmpeg
 
 # ---- frontend build -----------------------------------------------------------
 # The built UI is plain JS/CSS, so build it once on the runner's own platform
